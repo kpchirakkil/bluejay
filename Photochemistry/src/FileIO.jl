@@ -55,7 +55,7 @@ function get_elapsed_time(filepath)
     return parse(Float64, split(h5read(filepath, "info")[end])[1])
 end
 
-function get_ncurrent(readfile::String)
+function get_ncurrent(readfile::String, n_horiz::Int64)
     #=
     Input:
         readfile: HDF5 file containing a matrix with atmospheric density profiles
@@ -72,10 +72,10 @@ function get_ncurrent(readfile::String)
         global n_current_mat = h5read(readfile,"ncur/ncur_mat");
     end
     
-    n_current = Dict{Symbol, Array{ftype_ncur, 1}}()
+    n_current = Dict{Symbol, Vector{Array{ftype_ncur}}}()
 
     for ispecies in [1:length(n_current_tag_list);]
-        n_current[n_current_tag_list[ispecies]] = reshape(n_current_mat[:,ispecies], length(n_current_mat[:, ispecies]))
+        n_current[n_current_tag_list[ispecies]] = fill(reshape(n_current_mat[:,ispecies], length(n_current_mat[:, ispecies])),n_horiz) # MULTICOL WARNING hardcoded to use same values for each vertical column
     end
     return n_current
 end
@@ -121,7 +121,7 @@ function search_subfolders(path::String, key; type="folders")
     end
 end
 
-function write_atmosphere(atmdict::Dict{Symbol, Vector{ftype_ncur}}, filename::String; t=0, globvars...) 
+function write_atmosphere(atmdict::Dict{Symbol, Vector{Array{ftype_ncur}}}, filename::String, n_horiz::Int64; t=0, globvars...) 
     #=
     Writes out the current atmospheric state to an .h5 file
 
@@ -134,11 +134,13 @@ function write_atmosphere(atmdict::Dict{Symbol, Vector{ftype_ncur}}, filename::S
     check_requirements(keys(GV), required)
     
     sorted_keys = sort(collect(keys(atmdict)))
-    atm_mat = Array{Float64}(undef, GV.num_layers, length(sorted_keys));
+    atm_mat = Array{Float64}(undef, n_horiz, GV.num_layers, length(sorted_keys));
 
-    for ispecies in [1:length(sorted_keys);]
-        for ialt in [1:GV.num_layers;]
-            atm_mat[ialt, ispecies] = convert(Float64, atmdict[sorted_keys[ispecies]][ialt])
+    for ihoriz in [1:n_horiz;]
+    	for ispecies in [1:length(sorted_keys);]
+            for ialt in [1:GV.num_layers;]
+            	atm_mat[ihoriz, ialt, ispecies] = convert(Float64, atmdict[sorted_keys[ispecies]][ihoriz][ialt])
+	    end
         end
     end
     delete_old_h5file(filename)
@@ -150,7 +152,7 @@ function write_atmosphere(atmdict::Dict{Symbol, Vector{ftype_ncur}}, filename::S
     end
 end
 
-function write_final_state(atmdict, thedir, thefolder, fname; globvars...)
+function write_final_state(atmdict, thedir, thefolder, fname, n_horiz::Int64; globvars...)
     #=
     Write out the final atmosphere to a file, first making sure the current Jrates are included.
     =#
@@ -166,7 +168,7 @@ function write_final_state(atmdict, thedir, thefolder, fname; globvars...)
     end
 
     # Write out final atmosphere
-    write_atmosphere(atmdict, thedir*thefolder*"/"*fname; globvars...)
+    write_atmosphere(atmdict, thedir*thefolder*"/"*fname, n_horiz; globvars...)
     println("Saved final atmospheric state")
 end
 

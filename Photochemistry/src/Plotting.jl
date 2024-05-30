@@ -54,7 +54,7 @@ function get_grad_colors(L::Int64, cmap; strt=0, stp=1)
     return c
 end
 
-function plot_atm(atmdict::Dict{Symbol, Vector{ftype_ncur}}, savepath::String, atol, E_prof; imgfmt="png", print_shortcodes=true, mixing_ratio=false,
+function plot_atm(atmdict::Dict{Symbol, Vector{Array{ftype_ncur}}}, savepath::String, atol, E_prof; imgfmt="png", print_shortcodes=true, mixing_ratio=false,
                   t="", showonly=false, xlab=L"Species density (cm$^{-3}$)", xlim_1=(1e-12, 1e18), xlim_2=(1e-5, 2.5e5), ylims=[0, 250],
                   legloc=[0.8,1], globvars...)
     #=
@@ -181,19 +181,19 @@ function plot_atm(atmdict::Dict{Symbol, Vector{ftype_ncur}}, savepath::String, a
         atm_ax[3, 2].set_xlabel(xlab)
          
         # plot the neutrals according to logical groups -------------------------------------------------------
-        for sp in GV.neutral_species
-            atm_ax[axes_by_sp[sp], 1].plot(convert(Array{Float64}, atmdict[sp]), GV.plot_grid, color=get(GV.speciescolor, sp, "black"),
+        for sp in GV.neutral_species # MULTICOL WARNING hardcoded to the first vertical column; will need changing if want different values for each column
+            atm_ax[axes_by_sp[sp], 1].plot(convert(Array{Float64}, atmdict[sp][1]), GV.plot_grid, color=get(GV.speciescolor, sp, "black"),
                                            linewidth=2, label=string_to_latexstr(string(sp)), linestyle=get(GV.speciesstyle, sp, "-"), zorder=2)
         end
         
         # plot the ions according to logical groups ------------------------------------------------------------
-        for sp in GV.ion_species
-            atm_ax[axes_by_sp[sp], 2].plot(convert(Array{Float64}, atmdict[sp]), GV.plot_grid, color=get(GV.speciescolor, sp, "black"),
+        for sp in GV.ion_species  # MULTICOL WARNING hardcoded to the first vertical column; will need changing if want different values for each column
+            atm_ax[axes_by_sp[sp], 2].plot(convert(Array{Float64}, atmdict[sp][1]), GV.plot_grid, color=get(GV.speciescolor, sp, "black"),
                                            linewidth=2, label=string_to_latexstr(string(sp)), linestyle=get(GV.speciesstyle, sp, "-"), zorder=2)
         end
 
         # plot electron profile --------------------------------------------------------------------------------
-        atm_ax[1, 2].plot(convert(Array{Float64}, E_prof), GV.plot_grid, color="black", linewidth=2, linestyle=":", zorder=10, label=L"e$^-$")
+        atm_ax[1, 2].plot(convert(Array{Float64}, E_prof[1]), GV.plot_grid, color="black", linewidth=2, linestyle=":", zorder=10, label=L"e$^-$") # MULTICOL WARNING hardcoded to the first vertical column; will need changing if want different values for each column. Could use a for loop here to get all columns to plot on the same axes.
 
         # stuff that applies to all axes
         for r in 1:size(atm_ax)[1]
@@ -511,7 +511,7 @@ function plot_net_volume_change(sp, atmdict; globvars...)
     show() 
 end
 
-function plot_production_and_loss(final_atm, results_dir, thefolder; globvars...)
+function plot_production_and_loss(final_atm, results_dir, thefolder, n_horiz::Int64; globvars...)
     #=
 
     =#
@@ -527,12 +527,12 @@ function plot_production_and_loss(final_atm, results_dir, thefolder; globvars...
     println("Creating production and loss plots to show convergence of species...")
     create_folder("chemeq_plots", results_dir*thefolder*"/")
     for sp in GV.all_species
-        plot_rxns(sp, final_atm, results_dir; subfolder=thefolder,num="final_atmosphere", globvars...)
+        plot_rxns(sp, final_atm, results_dir, n_horiz; subfolder=thefolder,num="final_atmosphere", globvars...)
     end
     println("Finished convergence plots")
 end
 
-function plot_rxns(sp::Symbol, atmdict::Dict{Symbol, Vector{ftype_ncur}}, results_dir::String; 
+function plot_rxns(sp::Symbol, atmdict::Dict{Symbol, Vector{Array{ftype_ncur}}}, results_dir::String, n_horiz::Int64; 
                    nonthermal=true, shown_rxns=nothing, subfolder="", plotsfolder="chemeq_plots", dt=nothing, num="", extra_title="", 
                    plot_timescales=false, plot_total_rate_coefs=false, showonly=false, globvars...)
     #=
@@ -702,7 +702,7 @@ function plot_rxns(sp::Symbol, atmdict::Dict{Symbol, Vector{ftype_ncur}}, result
     # Calculate the transport fluxes for the species
     plottitle_ext = "" # no extra info in the plot title if flux==false 
     if sp in GV.transport_species
-        transportPL = get_transport_PandL_rate(sp, atmdict; nonthermal=nonthermal, globvars...)
+        transportPL = get_transport_PandL_rate(sp, atmdict, n_horiz; nonthermal=nonthermal, globvars...)
         # now separate into two different arrays for ease of addition.
         production_i = transportPL .>= 0  # boolean array for where transport entries > 0 (production),
         loss_i = transportPL .< 0 # and for where transport entries < 0 (loss).

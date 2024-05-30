@@ -89,7 +89,7 @@ function get_column_rates(sp::Symbol, atmdict::Dict{Symbol, Vector{ftype_ncur}};
     end
 end
 
-function get_volume_rates(sp::Symbol, atmdict::Dict{Symbol, Vector{ftype_ncur}}; species_role="both", which="all", remove_sp_density=false, globvars...)
+function get_volume_rates(sp::Symbol, atmdict::Dict{Symbol, Vector{Array{ftype_ncur}}}; species_role="both", which="all", remove_sp_density=false, globvars...)
     #=
     Input:
         sp: Species name
@@ -126,11 +126,11 @@ function get_volume_rates(sp::Symbol, atmdict::Dict{Symbol, Vector{ftype_ncur}};
         # Fill in rate coefficient * species density for all reactions
         if typeof(rxn[3]) == Symbol # for photodissociation
             if remove_sp_density==false
-                rxn_dat[rxn_str] = atmdict[rxn[1][1]] .* atmdict[rxn[3]]
+                rxn_dat[rxn_str] = atmdict[rxn[1][1]][1] .* vec(atmdict[rxn[3]][1]) # MULTICOL WARNING hardcoded to use first vertical column for all columns. Also, vec is just a quick way to deal with different parts of atmdict being [,,,] vs [   ]) -- deal with properly at some point
             else 
-                rxn_dat[rxn_str] = 1 .* atmdict[rxn[3]]  # this will functionally be the same as the rate coefficient for photodissociation.
+                rxn_dat[rxn_str] = 1 .* atmdict[rxn[3]][1]  # this will functionally be the same as the rate coefficient for photodissociation. # MULTICOL WARNING hardcoded to use first vertical column for all columns.
             end
-            rate_coefs[rxn_str] = atmdict[rxn[3]]
+            rate_coefs[rxn_str] = vec(atmdict[rxn[3]][1]) # MULTICOL WARNING hardcoded to use first vertical column for all columns.
         else                        # bi- and ter-molecular chemistry
             remove_me = remove_sp_density==true ? sp : nothing
             density_prod = reactant_density_product(atmdict, rxn[1]; removed_sp=remove_me, globvars...)
@@ -148,7 +148,7 @@ function get_volume_rates(sp::Symbol, atmdict::Dict{Symbol, Vector{ftype_ncur}};
     return rxn_dat, rate_coefs
 end
 
-function get_volume_rates(sp::Symbol, source_rxn::Vector{Any}, source_rxn_rc_func, atmdict::Dict{Symbol, Vector{ftype_ncur}}, Mtot; globvars...)
+function get_volume_rates(sp::Symbol, source_rxn::Vector{Any}, source_rxn_rc_func, atmdict::Dict{Symbol, Vector{Array{ftype_ncur}}}, Mtot; globvars...)
     #=
     Override to call for a single reaction. Useful for doing non-thermal flux boundary conditions.
     Input:
@@ -177,7 +177,7 @@ function get_volume_rates(sp::Symbol, source_rxn::Vector{Any}, source_rxn_rc_fun
         # Honestly I could probably rewrite everything so that photochem eq is possible with the Gear solver and ditch
         # the Julia solvers entirely but I like having the option and would rather get my PhD and get a pay raise
         # println(keys(GV.Jratedict))
-        vol_rates = atmdict[source_rxn[1][1]] .* GV.Jratedict[source_rxn[3]] 
+        vol_rates = atmdict[source_rxn[1][1]][1] .* GV.Jratedict[source_rxn[3]][1] # MULTICOL WARNING hardcoded to use first vertical column for all columns. Remove the final [1]s here eventually
     else                        # bi- and ter-molecular chemistry
         rate_coef = source_rxn_rc_func(GV.Tn, GV.Ti, GV.Te, Mtot)
         vol_rates = reactant_density_product(atmdict, source_rxn[1]; globvars...) .* rate_coef # This is k * [R1] * [R2] where [] is density of a reactant. 
@@ -212,7 +212,7 @@ function make_chemjac_key(fn, fpath, list1, list2)
     end
 end
 
-function reactant_density_product(atmdict::Dict{Symbol, Vector{ftype_ncur}}, reactants; removed_sp=nothing, globvars...)
+function reactant_density_product(atmdict::Dict{Symbol, Vector{Array{ftype_ncur}}}, reactants; removed_sp=nothing, globvars...)
     #=
     Calculates the product of all reactant densities for a chemical reaction for the whole atmosphere, 
     i.e. for A + B --> C + D, return n_A * n_B.
@@ -236,11 +236,11 @@ function reactant_density_product(atmdict::Dict{Symbol, Vector{ftype_ncur}}, rea
     for r in reactants
         if r != :M && r != :E
             # species densities by altitude
-            density_product .*= atmdict[r]  # multiply by each reactant density
+            density_product .*= atmdict[r][1]  # multiply by each reactant density # MULTICOL WARNING hardcoded to use values from first vertical column only
         elseif r == :M
-            density_product .*= sum([atmdict[sp] for sp in GV.all_species]) 
+            density_product .*= sum([atmdict[sp][1] for sp in GV.all_species])  # MULTICOL WARNING hardcoded to use values from first vertical column only
         elseif r == :E
-            density_product .*= sum([atmdict[sp] for sp in GV.ion_species])
+            density_product .*= sum([atmdict[sp][1] for sp in GV.ion_species])  # MULTICOL WARNING hardcoded to use values from first vertical column only
         else
             throw("Got an unknown symbol in a reaction rate: $(r)")
         end
@@ -314,8 +314,8 @@ function diffusion_timescale(s::Symbol, T_arr::Array, atmdict; globvars...)
     Dcoef_template = zeros(size(T_arr)) 
 
     # Other stuff
-    Hs = scaleH(GV.alt, s, T_arr; GV.molmass)
-    ncur_with_bdys =  ncur_with_boundary_layers(atmdict; GV.all_species, GV.n_alt_index)
+    Hs = scaleH(GV.alt, s, T_arr, n_horiz; GV.molmass)
+    ncur_with_bdys =  ncur_with_boundary_layers(atmdict, n_horiz; GV.all_species, GV.n_alt_index)
     
     # Molecular diffusion timescale: H_s^2 / D, scale height over diffusion constant
     D = Dcoef!(Dcoef_template, T_arr, s, ncur_with_bdys; globvars...)
@@ -331,7 +331,7 @@ function diffusion_timescale(s::Symbol, T_arr::Array, atmdict; globvars...)
     return molec_or_ambi_timescale, eddy_timescale, combined_timescale
 end
 
-function final_escape(thefolder, thefile; globvars...)
+function final_escape(thefolder, thefile, n_horiz::Int64; globvars...)
     #=
     thefolder: Folder in which an atmosphere file lives
     thefile: the file containing an atmosphere for which you'd like to calculate the final escape fluxes of H and D.
@@ -347,7 +347,7 @@ function final_escape(thefolder, thefile; globvars...)
     check_requirements(keys(GV), required)
     
     # First load the atmosphere and associated variables.
-    atmdict = get_ncurrent(thefolder*thefile);
+    atmdict = get_ncurrent(thefolder*thefile, n_horiz);
 
     vardict = load_from_paramlog(thefolder; globvars...);
     
@@ -361,7 +361,7 @@ function final_escape(thefolder, thefile; globvars...)
 
     # Now collect non-thermal and thermal fluxes for each species. 
     for s in ["H", "D", "H2", "HD"]
-        nonthermal_esc, thermal_esc = get_transport_PandL_rate(Symbol(s), atmdict; returnfluxes=true, Jratedict, zmax=GV.alt[end],
+        nonthermal_esc, thermal_esc = get_transport_PandL_rate(Symbol(s), atmdict, n_horiz; returnfluxes=true, Jratedict, zmax=GV.alt[end],
                                                                hot_H_network=GV.hHnet, hot_D_network=GV.hDnet, hot_H2_network=GV.hH2net, hot_HD_network=GV.hHDnet,
                                                                hot_H_rc_funcs=GV.hHrc, hot_D_rc_funcs=GV.hDrc, hot_H2_rc_funcs=GV.hH2rc, hot_HD_rc_funcs=GV.hHDrc, 
                                                                Hs_dict=vardict["Hs_dict"], ion_species=vardict["ion_species"], neutral_species=vardict["neutral_species"],
@@ -406,7 +406,7 @@ function fractionation_factor(esc_df, h2o_0, hdo_0; ftype="total")
     return f = ((flux_t_D + flux_nt_D) / (flux_t_H + flux_nt_H)) / (hdo_0 / (2 * h2o_0))
 end
 
-function get_transport_PandL_rate(sp::Symbol, atmdict::Dict{Symbol, Vector{ftype_ncur}}; returnfluxes=false, nonthermal=true, globvars...)
+function get_transport_PandL_rate(sp::Symbol, atmdict::Dict{Symbol, Vector{Array{ftype_ncur}}}, n_horiz::Int64; returnfluxes=false, nonthermal=true, globvars...)
     #=
     Input:
         sp: species for which to return the transport production and loss
@@ -433,7 +433,7 @@ function get_transport_PandL_rate(sp::Symbol, atmdict::Dict{Symbol, Vector{ftype
 
     # Generate the fluxcoefs dictionary and boundary conditions dictionary
     D_arr = zeros(size(GV.Tn))
-    Keddy_arr, H0_dict, Dcoef_dict = update_diffusion_and_scaleH(GV.all_species, atmdict, D_arr; globvars...) 
+    Keddy_arr, H0_dict, Dcoef_dict = update_diffusion_and_scaleH(GV.all_species, atmdict, D_arr, n_horiz; globvars...) 
     fluxcoefs_all = fluxcoefs(GV.all_species, Keddy_arr, Dcoef_dict, H0_dict; globvars...)
 
     # For the bulk layers only to make the loops below more comprehendable: 
@@ -448,20 +448,20 @@ function get_transport_PandL_rate(sp::Symbol, atmdict::Dict{Symbol, Vector{ftype
     transport_PL = fill(convert(ftype_ncur, NaN), GV.num_layers)
 
     # These are the derivatives, which should be what we want (check math)
-    transport_PL[1] = ((atmdict[sp][2]*fluxcoefs_bulk_layers[sp][2, 1]  # in from layer above
-                        -atmdict[sp][1]*fluxcoefs_bulk_layers[sp][1, 2]) # out to layer above
-                    +(-atmdict[sp][1]*thesebcs[1, 1] # out to boundary layer
+    transport_PL[1] = ((atmdict[sp][1][2]*fluxcoefs_bulk_layers[sp][2, 1]  # in from layer above     # MULTICOL WARNING hardcoded to use first vertical column for all columns
+                        -atmdict[sp][1][1]*fluxcoefs_bulk_layers[sp][1, 2]) # out to layer above     # MULTICOL WARNING hardcoded to use first vertical column for all columns
+                    +(-atmdict[sp][1][1]*thesebcs[1, 1] # out to boundary layer                      # MULTICOL WARNING hardcoded to use first vertical column for all columns
                       +thesebcs[1, 2])) # in from the boundary layer
     for ialt in 2:length(transport_PL) - 1
-        transport_PL[ialt] = ((atmdict[sp][ialt+1]*fluxcoefs_bulk_layers[sp][ialt+1, 1]  # coming in from above
-                               -atmdict[sp][ialt]*fluxcoefs_bulk_layers[sp][ialt, 2])    # leaving out to above layer
-                             +(-atmdict[sp][ialt]*fluxcoefs_bulk_layers[sp][ialt, 1]     # leaving to the layer below
-                               +atmdict[sp][ialt-1]*fluxcoefs_bulk_layers[sp][ialt-1, 2]))  # coming in from below
+        transport_PL[ialt] = ((atmdict[sp][1][ialt+1]*fluxcoefs_bulk_layers[sp][ialt+1, 1]  # coming in from above       # MULTICOL WARNING hardcoded to use first vertical column for all columns       
+                               -atmdict[sp][1][ialt]*fluxcoefs_bulk_layers[sp][ialt, 2])    # leaving out to above layer # MULTICOL WARNING hardcoded to use first vertical column for all columns
+                             +(-atmdict[sp][1][ialt]*fluxcoefs_bulk_layers[sp][ialt, 1]     # leaving to the layer below # MULTICOL WARNING hardcoded to use first vertical column for all columns
+                               +atmdict[sp][1][ialt-1]*fluxcoefs_bulk_layers[sp][ialt-1, 2]))  # coming in from below    # MULTICOL WARNING hardcoded to use first vertical column for all columns
     end
     transport_PL[end] = ((thesebcs[2, 2] # in from upper boundary layer - (non-thermal loss from flux bc)
-                          - atmdict[sp][end]*thesebcs[2, 1]) # (#/cm³) * (#/s) out to space from upper bdy (thermal loss from velocity bc)
-                        + (-atmdict[sp][end]*fluxcoefs_bulk_layers[sp][end, 1] # leaving out to layer below
-                           +atmdict[sp][end-1]*fluxcoefs_bulk_layers[sp][end-1, 2])) # coming in to top layer from layer below
+                          - atmdict[sp][1][end]*thesebcs[2, 1]) # (#/cm³) * (#/s) out to space from upper bdy (thermal loss from velocity bc)  # MULTICOL WARNING hardcoded to use first vertical column for all columns
+                        + (-atmdict[sp][1][end]*fluxcoefs_bulk_layers[sp][end, 1] # leaving out to layer below                                 # MULTICOL WARNING hardcoded to use first vertical column for all columns
+                           +atmdict[sp][1][end-1]*fluxcoefs_bulk_layers[sp][end-1, 2])) # coming in to top layer from layer below              # MULTICOL WARNING hardcoded to use first vertical column for all columns
 
     # Use these for a sanity check if you like. 
     # println("Activity in the top layer for sp $(sp) AS FLUX:")
@@ -471,7 +471,7 @@ function get_transport_PandL_rate(sp::Symbol, atmdict::Dict{Symbol, Vector{ftype
     # println("In from layer below: $(atmdict[sp][end-1]*fluxcoefs_all[sp][end-1, 2]*GV.dz)")
 
     if returnfluxes
-        tflux = atmdict[sp][end]*thesebcs[2, 1]*GV.dz
+        tflux = atmdict[sp][1][end]*thesebcs[2, 1]*GV.dz   # MULTICOL WARNING hardcoded to use first vertical column for all columns
         if nonthermal
             ntflux = thesebcs[2, 2]*GV.dz
             if sp in [:H, :D, :H2, :HD]
@@ -517,7 +517,7 @@ function get_directional_fluxes(sp::Symbol, atmdict::Dict{Symbol, Vector{ftype_n
 
     # Generate the fluxcoefs dictionary and boundary conditions dictionary
     D_arr = zeros(size(GV.Tn))
-    Keddy_arr, H0_dict, Dcoef_dict = update_diffusion_and_scaleH(GV.all_species, atmdict, D_arr; globvars...) 
+    Keddy_arr, H0_dict, Dcoef_dict = update_diffusion_and_scaleH(GV.all_species, atmdict, D_arr, n_horiz; globvars...) 
     fluxcoefs_all = fluxcoefs(GV.all_species, Keddy_arr, Dcoef_dict, H0_dict; globvars...)
 
     # For the bulk layers only to make the loops below more comprehendable: 
@@ -640,7 +640,7 @@ function limiting_flux(sp, atmdict, T_arr; treat_H_as_rare=false, full_equation=
         T_arr = T_arr[2:end-1]
     end
 
-    Ha = scaleH(atmdict, T_arr; ignore=[sp], globvars..., alt=GV.non_bdy_layers)
+    Ha = scaleH(atmdict, T_arr, n_horiz; ignore=[sp], globvars..., alt=GV.non_bdy_layers)
     bi = binary_dcoeff_inCO2(sp, T_arr) # AT^s
 
     if full_equation
@@ -648,12 +648,12 @@ function limiting_flux(sp, atmdict, T_arr; treat_H_as_rare=false, full_equation=
         dTdz = dTdz[2:end] = @. (T_arr[2:end] - T_arr[1:end-1]) / GV.dz # make the temp gradient
         print(dTdz)
         fi = thedensity ./ n_tot(atmdict; ignore=[sp], globvars...)
-        ma = meanmass(atmdict; ignore=[sp], globvars...) 
+        ma = meanmass(atmdict, n_horiz; ignore=[sp], globvars...) 
 
         return @. ((bi*fi)/(1+fi)) * ( mH*(ma - GV.molmass[sp]) * (g/(kB*T_arr)) - (thermaldiff(sp)/T_arr) * dTdz[1:end-1])
     else
         D = Dcoef_neutrals(non_bdy_layers, sp, bi, atmdict; globvars...)    
-        return (D .* atmdict[sp] ./ Ha) .* (1 .- GV.molmass[sp] ./ meanmass(atmdict; ignore=[sp], globvars...))
+        return (D .* atmdict[sp] ./ Ha) .* (1 .- GV.molmass[sp] ./ meanmass(atmdict, n_horiz; ignore=[sp], globvars...))
     end
 end
 
@@ -693,9 +693,9 @@ function limiting_flux_molef(sp, atmdict, T_arr; globvars...)
     X = (atmdict[sp] ./ avogadro) ./ (n_tot(atmdict; globvars...) ./ avogadro)
     # Calculate some common things: mixing ratio, scale height, binary diffusion coefficient AT^s
 
-    Ha = scaleH(atmdict, T_arr; globvars..., alt=GV.non_bdy_layers)
+    Ha = scaleH(atmdict, T_arr, n_horiz; globvars..., alt=GV.non_bdy_layers)
     bi = binary_dcoeff_inCO2(sp, T_arr)
-    Hi = scaleH(non_bdy_layers, sp, T_arr; globvars...)
+    Hi = scaleH(non_bdy_layers, sp, T_arr, n_horiz; globvars...)
 
     return bi .* X .* (1 ./ Ha - 1 ./ Hi), X
 end

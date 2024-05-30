@@ -94,7 +94,7 @@ These functions are required to be in this file for one of two reasons:
    be changed so that they could be moved into the Core.jl module but I don't want to do it right now. (Feb 2023)
 =#
 
-function evolve_atmosphere(atm_init::Dict{Symbol, Array{ftype_ncur, 1}}, log_t_start, log_t_end; t_to_save=[], abstol=1e-12, reltol=1e-6, globvars...)
+function evolve_atmosphere(atm_init::Dict{Symbol, Vector{Array{ftype_ncur}}}, log_t_start, log_t_end; t_to_save=[], abstol=1e-12, reltol=1e-6, globvars...)
     #=
     Sets up the initial conditions for the simulation and calls the ODE solver. 
 
@@ -129,7 +129,7 @@ function evolve_atmosphere(atm_init::Dict{Symbol, Array{ftype_ncur, 1}}, log_t_s
     tspan = (10.0^log_t_start, 10.0^log_t_end)
     
     # Set up the initial state and check for any problems 
-    nstart = flatten_atm(atm_init, GV.active_longlived; GV.num_layers)
+    nstart = flatten_atm(atm_init, GV.active_longlived, n_horiz; GV.num_layers)
     find_nonfinites(nstart, collec_name="nstart")
 
     # Set up parameters
@@ -228,7 +228,7 @@ function chemJmat(n_active_longlived, n_active_shortlived, n_inactive, Jrates, t
     GV = values(globvars)
     @assert all(x->x in keys(GV), [:active_longlived, :active_shortlived, :H2Oi, :HDOi, :inactive_species, :num_layers, :Tn, :Ti, :Te, :upper_lower_bdy_i])
 
-    nmat_llsp = reshape(n_active_longlived, (length(GV.active_longlived), GV.num_layers))
+    nmat_llsp = reshape(n_active_longlived, (length(GV.active_longlived), GV.num_layers, n_horiz))
     nmat_slsp = reshape(n_active_shortlived, (length(GV.active_shortlived), GV.num_layers))
     nmat_inactive = reshape(n_inactive, (length(GV.inactive_species), GV.num_layers))
     
@@ -238,14 +238,14 @@ function chemJmat(n_active_longlived, n_active_shortlived, n_inactive, Jrates, t
     chemJval = ftype_chem[]
 
     # tc___ are the coordinate tuples containing (I, J, V) to be used to fill a sparse matrix.
-    argvec = [nmat_llsp[:, 1];                        # active_longlived;
-              nmat_llsp[:, 2];                        # active_longlived_above;
+    argvec = [nmat_llsp[:, 1, 1];                     # active_longlived; # MULTICOL WARNING hardcoded to use info from first column for all columns.
+              nmat_llsp[:, 2, 1];                     # active_longlived_above; # MULTICOL WARNING hardcoded to use info from first column for all columns.
               fill(1.0, length(GV.active_longlived)); # active_longlived_below;
-              nmat_slsp[:, 1];                        # active_shortlived;
+              nmat_slsp[:, 1, 1];                     # active_shortlived; # MULTICOL WARNING hardcoded to use info from first column for all columns.
               nmat_inactive[:,1];                     # inactive_species;
               Jrates[:,1];                            # Jratelist;
               GV.Tn[1]; GV.Ti[1]; GV.Te[1];           #:Tn; :Ti; :Te;
-              M[1]; E[1];                             # total density and electrons,
+              M[1]; E[1][1];                          # total density and electrons, # MULTICOL WARNING hardcoded to use info from first column for all columns.
               tup[:,1]; tlower[:,1];                  # local_transport_rates
               tdown[:,2]; tlower[:,2]]
     argvec = convert(Array{ftype_chem}, argvec)
@@ -263,14 +263,14 @@ function chemJmat(n_active_longlived, n_active_shortlived, n_inactive, Jrates, t
     append!(chemJval, tcupper[3])
 
     for ialt in 2:(GV.num_layers-1)
-        argvec = [nmat_llsp[:, ialt];
-                  nmat_llsp[:, ialt+1];
-                  nmat_llsp[:, ialt-1];
-                  nmat_slsp[:, ialt];
+        argvec = [nmat_llsp[:, ialt, 1];    # MULTICOL WARNING hardcoded to use info from first column for all columns.
+                  nmat_llsp[:, ialt+1, 1];  # MULTICOL WARNING hardcoded to use info from first column for all columns.
+                  nmat_llsp[:, ialt-1, 1];  # MULTICOL WARNING hardcoded to use info from first column for all columns.
+                  nmat_slsp[:, ialt, 1];    # MULTICOL WARNING hardcoded to use info from first column for all columns.
                   nmat_inactive[:, ialt];
                   Jrates[:, ialt];
                   GV.Tn[ialt]; GV.Ti[ialt]; GV.Te[ialt];
-                  M[ialt]; E[ialt];
+                  M[ialt]; E[1][ialt];      # MULTICOL WARNING hardcoded to use info from first column for all columns.
                   tup[:, ialt];
                   tdown[:, ialt];
                   tdown[:, ialt+1];
@@ -293,14 +293,14 @@ function chemJmat(n_active_longlived, n_active_shortlived, n_inactive, Jrates, t
         append!(chemJval, tclower[3])
     end
 
-    argvec = [nmat_llsp[:,end];
+    argvec = [nmat_llsp[:,end, 1];          # MULTICOL WARNING hardcoded to use info from first column for all columns.
               fill(1.0, length(GV.active_longlived));
-              nmat_llsp[:,end-1];
-              nmat_slsp[:, end];
+              nmat_llsp[:,end-1, 1];        # MULTICOL WARNING hardcoded to use info from first column for all columns.
+              nmat_slsp[:, end, 1];         # MULTICOL WARNING hardcoded to use info from first column for all columns.
               nmat_inactive[:,end];
               Jrates[:,end];
               GV.Tn[end]; GV.Ti[end]; GV.Te[end];
-              M[end]; E[end]; # E FIX ATTEMPT
+              M[end]; E[1][end]; # E FIX ATTEMPT   # MULTICOL WARNING hardcoded to use info from first column for all columns.
               tupper[:,1]; tdown[:,end];
               tupper[:,2]; tup[:,end-1]]
     argvec = convert(Array{ftype_chem}, argvec)
@@ -360,59 +360,59 @@ function ratefn(n_active_longlived, n_active_shortlived, n_inactive, Jrates, tup
     GV = values(globvars)
     @assert all(x->x in keys(GV), [:active_longlived, :active_shortlived, :H2Oi, :HDOi, :inactive_species, :num_layers, :Tn, :Ti, :Te, :upper_lower_bdy_i])
 
-    nmat_llsp = reshape(n_active_longlived, (length(GV.active_longlived), GV.num_layers))
-    nmat_slsp = reshape(n_active_shortlived, (length(GV.active_shortlived), GV.num_layers))
-    nmat_inactive = reshape(n_inactive, (length(GV.inactive_species), GV.num_layers))
+    nmat_llsp = reshape(n_active_longlived, (length(GV.active_longlived), GV.num_layers, n_horiz))
+    nmat_slsp = reshape(n_active_shortlived, (length(GV.active_shortlived), GV.num_layers, n_horiz))
+    nmat_inactive = reshape(n_inactive, (length(GV.inactive_species), GV.num_layers, n_horiz))
     returnrates = zeros(size(nmat_llsp))
     
     # fill the first altitude entry with information for all species
-    argvec = [nmat_llsp[:,1];                         # densities for active_longlived;
-              nmat_llsp[:,2];                         # active_longlived_above;
+    argvec = [nmat_llsp[:,1, 1];                      # densities for active_longlived;  # MULTICOL WARNING hardcoded to use info from first column for all columns.
+              nmat_llsp[:,2, 1];                      # active_longlived_above; # MULTICOL WARNING hardcoded to use info from first column for all columns.
               fill(1.0, length(GV.active_longlived)); # active_longlived_below;
-              nmat_slsp[:, 1];                        # active_shortlived;
-              nmat_inactive[:,1];                     # inactive_species;
+              nmat_slsp[:, 1, 1];                     # active_shortlived;      # MULTICOL WARNING hardcoded to use info from first column for all columns.
+              nmat_inactive[:,1, 1];                  # inactive_species;       # MULTICOL WARNING hardcoded to use info from first column for all columns.
               Jrates[:,1];                            # Jratelist;
               GV.Tn[1]; GV.Ti[1]; GV.Te[1];           # :Tn; :Ti; :Te;
-              M[1]; E[1];  
+              M[1]; E[1][1];                          # MULTICOL WARNING hardcoded to use info from first column for all columns.
               tup[:,1]; tlower[:,1]; tdown[:,2]; tlower[:,2]]
     argvec = convert(Array{ftype_chem}, argvec)
     
-    returnrates[:,1] .= ratefn_local(argvec...) # local_transport_rates
+    returnrates[:,1,1] .= ratefn_local(argvec...) # local_transport_rates # MULTICOL WARNING hardcoded to use info from first column for all columns.
 
     # iterate through other altitudes in the lower atmosphere
     for ialt in 2:(GV.num_layers-1)
-        argvec = [nmat_llsp[:, ialt]; # active_longlived;
-                  nmat_llsp[:, ialt+1];
-                  nmat_llsp[:, ialt-1];
-                  nmat_slsp[:, ialt]; # active_shortlived;
-                  nmat_inactive[:,ialt];
+        argvec = [nmat_llsp[:, ialt, 1]; # active_longlived;  # MULTICOL WARNING hardcoded to use info from first column for all columns.
+                  nmat_llsp[:, ialt+1, 1];                    # MULTICOL WARNING hardcoded to use info from first column for all columns.
+                  nmat_llsp[:, ialt-1, 1];                    # MULTICOL WARNING hardcoded to use info from first column for all columns.
+                  nmat_slsp[:, ialt, 1]; # active_shortlived; # MULTICOL WARNING hardcoded to use info from first column for all columns.
+                  nmat_inactive[:,ialt, 1];                   # MULTICOL WARNING hardcoded to use info from first column for all columns.
                   Jrates[:,ialt];
                   GV.Tn[ialt]; GV.Ti[ialt]; GV.Te[ialt];
-                  M[ialt]; E[ialt]; 
+                  M[ialt]; E[1][ialt];                        # MULTICOL WARNING hardcoded to use info from first column for all columns.
                   tup[:, ialt];
                   tdown[:, ialt];
                   tdown[:, ialt+1];
                   tup[:, ialt-1]]
         argvec = convert(Array{ftype_chem}, argvec)
         
-        returnrates[:,ialt] .= ratefn_local(argvec...)
+        returnrates[:,ialt,1] .= ratefn_local(argvec...)      # MULTICOL WARNING hardcoded to use info from first column for all columns.
     end
 
     # fill in the last level of altitude
-    argvec = [nmat_llsp[:, end];
+    argvec = [nmat_llsp[:, end, 1];                           # MULTICOL WARNING hardcoded to use info from first column for all columns.
               fill(1.0, length(GV.active_longlived));
-              nmat_llsp[:, end-1];
-              nmat_slsp[:, end]; # active_shortlived;
-              nmat_inactive[:,end];
+              nmat_llsp[:, end-1, 1];                         # MULTICOL WARNING hardcoded to use info from first column for all columns.
+              nmat_slsp[:, end, 1]; # active_shortlived;      # MULTICOL WARNING hardcoded to use info from first column for all columns.
+              nmat_inactive[:,end, 1];                        # MULTICOL WARNING hardcoded to use info from first column for all columns.
               Jrates[:,end];
               GV.Tn[end]; GV.Ti[end]; GV.Te[end];
-              M[end]; E[end];
+              M[end]; E[1][end];                              # MULTICOL WARNING hardcoded to use info from first column for all columns.
               tupper[:,1];
               tdown[:,end];
               tupper[:,2];
               tup[:,end-1]]
     argvec = convert(Array{ftype_chem}, argvec)
-    returnrates[:,end] .= ratefn_local(argvec...)
+    returnrates[:,end,1] .= ratefn_local(argvec...)           # MULTICOL WARNING hardcoded to use info from first column for all columns.
 
     # NEW: Overwrite the entries for water in the lower atmosphere with 0s so that it will behave as fixed.
     # Only runs when water is in the active_species list. If neutrals are set to inactive, it will be taken care of already.
@@ -455,9 +455,9 @@ function record_atmospheric_state(t, n, actively_solved, E_prof; opt="", globvar
     println(progress_alert)
     
     # write out the current atmospheric state to a file and plot it
-    atm_snapshot = merge(external_storage, unflatten_atm(n, actively_solved; GV.num_layers))
+    atm_snapshot = merge(external_storage, unflatten_atm(n, actively_solved, n_horiz; GV.num_layers))
     plot_atm(atm_snapshot, results_dir*sim_folder_name*"/atm_peek_$(plotnum)$(opt).png", abs_tol_for_plot, E_prof; ylims=[zmin/1e5, zmax/1e5], t="$(round(t, digits=rounding_digits))", globvars...)
-    write_atmosphere(atm_snapshot, results_dir*sim_folder_name*"/atm_state_$(lpad(plotnum,2,"0"))$(opt).h5"; t=round(t, digits=rounding_digits), globvars...)
+    write_atmosphere(atm_snapshot, results_dir*sim_folder_name*"/atm_state_$(lpad(plotnum,2,"0"))$(opt).h5", n_horiz; t=round(t, digits=rounding_digits), globvars...)
 
     # Turn this on if you'd like to take a peek at the Jrates
     # for Jspc in values(GV.neutral_species)
@@ -470,7 +470,7 @@ end
 #                                   Gear solver                                 #
 #===============================================================================#
 
-function converge(n_current::Dict{Symbol, Array{ftype_ncur, 1}}, log_t_start, log_t_end; verbose=false, t_to_save=nothing,
+function converge(n_current::Dict{Symbol, Vector{Array{ftype_ncur}}}, log_t_start, log_t_end; verbose=false, t_to_save=nothing,
                   abstol=1e-12, reltol=1e-2, globvars...)
     #= 
     Calls update! in logarithmiclly spaced timesteps until convergence, returning converged atmosphere 
@@ -658,29 +658,29 @@ function get_rates_and_jacobian(n, p, t; globvars...)
     end
 
     # retrieve the shortlived species from their storage and flatten them
-    n_short = flatten_atm(external_storage, GV.active_shortlived; GV.num_layers)
+    n_short = flatten_atm(external_storage, GV.active_shortlived, n_horiz; GV.num_layers)
 
     # Update Jrates
-    n_cur_all = compile_ncur_all(n, n_short, GV.n_inactive; GV.active_longlived, GV.active_shortlived, GV.inactive_species, GV.num_layers)
+    n_cur_all = compile_ncur_all(n, n_horiz, n_short, GV.n_inactive; GV.active_longlived, GV.active_shortlived, GV.inactive_species, GV.num_layers)
 
-    update_Jrates!(n_cur_all; GV.Jratelist, GV.crosssection, GV.num_layers, GV.absorber, GV.dz, GV.solarflux)
+    update_Jrates!(n_cur_all, n_horiz; GV.Jratelist, GV.crosssection, GV.num_layers, GV.absorber, GV.dz, GV.solarflux)
     # copy all the Jrates into an external dictionary for storage
     for jr in GV.Jratelist                # time for this is ~0.000005 s
         global external_storage[jr] = n_cur_all[jr]
     end
 
     # Retrieve Jrates 
-    Jrates = deepcopy(ftype_ncur[external_storage[jr][ialt] for jr in GV.Jratelist, ialt in 1:GV.num_layers])
+    Jrates = deepcopy(ftype_ncur[external_storage[jr][1][ialt] for jr in GV.Jratelist, ialt in 1:GV.num_layers]) # MULTICOL WARNING hardcoded to use info from first column for all columns.
 
     # set the concentrations of species assumed to be in photochemical equilibrium. 
     n_short_updated = set_concentrations!(external_storage, n, n_short, GV.n_inactive, Jrates, M, E; 
                                           GV.active_longlived, GV.active_shortlived, GV.inactive_species, GV.Tn, GV.Ti, GV.Te, GV.num_layers)
 
     # Reconstruct the dictionary that holds densities
-    updated_ncur_all = compile_ncur_all(n, n_short_updated, GV.n_inactive; GV.active_longlived, GV.active_shortlived, GV.inactive_species, GV.num_layers)
+    updated_ncur_all = compile_ncur_all(n, n_horiz, n_short_updated, GV.n_inactive; GV.active_longlived, GV.active_shortlived, GV.inactive_species, GV.num_layers)
 
     # Get the updated transport coefficients, taking into account short-lived species update
-    tlower, tup, tdown, tupper = update_transport_coefficients(GV.transport_species, updated_ncur_all, D_arr, M; 
+    tlower, tup, tdown, tupper = update_transport_coefficients(GV.transport_species, updated_ncur_all, D_arr, M, n_horiz; 
                                                                calc_nonthermal=nontherm, results_dir, sim_folder_name, 
                                                                Jratedict=Dict([j=>n_cur_all[j] for j in GV.Jratelist]), # Needed for nonthermal BCs
                                                                globvars...)
@@ -865,32 +865,34 @@ function set_concentrations!(external_storage, n_active_long, n_active_short, n_
     @assert all(x->x in keys(GV), [:active_longlived, :active_shortlived, :inactive_species, :Tn, :Ti, :Te, :num_layers])
     
     # rows = species, columns = altitudes. 
-    nmat_shortlived = reshape(n_active_short, (length(GV.active_shortlived), GV.num_layers))
+    nmat_shortlived = reshape(n_active_short, (length(GV.active_shortlived), GV.num_layers)) # MULTICOL WARNING might need to add n_horiz as in line below
     
     # auxiliary information that is needed. 
-    nmat_longlived = reshape(n_active_long, (length(GV.active_longlived), GV.num_layers))
-    nmat_inactive = reshape(n_inactive, (length(GV.inactive_species), GV.num_layers))
+    nmat_longlived = reshape(n_active_long, (length(GV.active_longlived), GV.num_layers, n_horiz))
+    nmat_inactive = reshape(n_inactive, (length(GV.inactive_species), GV.num_layers))        # MULTICOL WARNING  might need to add n_horiz as in line above
     
     # storage for the updated concentrations
     new_densities = zeros(size(nmat_shortlived))
     # dist_zero = zeros(length(nmat_shortlived)) # TODO: Figure out how to make useful
 
     # fill the first altitude entry with information for all species   
-    argvec = [nmat_shortlived[:,1]; nmat_longlived[:, 1]; nmat_inactive[:, 1]; Jrates[:, 1]; GV.Tn[1]; GV.Ti[1]; GV.Te[1]; M[1]; E[1]] # E FIX ATTEMPT
+    argvec = [nmat_shortlived[:,1]; nmat_longlived[:, 1, 1]; nmat_inactive[:, 1]; Jrates[:, 1]; GV.Tn[1]; GV.Ti[1]; GV.Te[1]; M[1, :]; E[1][1]] # E FIX ATTEMPT  # MULTICOL WARNING hardcoded to use info from first column for all columns. This should probably eventually be n_horiz times as large?
+    
     argvec = convert(Array{ftype_chem}, argvec)
     new_densities[:,1] .= set_concentrations_local(argvec...)
     # dist_zero[1] = check_zero_distance([nmat_shortlived[:,1]; nmat_longlived[:, 1]; nmat_inactive[:, 1]; Jrates[:, 1]; Tn[1]; Ti[1]; Te[1]]...)
 
     # iterate through other altitudes in the lower atmosphere
     for ialt in 2:(GV.num_layers-1)
-        argvec = [nmat_shortlived[:,ialt]; nmat_longlived[:, ialt]; nmat_inactive[:, ialt]; Jrates[:, ialt]; GV.Tn[ialt]; GV.Ti[ialt]; GV.Te[ialt]; M[ialt]; E[ialt]] # E FIX ATTEMPT
+        argvec = [nmat_shortlived[:,ialt]; nmat_longlived[:, ialt, 1]; nmat_inactive[:, ialt]; Jrates[:, ialt]; GV.Tn[ialt]; GV.Ti[ialt]; GV.Te[ialt]; M[ialt, :]; E[1][ialt]] # E FIX ATTEMPT # MULTICOL WARNING hardcoded to use info from first column for all columns.
+	
         argvec = convert(Array{ftype_chem}, argvec)
         new_densities[:,ialt] .= set_concentrations_local(argvec...)
         # dist_zero[ialt] = check_zero_distance([nmat_shortlived[:,ialt]; nmat_longlived[:, ialt]; nmat_inactive[:, ialt]; Jrates[:, ialt]; Tn[ialt]; Ti[ialt]; Te[ialt]]...)
     end
 
     # fill in the last level of altitude
-    argvec = [nmat_shortlived[:, end]; nmat_longlived[:, end]; nmat_inactive[:, end]; Jrates[:, end]; GV.Tn[end]; GV.Ti[end]; GV.Te[end]; M[end]; E[end]] # E FIX ATTEMPT
+    argvec = [nmat_shortlived[:, end]; nmat_longlived[:, end, 1]; nmat_inactive[:, end]; Jrates[:, end]; GV.Tn[end]; GV.Ti[end]; GV.Te[end]; M[end]; E[1][end]] # E FIX ATTEMPT # MULTICOL WARNING hardcoded to use info from first column for all columns. 
     argvec = convert(Array{ftype_chem}, argvec)
     new_densities[:,end] .= set_concentrations_local(argvec...)
     # dist_zero[end] = check_zero_distance([nmat_shortlived[:, end]; nmat_longlived[:, end]; nmat_inactive[:, end]; Jrates[:, end]; Tn[end]; Ti[end]; Te[end]]...)
@@ -908,7 +910,7 @@ function set_concentrations!(external_storage, n_active_long, n_active_short, n_
     # end
 end
 
-function update!(n_current::Dict{Symbol, Array{ftype_ncur, 1}}, t, dt; abstol=1e-12, reltol=1e-2, globvars...)
+function update!(n_current::Dict{Symbol, Vector{Array{ftype_ncur}}}, t, dt; abstol=1e-12, reltol=1e-2, globvars...)
     #= 
     update n_current using the coupled reaction network, moving to the next timestep.
     Input:
@@ -935,19 +937,19 @@ function update!(n_current::Dict{Symbol, Array{ftype_ncur, 1}}, t, dt; abstol=1e
     params = [GV.Dcoef_arr_template, M, E] 
 
     # get current long-lived species concentrations
-    nstart = flatten_atm(n_current, GV.active_longlived; GV.num_layers)
+    nstart = flatten_atm(n_current, GV.active_longlived, n_horiz; GV.num_layers)
 
     # update to next timestep
     nend = next_timestep(nstart, params, t, dt; abstol=abstol, reltol=reltol, globvars...)
     #    println("max(nend-nstart) = $(max((nend-nstart)...))")
 
     # retrieve the shortlived species from their storage and flatten them
-    n_short = flatten_atm(external_storage, GV.active_shortlived; GV.num_layers)  
+    n_short = flatten_atm(external_storage, GV.active_shortlived, n_horiz; GV.num_layers)  
 
-    n_current = compile_ncur_all(nend, n_short, GV.n_inactive; GV.active_longlived, GV.active_shortlived, GV.inactive_species, GV.num_layers)
+    n_current = compile_ncur_all(nend, n_horiz, n_short, GV.n_inactive; GV.active_longlived, GV.active_shortlived, GV.inactive_species, GV.num_layers)
 
     # ensure Jrates are included in n_current
-    update_Jrates!(n_current; GV.Jratelist, GV.crosssection, GV.num_layers, GV.absorber, GV.dz, GV.solarflux)
+    update_Jrates!(n_current, n_horiz; GV.Jratelist, GV.crosssection, GV.num_layers, GV.absorber, GV.dz, GV.solarflux)
 
     return n_current
 end 
@@ -1008,7 +1010,7 @@ end
 #                        Load starting atmosphere                               #
 #===============================================================================#
 println("$(Dates.format(now(), "(HH:MM:SS)")) Loading atmosphere")
-n_current = get_ncurrent(initial_atm_file)
+n_current = get_ncurrent(initial_atm_file, n_horiz)
 
 
 #                       Establish new species profiles                          #
@@ -1179,8 +1181,8 @@ if update_water_profile
 end
 
 # Calculate precipitable microns, including boundary layers (assumed same as nearest bulk layer)
-H2Oprum = precip_microns(:H2O, [n_current[:H2O][1]; n_current[:H2O]; n_current[:H2O][end]]; molmass, dz)
-HDOprum = precip_microns(:HDO, [n_current[:HDO][1]; n_current[:HDO]; n_current[:HDO][end]]; molmass, dz)
+H2Oprum = precip_microns(:H2O, [n_current[:H2O][1][1]; n_current[:H2O][1]; n_current[:H2O][1][end]]; molmass, dz) # MULTICOL WARNING hardcoded to the first vertical column; will need changing if want different values for each column
+HDOprum = precip_microns(:HDO, [n_current[:HDO][1][1]; n_current[:HDO][1]; n_current[:HDO][1][end]]; molmass, dz) # MULTICOL WARNING hardcoded to the first vertical column; will need changing if want different values for each column
 
 #           Define storage for species/Jrates not solved for actively           #
 #===============================================================================#
@@ -1188,8 +1190,8 @@ HDOprum = precip_microns(:HDO, [n_current[:HDO][1]; n_current[:HDO]; n_current[:
 # outside of the primary ODE solver. Inactive species never change during simulation.
 # Jrates must be stored here because they have to be updated alongside evolution
 # of the atmospheric densities--the solver doesn't handle their values currently.
-const external_storage = Dict{Symbol, Vector{Float64}}([j=>n_current[j] for j in union(short_lived_species, inactive_species, Jratelist)])
-const n_inactive = flatten_atm(n_current, inactive_species; num_layers)
+const external_storage = Dict{Symbol, Vector{Array{Float64}}}([j=>n_current[j] for j in union(short_lived_species, inactive_species, Jratelist)])
+const n_inactive = flatten_atm(n_current, inactive_species, n_horiz; num_layers)
 
 # **************************************************************************** #
 #                                                                              #
@@ -1505,7 +1507,7 @@ write_to_log(logfile, ["Description: $(optional_logging_note)"], mode="w")
 # n_current[:D] = map(x->1e5*exp(-((x-184)/20)^2), non_bdy_layers/1e5) + n_current[:D]
 
 # write initial atmospheric state ==============================================
-write_atmosphere(n_current, results_dir*sim_folder_name*"/initial_atmosphere.h5"; alt, num_layers, hrshortcode, rshortcode)
+write_atmosphere(n_current, results_dir*sim_folder_name*"/initial_atmosphere.h5", n_horiz; alt, num_layers, hrshortcode, rshortcode)
 
 # Plot initial temperature and water profiles ==================================
 plot_temp_prof(Tn_arr; savepath=results_dir*sim_folder_name, Tprof_2=Ti_arr, Tprof_3=Te_arr, alt, monospace_choice, sansserif_choice)
@@ -1639,11 +1641,11 @@ println("$(Dates.format(now(), "(HH:MM:SS)")) Simulation active convergence runt
 if problem_type == "SS"
     # Update short-lived species one more time
     println("One last update of short-lived species")
-    n_short = flatten_atm(external_storage, active_shortlived; num_layers)
+    n_short = flatten_atm(external_storage, active_shortlived, n_horiz; num_layers)
     Jrates = deepcopy(Float64[external_storage[jr][ialt] for jr in Jratelist, ialt in 1:num_layers])
     set_concentrations!(external_storage, atm_soln.u, n_short, inactive, 
                         active_longlived, active_shortlived, inactive_species, Jrates, Tn_arr, Ti_arr, Te_arr)
-    nc_all = merge(external_storage, unflatten_atm(atm_soln.u, active_longlived; num_layers))
+    nc_all = merge(external_storage, unflatten_atm(atm_soln.u, active_longlived, n_horiz; num_layers))
 
     println("Plotting final atmosphere, writing out state")
     # Make final atmosphere plot
@@ -1654,7 +1656,7 @@ if problem_type == "SS"
     write_final_state(nc_all, results_dir, sim_folder_name, final_atm_file; alt, num_layers, hrshortcode, Jratedict=Jrates, rshortcode, external_storage)
     write_to_log(logfile, "$(Dates.format(now(), "(HH:MM:SS)")) Making production/loss plots", mode="a")
     println("Making production/loss plots (this tends to take several minutes)")
-    plot_production_and_loss(nc_all, results_dir, sim_folder_name; nonthermal=nontherm, all_species, alt, chem_species, collision_xsect, 
+    plot_production_and_loss(nc_all, results_dir, sim_folder_name, n_horiz; nonthermal=nontherm, all_species, alt, chem_species, collision_xsect, 
                               dz, hot_D_rc_funcs, hot_H_rc_funcs, hot_H2_rc_funcs, hot_HD_rc_funcs, Hs_dict, 
                               hot_H_network, hot_D_network, hot_H2_network, hot_HD_network, hrshortcode, ion_species, Jratedict,
                               molmass, neutral_species, non_bdy_layers, num_layers, n_all_layers, n_alt_index, polarizability, 
@@ -1672,7 +1674,7 @@ elseif problem_type == "ODE"
             # Currently there's no workaround for this and you just have to remember NOT TO TRUST Jrates
             # at any timestep except the very last. 
             # TODO: Fix this so we just don't write Jrates in these iterations...
-            local nc_all = merge(external_storage, unflatten_atm(atm_state, active_longlived; num_layers))
+            local nc_all = merge(external_storage, unflatten_atm(atm_state, active_longlived, n_horiz; num_layers))
             write_atmosphere(nc_all, results_dir*sim_folder_name*"/atm_state_t_$(timestep).h5"; alt, num_layers, hrshortcode, rshortcode) 
         elseif i == L
             # Update short-lived species one more time
@@ -1681,7 +1683,7 @@ elseif problem_type == "ODE"
             local Jrates = deepcopy(Float64[external_storage[jr][ialt] for jr in Jratelist, ialt in 1:num_layers])
             set_concentrations!(external_storage, atm_state, n_short, inactive, Jrates; active_longlived, active_shortlived, 
                                inactive_species, Tn=Tn_arr, Ti=Ti_arr, Te=Te_arr, num_layers)
-            local nc_all = merge(external_storage, unflatten_atm(atm_state, active_longlived; num_layers))
+            local nc_all = merge(external_storage, unflatten_atm(atm_state, active_longlived, n_horiz; num_layers))
 
             # Make final atmosphere plot
             println("Plotting final atmosphere, writing out state")
@@ -1691,7 +1693,7 @@ elseif problem_type == "ODE"
             write_final_state(nc_all, results_dir, sim_folder_name, final_atm_file; alt, num_layers, hrshortcode, Jratedict=Jrates, rshortcode, external_storage)
             write_to_log(logfile, "$(Dates.format(now(), "(HH:MM:SS)")) Making production/loss plots", mode="a")
             println("Making production/loss plots (this tends to take several minutes)")
-            plot_production_and_loss(nc_all, results_dir, sim_folder_name; nonthermal=nontherm, all_species, alt, chem_species, collision_xsect, 
+            plot_production_and_loss(nc_all, results_dir, sim_folder_name, n_horiz; nonthermal=nontherm, all_species, alt, chem_species, collision_xsect, 
                                       dz, hot_D_rc_funcs, hot_H_rc_funcs, hot_H2_rc_funcs, hot_HD_rc_funcs, Hs_dict, 
                                       hot_H_network, hot_D_network, hot_H2_network, hot_HD_network, hrshortcode, ion_species, Jratedict,
                                       molmass, neutral_species, non_bdy_layers, num_layers, n_all_layers, n_alt_index, polarizability, 
@@ -1710,10 +1712,10 @@ elseif problem_type == "Gear"
              monospace_choice, sansserif_choice)
 
     # Collect the J rates
-    Jratedict = Dict{Symbol, Vector{Float64}}([j=>external_storage[j] for j in keys(external_storage) if occursin("J", string(j))])
+    Jratedict = Dict{Symbol, Vector{Array{Float64}}}([j=>external_storage[j] for j in keys(external_storage) if occursin("J", string(j))])
 
     # Write out the final state to a unique file for easy finding
-    write_final_state(atm_soln, results_dir, sim_folder_name, final_atm_file; alt, num_layers, hrshortcode, Jratedict, rshortcode, external_storage)
+    write_final_state(atm_soln, results_dir, sim_folder_name, final_atm_file, n_horiz; alt, num_layers, hrshortcode, Jratedict, rshortcode, external_storage)
 
     # Write out the final column rates to the reaction log
     calculate_and_write_column_rates("active_rxns.xlsx", atm_soln; all_species, dz, ion_species, num_layers, reaction_network, results_dir, sim_folder_name, 
@@ -1723,7 +1725,7 @@ elseif problem_type == "Gear"
     println("$(Dates.format(now(), "(HH:MM:SS)")) Making production/loss plots (this tends to take several minutes)")
     # make production and loss plots
     if make_P_and_L_plots
-        plot_production_and_loss(atm_soln, results_dir, sim_folder_name; nonthermal=nontherm, all_species, alt, chem_species, collision_xsect, 
+        plot_production_and_loss(atm_soln, results_dir, sim_folder_name, n_horiz; nonthermal=nontherm, all_species, alt, chem_species, collision_xsect, 
                                   dz, hot_D_rc_funcs, hot_H_rc_funcs, hot_H2_rc_funcs, hot_HD_rc_funcs, Hs_dict, 
                                   hot_H_network, hot_D_network, hot_H2_network, hot_HD_network, hrshortcode, ion_species, Jratedict, M_P, 
                                   molmass, monospace_choice, neutral_species, non_bdy_layers, num_layers, n_all_layers, n_alt_index, polarizability, planet,
