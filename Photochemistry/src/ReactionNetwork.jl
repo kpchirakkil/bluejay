@@ -8,7 +8,7 @@
 #                      Functions to load and manipulate the network             #
 #===============================================================================#
 
-function calculate_and_write_column_rates(rxn_filename, atm_state; globvars...)
+function calculate_and_write_column_rates(rxn_filename, atm_state, n_horiz; globvars...)
     #=
     Calculates the column rates for all the reactions in rxn_filename on the species densities in atm_state 
     and writes them back out in a column to rxn_filename. Loops over each sheet. 
@@ -65,19 +65,21 @@ function calculate_and_write_column_rates(rxn_filename, atm_state; globvars...)
 
                 this_rxn_func = mk_function(:((Tn, Ti, Te, M) -> $(this_rxn[3])))
 
-                # Call get_volume_rates(sp, source_rxn, source_rxn_rc_func, Mtot)
-                vol_rate_by_alt = get_volume_rates(these_reactants[1], this_rxn, this_rxn_func, atm_state, Mtot; Jratedict, globvars...)  #all_species, ion_species, 
+		for ihoriz in [1:n_horiz;]
+                    # Call get_volume_rates(sp, source_rxn, source_rxn_rc_func, Mtot, ihoriz)
+                    vol_rate_by_alt = get_volume_rates(these_reactants[1], this_rxn, this_rxn_func, atm_state, Mtot, ihoriz; Jratedict, globvars...)  #all_species, ion_species, 
                                                                                                                  #num_layers, Tn=Tn_arr[2:end-1], Ti=Ti_arr[2:end-1], Te=Te_arr[2:end-1])
 
-                # sum over the result and multiply by dz to get the column rate
-                col_rate = sum(vol_rate_by_alt .* GV.dz)
+                    # sum over the result and multiply by dz to get the column rate
+                    col_rate = sum(vol_rate_by_alt .* GV.dz)
 
-                # Fill in the column
-                # do it unformatted so Excel can sort if it wants to
-                row.ColumnRate = col_rate
+                    # Fill in the column
+                    # do it unformatted so Excel can sort if it wants to
+                    row.ColumnRate = col_rate # MULTICOL WARNING does not currently make separate spreadsheet columns for each vertical column 
 
-                if col_rate==0
-                    println("$(this_rxn) has a 0 col rate. This may or may not be expected.")
+                    if col_rate==0
+                       println("$(this_rxn) in column $(ihoriz) has a 0 col rate. This may or may not be expected.")
+		    end
                 end
 
             end

@@ -246,8 +246,8 @@ function chemJmat(n_active_longlived, n_active_shortlived, n_inactive, Jrates, t
               Jrates[:,1];                            # Jratelist;
               GV.Tn[1]; GV.Ti[1]; GV.Te[1];           #:Tn; :Ti; :Te;
               M[1]; E[1][1];                          # total density and electrons, # MULTICOL WARNING hardcoded to use info from first column for all columns.
-              tup[:,1]; tlower[:,1];                  # local_transport_rates
-              tdown[:,2]; tlower[:,2]]
+              tup[:,1]; tlower[1][:,1];                  # local_transport_rates        # MULTICOL WARNING change tlower[1][...] to tlower[ihoriz][...]
+              tdown[:,2]; tlower[1][:,2]]                                               # MULTICOL WARNING change tlower[1][...] to tlower[ihoriz][...]
     argvec = convert(Array{ftype_chem}, argvec)
 
     (tclocal, tcupper, tclower) = chemJmat_local(argvec...) 
@@ -301,8 +301,8 @@ function chemJmat(n_active_longlived, n_active_shortlived, n_inactive, Jrates, t
               Jrates[:,end];
               GV.Tn[end]; GV.Ti[end]; GV.Te[end];
               M[end]; E[1][end]; # E FIX ATTEMPT   # MULTICOL WARNING hardcoded to use info from first column for all columns.
-              tupper[:,1]; tdown[:,end];
-              tupper[:,2]; tup[:,end-1]]
+              tupper[1][:,1]; tdown[:,end];           # MULTICOL WARNING change tupper[1][...] to tupper[ihoriz][...]
+              tupper[1][:,2]; tup[:,end-1]]           # MULTICOL WARNING change tupper[1][...] to tupper[ihoriz][...]
     argvec = convert(Array{ftype_chem}, argvec)
     
     (tclocal, tcupper, tclower) = chemJmat_local(argvec...)
@@ -374,7 +374,7 @@ function ratefn(n_active_longlived, n_active_shortlived, n_inactive, Jrates, tup
               Jrates[:,1];                            # Jratelist;
               GV.Tn[1]; GV.Ti[1]; GV.Te[1];           # :Tn; :Ti; :Te;
               M[1]; E[1][1];                          # MULTICOL WARNING hardcoded to use info from first column for all columns.
-              tup[:,1]; tlower[:,1]; tdown[:,2]; tlower[:,2]]
+              tup[:,1]; tlower[1][:,1]; tdown[:,2]; tlower[1][:,2]] # MULTICOL WARNING change tlower[1][...] to tlower[ihoriz][...] 
     argvec = convert(Array{ftype_chem}, argvec)
     
     returnrates[:,1,1] .= ratefn_local(argvec...) # local_transport_rates # MULTICOL WARNING hardcoded to use info from first column for all columns.
@@ -407,9 +407,9 @@ function ratefn(n_active_longlived, n_active_shortlived, n_inactive, Jrates, tup
               Jrates[:,end];
               GV.Tn[end]; GV.Ti[end]; GV.Te[end];
               M[end]; E[1][end];                              # MULTICOL WARNING hardcoded to use info from first column for all columns.
-              tupper[:,1];
+              tupper[1][:,1];                                    # MULTICOL WARNING tupper[1][...] to tupper[ihoriz][...]
               tdown[:,end];
-              tupper[:,2];
+              tupper[1][:,2];                                    # MULTICOL WARNING tupper[1][...] to tupper[ihoriz][...]
               tup[:,end-1]]
     argvec = convert(Array{ftype_chem}, argvec)
     returnrates[:,end,1] .= ratefn_local(argvec...)           # MULTICOL WARNING hardcoded to use info from first column for all columns.
@@ -456,7 +456,7 @@ function record_atmospheric_state(t, n, actively_solved, E_prof; opt="", globvar
     
     # write out the current atmospheric state to a file and plot it
     atm_snapshot = merge(external_storage, unflatten_atm(n, actively_solved, n_horiz; GV.num_layers))
-    plot_atm(atm_snapshot, results_dir*sim_folder_name*"/atm_peek_$(plotnum)$(opt).png", abs_tol_for_plot, E_prof; ylims=[zmin/1e5, zmax/1e5], t="$(round(t, digits=rounding_digits))", globvars...)
+    plot_atm(atm_snapshot, results_dir*sim_folder_name*"/atm_peek_$(plotnum)$(opt).png", abs_tol_for_plot, E_prof, n_horiz; ylims=[zmin/1e5, zmax/1e5], t="$(round(t, digits=rounding_digits))", globvars...)
     write_atmosphere(atm_snapshot, results_dir*sim_folder_name*"/atm_state_$(lpad(plotnum,2,"0"))$(opt).h5", n_horiz; t=round(t, digits=rounding_digits), globvars...)
 
     # Turn this on if you'd like to take a peek at the Jrates
@@ -1524,7 +1524,7 @@ end
     
 # Plot initial atmosphere condition  ===========================================
 println("$(Dates.format(now(), "(HH:MM:SS)")) Plotting the initial condition")
-plot_atm(n_current, results_dir*sim_folder_name*"/initial_atmosphere.png", abs_tol_for_plot, E; ylims=[zmin/1e5, zmax/1e5],
+plot_atm(n_current, results_dir*sim_folder_name*"/initial_atmosphere.png", abs_tol_for_plot, E, n_horiz; ylims=[zmin/1e5, zmax/1e5],
          t="initial state", neutral_species, ion_species, plot_grid, speciescolor, speciesstyle, zmax, hrshortcode, rshortcode,
          monospace_choice, sansserif_choice) 
 
@@ -1707,7 +1707,7 @@ elseif problem_type == "Gear"
     # Plot the final atmospheric state
     println("Plotting final atmosphere, writing out state")
     final_E_profile = electron_density(atm_soln; e_profile_type, non_bdy_layers, ion_species)   
-    plot_atm(atm_soln, results_dir*sim_folder_name*"/final_atmosphere.png", abs_tol_for_plot, final_E_profile; ylims=[zmin/1e5, zmax/1e5],
+    plot_atm(atm_soln, results_dir*sim_folder_name*"/final_atmosphere.png", abs_tol_for_plot, final_E_profile, n_horiz; ylims=[zmin/1e5, zmax/1e5],
              t="final converged state, total time = $(sim_time)", neutral_species, ion_species, plot_grid, speciescolor, speciesstyle, zmax, hrshortcode, rshortcode,
              monospace_choice, sansserif_choice)
 
@@ -1718,7 +1718,7 @@ elseif problem_type == "Gear"
     write_final_state(atm_soln, results_dir, sim_folder_name, final_atm_file, n_horiz; alt, num_layers, hrshortcode, Jratedict, rshortcode, external_storage)
 
     # Write out the final column rates to the reaction log
-    calculate_and_write_column_rates("active_rxns.xlsx", atm_soln; all_species, dz, ion_species, num_layers, reaction_network, results_dir, sim_folder_name, 
+    calculate_and_write_column_rates("active_rxns.xlsx", atm_soln, n_horiz; all_species, dz, ion_species, num_layers, reaction_network, results_dir, sim_folder_name, 
                                                               Tn=Tn_arr[2:end-1], Ti=Ti_arr[2:end-1], Te=Te_arr[2:end-1])
     
     write_to_log(logfile, "$(Dates.format(now(), "(HH:MM:SS)")) Making production/loss plots", mode="a")

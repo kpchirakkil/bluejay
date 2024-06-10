@@ -54,7 +54,7 @@ function get_grad_colors(L::Int64, cmap; strt=0, stp=1)
     return c
 end
 
-function plot_atm(atmdict::Dict{Symbol, Vector{Array{ftype_ncur}}}, savepath::String, atol, E_prof; imgfmt="png", print_shortcodes=true, mixing_ratio=false,
+function plot_atm(atmdict::Dict{Symbol, Vector{Array{ftype_ncur}}}, savepath::String, atol, E_prof, n_horiz::Int64; imgfmt="png", print_shortcodes=true, mixing_ratio=false,
                   t="", showonly=false, xlab=L"Species density (cm$^{-3}$)", xlim_1=(1e-12, 1e18), xlim_2=(1e-5, 2.5e5), ylims=[0, 250],
                   legloc=[0.8,1], globvars...)
     #=
@@ -66,6 +66,7 @@ function plot_atm(atmdict::Dict{Symbol, Vector{Array{ftype_ncur}}}, savepath::St
         savepath: path and name for saving resulting .png file
         atol: absolute tolerance to plot
         E_prof: E densities for plotting the electron line
+	n_horiz: number of vertical columns in the simulation
         print_shortcodes: whether to print unique simulation IDs on plots
         t: title text for whole plot
         showonly: whether to just show() the plot instead of saving. If setting to true, send in junk string for savepath.
@@ -181,19 +182,39 @@ function plot_atm(atmdict::Dict{Symbol, Vector{Array{ftype_ncur}}}, savepath::St
         atm_ax[3, 2].set_xlabel(xlab)
          
         # plot the neutrals according to logical groups -------------------------------------------------------
-        for sp in GV.neutral_species # MULTICOL WARNING hardcoded to the first vertical column; will need changing if want different values for each column
-            atm_ax[axes_by_sp[sp], 1].plot(convert(Array{Float64}, atmdict[sp][1]), GV.plot_grid, color=get(GV.speciescolor, sp, "black"),
+        for sp in GV.neutral_species
+	    for ihoriz in [1:n_horiz;] # MULTICOL WARNING -- might want to dictate which columns to plot instead, rather than plotting all
+	        if ihoriz == 1
+                    atm_ax[axes_by_sp[sp], 1].plot(convert(Array{Float64}, atmdict[sp][ihoriz]), GV.plot_grid, color=get(GV.speciescolor, sp, "black"),
                                            linewidth=2, label=string_to_latexstr(string(sp)), linestyle=get(GV.speciesstyle, sp, "-"), zorder=2)
+		else
+		    atm_ax[axes_by_sp[sp], 1].plot(convert(Array{Float64}, atmdict[sp][ihoriz]), GV.plot_grid, color=get(GV.speciescolor, sp, "black"),
+                                           linewidth=2, linestyle=get(GV.speciesstyle, sp, "-"), zorder=2)
+		end
+	    end
         end
         
         # plot the ions according to logical groups ------------------------------------------------------------
-        for sp in GV.ion_species  # MULTICOL WARNING hardcoded to the first vertical column; will need changing if want different values for each column
-            atm_ax[axes_by_sp[sp], 2].plot(convert(Array{Float64}, atmdict[sp][1]), GV.plot_grid, color=get(GV.speciescolor, sp, "black"),
+        for sp in GV.ion_species
+	    for ihoriz in [1:n_horiz;] # MULTICOL WARNING -- might want to dictate which columns to plot instead, rather than plotting all
+	        if ihoriz == 1
+            	    atm_ax[axes_by_sp[sp], 2].plot(convert(Array{Float64}, atmdict[sp][ihoriz]), GV.plot_grid, color=get(GV.speciescolor, sp, "black"),
                                            linewidth=2, label=string_to_latexstr(string(sp)), linestyle=get(GV.speciesstyle, sp, "-"), zorder=2)
+		else
+		    atm_ax[axes_by_sp[sp], 2].plot(convert(Array{Float64}, atmdict[sp][ihoriz]), GV.plot_grid, color=get(GV.speciescolor, sp, "black"),
+                                           linewidth=2, linestyle=get(GV.speciesstyle, sp, "-"), zorder=2)
+		end
+	    end
         end
 
         # plot electron profile --------------------------------------------------------------------------------
-        atm_ax[1, 2].plot(convert(Array{Float64}, E_prof[1]), GV.plot_grid, color="black", linewidth=2, linestyle=":", zorder=10, label=L"e$^-$") # MULTICOL WARNING hardcoded to the first vertical column; will need changing if want different values for each column. Could use a for loop here to get all columns to plot on the same axes.
+        for ihoriz in [1:n_horiz;] # MULTICOL WARNING -- might want to dictate which columns to plot instead, rather than plotting all
+	    if ihoriz == 1
+                atm_ax[1, 2].plot(convert(Array{Float64}, E_prof[ihoriz]), GV.plot_grid, color="black", linewidth=2, linestyle=":", zorder=10, label=L"e$^-$")
+            else
+	        atm_ax[1, 2].plot(convert(Array{Float64}, E_prof[ihoriz]), GV.plot_grid, color="black", linewidth=2, linestyle=":", zorder=10) 
+	    end
+	end
 
         # stuff that applies to all axes
         for r in 1:size(atm_ax)[1]
@@ -426,8 +447,8 @@ function plot_Jrates(sp, atmdict::Dict{Symbol, Vector{ftype_ncur}}; savedir=noth
 
     # --------------------------------------------------------------------------------
     # make plot
-    rxd_prod, prod_rc = get_volume_rates(sp, atmdict; which="Jrates", globvars..., Tn=GV.Tn[2:end-1], Ti=GV.Ti[2:end-1], Te=GV.Te[2:end-1]) 
-    rxd_loss, loss_rc = get_volume_rates(sp, atmdict; which="Jrates", globvars..., Tn=GV.Tn[2:end-1], Ti=GV.Ti[2:end-1], Te=GV.Te[2:end-1]) 
+    rxd_prod, prod_rc = get_volume_rates(sp, atmdict, n_horiz; which="Jrates", globvars..., Tn=GV.Tn[2:end-1], Ti=GV.Ti[2:end-1], Te=GV.Te[2:end-1]) 
+    rxd_loss, loss_rc = get_volume_rates(sp, atmdict, n_horiz; which="Jrates", globvars..., Tn=GV.Tn[2:end-1], Ti=GV.Ti[2:end-1], Te=GV.Te[2:end-1]) 
 
     fig, ax = subplots(figsize=(8,6))
     plot_bg(ax)
@@ -595,14 +616,14 @@ function plot_rxns(sp::Symbol, atmdict::Dict{Symbol, Vector{Array{ftype_ncur}}},
     end
 
     # Arrays to store the total reactions per second for this species of interest
-    total_prod_rate = zeros(GV.num_layers)
-    total_loss_rate = zeros(GV.num_layers)
+    total_prod_rate = [zeros(GV.num_layers) for ihoriz in 1:n_horiz]
+    total_loss_rate = [zeros(GV.num_layers) for ihoriz in 1:n_horiz]
 
     # Arrays to hold the total chemical production and loss 
-    total_chem_prod = zeros(GV.num_layers)
-    total_chem_loss = zeros(GV.num_layers)
-    total_chem_prod_ratecoef = zeros(GV.num_layers)
-    total_chem_loss_ratecoef = zeros(GV.num_layers)
+    total_chem_prod = [zeros(GV.num_layers) for ihoriz in 1:n_horiz]
+    total_chem_loss = [zeros(GV.num_layers) for ihoriz in 1:n_horiz]
+    total_chem_prod_ratecoef = [zeros(GV.num_layers) for ihoriz in 1:n_horiz]
+    total_chem_loss_ratecoef = [zeros(GV.num_layers) for ihoriz in 1:n_horiz]
 
     if sp in GV.chem_species
         # --------------------------------------------------------------------------------
@@ -611,14 +632,16 @@ function plot_rxns(sp::Symbol, atmdict::Dict{Symbol, Vector{Array{ftype_ncur}}},
         # index these in this way to make the evaluation of chemistry reaction rate coefficients work. 
         # Entering them separately from globvars allows us to keep passing globvars as a "packed" variable but 
         # use the most recent Tn, Ti, Te according to rightmost taking precedence.
-        rxd_prod, rate_coefs_prod = get_volume_rates(sp, atmdict; species_role="product", globvars..., Tn=GV.Tn[2:end-1], Ti=GV.Ti[2:end-1], Te=GV.Te[2:end-1])
-        rxd_loss, rate_coefs_loss = get_volume_rates(sp, atmdict; species_role="reactant", globvars..., Tn=GV.Tn[2:end-1], Ti=GV.Ti[2:end-1], Te=GV.Te[2:end-1])
+        rxd_prod, rate_coefs_prod = get_volume_rates(sp, atmdict, n_horiz; species_role="product", globvars..., Tn=GV.Tn[2:end-1], Ti=GV.Ti[2:end-1], Te=GV.Te[2:end-1])
+        rxd_loss, rate_coefs_loss = get_volume_rates(sp, atmdict, n_horiz; species_role="reactant", globvars..., Tn=GV.Tn[2:end-1], Ti=GV.Ti[2:end-1], Te=GV.Te[2:end-1])
 
         # Water is turned off in the lower atmosphere, so we should represent that.
-        if sp in [:H2O, :HDO] 
-            for (prod_k, loss_k) in zip(keys(rxd_prod), keys(rxd_loss))
-                rxd_prod[prod_k][1:GV.upper_lower_bdy_i] .= NaN
-                rxd_loss[loss_k][1:GV.upper_lower_bdy_i] .= NaN
+        if sp in [:H2O, :HDO]
+	    for ihoriz in [1:n_horiz;]
+            	for (prod_k, loss_k) in zip(keys(rxd_prod), keys(rxd_loss))
+                    rxd_prod[prod_k][ihoriz][1:GV.upper_lower_bdy_i] .= NaN
+                    rxd_loss[loss_k][ihoriz][1:GV.upper_lower_bdy_i] .= NaN
+		end
             end
         end
 
@@ -634,21 +657,27 @@ function plot_rxns(sp::Symbol, atmdict::Dict{Symbol, Vector{Array{ftype_ncur}}},
         pat = r"((?<=--> ).+)"
 
         # Chemical production - add up total, and plot individual reactions if needed
-        for kv in rxd_prod  # loop through the dict of format reaction => [rates by altitude]
+        for kv in rxd_prod  # loop through the dict of format reaction => [[rates by altitude] for each vertical column]
             if shown_rxns != nothing
-                if kv[1] in shown_rxns 
-                    ax[1].semilogx(kv[2], GV.plot_grid, linestyle=ls[ls_i], marker=9, markevery=20, color=cols[col_i], linewidth=1, label=kv[1])
+                if kv[1] in shown_rxns
+		    for ihoriz in [1:n_horiz;]
+                    	ax[1].semilogx(kv[2][ihoriz], GV.plot_grid, linestyle=ls[ls_i], marker=9, markevery=20, color=cols[col_i], linewidth=1, label=kv[1])
+	            end
                     col_i = next_in_loop(col_i, length(cols))
                     ls_i = next_in_loop(ls_i, length(ls))
                 end
             end
-            # Add up the total chemical production. Accounts for cases where species is produced more than once. 
+            # Add up the total chemical production. Accounts for cases where species is produced more than once.
             prods = split(match(pat, kv[1])[1], " + ")
             num_created = count(i->(i==string(sp)), prods)
-            total_chem_prod += num_created .* kv[2]
+	    for ihoriz in [1:n_horiz;]
+            	total_chem_prod[ihoriz] += num_created .* kv[2][ihoriz]
+	    end
         end
         for kv in rate_coefs_prod
-            total_chem_prod_ratecoef += kv[2]
+	    for ihoriz in [1:n_horiz;]
+                total_chem_prod_ratecoef[ihoriz] += vec(kv[2][ihoriz]) # MULTICOL WARNING changed kv[2][ihoriz] to vector -- assess whether there is a better way of doing this
+	    end
         end
 
         # Chemical loss 
@@ -663,18 +692,22 @@ function plot_rxns(sp::Symbol, atmdict::Dict{Symbol, Vector{Array{ftype_ncur}}},
             total_chem_loss += kv[2]
         end
         for kv in rate_coefs_loss
-            total_chem_loss_ratecoef += kv[2]
+	    for ihoriz in [1:n_horiz;]
+            	total_chem_loss_ratecoef[ihoriz] += vec(kv[2][ihoriz])
+	    end
         end
 
-        # Plot the totals 
-        ax[1].semilogx(total_chem_prod, GV.plot_grid, color="xkcd:forest green", linestyle=(0, (4,2)), marker=9, markevery=20, linewidth=2, label="Total chemical production", zorder=5)
-        ax[1].semilogx(total_chem_loss, GV.plot_grid, color="xkcd:shamrock", linestyle=(0, (4,2)), marker=8, markevery=20, linewidth=2, label="Total chemical loss", zorder=5)
+        # Plot the totals
+	for ihoriz in [1:n_horiz;]
+            ax[1].semilogx(total_chem_prod[ihoriz], GV.plot_grid, color="xkcd:forest green", linestyle=(0, (4,2)), marker=9, markevery=20, linewidth=2, label="Total chemical production", zorder=5)
+            ax[1].semilogx(total_chem_loss[ihoriz], GV.plot_grid, color="xkcd:shamrock", linestyle=(0, (4,2)), marker=8, markevery=20, linewidth=2, label="Total chemical loss", zorder=5)
+	end
 
         # set the x lims for chem axis
-        prod_without_nans = filter(x->!isnan(x), total_chem_prod)
-        loss_without_nans = filter(x->!isnan(x), total_chem_loss)
-        minx[1] = minimum( [minimum(prod_without_nans), minimum(loss_without_nans)] )
-        maxx[1] = maximum( [maximum(prod_without_nans), maximum(loss_without_nans)] )
+        prod_without_nans = [filter(x->!isnan(x), total_chem_prod[ihoriz]) for ihoriz in 1:n_horiz]
+        loss_without_nans = [filter(x->!isnan(x), total_chem_loss[ihoriz]) for ihoriz in 1:n_horiz]
+	minx[1] = minimum( minimum([[minimum(prod_without_nans[ihoriz]), minimum(loss_without_nans[ihoriz])] for ihoriz in 1:n_horiz]) )
+        maxx[1] = maximum( maximum([[maximum(prod_without_nans[ihoriz]), maximum(loss_without_nans[ihoriz])] for ihoriz in 1:n_horiz]) )
         minx[1] = 10^(floor(log10(minx[1])))
         maxx[1] = 10^(ceil(log10(maxx[1])))
 
@@ -702,33 +735,37 @@ function plot_rxns(sp::Symbol, atmdict::Dict{Symbol, Vector{Array{ftype_ncur}}},
     # Calculate the transport fluxes for the species
     plottitle_ext = "" # no extra info in the plot title if flux==false 
     if sp in GV.transport_species
-        transportPL = get_transport_PandL_rate(sp, atmdict, n_horiz; nonthermal=nonthermal, globvars...)
+        transportPL = get_transport_PandL_rate(sp, atmdict, n_horiz; nonthermal=nonthermal, globvars...) # WARNING MULTICOL note that the first column is different from the others here and shouldn't be
         # now separate into two different arrays for ease of addition.
-        production_i = transportPL .>= 0  # boolean array for where transport entries > 0 (production),
-        loss_i = transportPL .< 0 # and for where transport entries < 0 (loss).
-        total_transport_prod = production_i .* transportPL
-        total_transport_loss = loss_i .* abs.(transportPL)
+        production_i = [transportPL[ihoriz] .>= 0 for ihoriz in 1:n_horiz]  # boolean array for where transport entries > 0 (production),
+        loss_i = [transportPL[ihoriz] .< 0 for ihoriz in 1:n_horiz] # and for where transport entries < 0 (loss).
+        total_transport_prod = [production_i[ihoriz] .* transportPL[ihoriz] for ihoriz in 1:n_horiz] # MULTICOL WARNING note that the first column is different from the others here and shouldn't be
+        total_transport_loss = [loss_i[ihoriz] .* abs.(transportPL[ihoriz]) for ihoriz in 1:n_horiz]
 
         if sp in [:H2O, :HDO] # Water is turned off in the lower atmosphere, so we should represent that.
-            total_transport_prod[1:GV.upper_lower_bdy_i] .= NaN
-            total_transport_loss[1:GV.upper_lower_bdy_i] .= NaN
+	    for ihoriz in [1:n_horiz;]
+            	total_transport_prod[ihoriz][1:GV.upper_lower_bdy_i] .= NaN
+            	total_transport_loss[ihoriz][1:GV.upper_lower_bdy_i] .= NaN
+            end
         end
 
         # set the x lims for transport axis. Special because total_transport_prod, and etc are incomplete arrays.
-        minx[2] = 10.0^(floor(log10(minimum(abs.(transportPL)))))
-        maxx[2] = 10.0^(ceil(log10(maximum(abs.(transportPL)))))
+	minx[2] = 10.0^(floor(log10(minimum([minimum(abs.(filter(x->!isnan(x),transportPL[ihoriz]))) for ihoriz in 1:n_horiz]))))
+	maxx[2] = 10.0^(ceil(log10(maximum([maximum(abs.(filter(x->!isnan(x),transportPL[ihoriz]))) for ihoriz in 1:n_horiz]))))
 
         # Plot the transport production and loss without the boundary layers
-        ax[2].scatter(total_transport_prod, GV.plot_grid, color="red", marker=9, label="Total gain this layer", zorder=4)
-        ax[2].scatter(total_transport_loss, GV.plot_grid, color="blue", marker=8, label="Total loss this layer", zorder=4)
+	for ihoriz in [1:n_horiz;]
+            ax[2].scatter(total_transport_prod[ihoriz], GV.plot_grid, color="red", marker=9, label="Total gain this layer", zorder=4)
+            ax[2].scatter(total_transport_loss[ihoriz], GV.plot_grid, color="blue", marker=8, label="Total loss this layer", zorder=4)
+	end
         ax[2].set_xscale("log")
 
         ax[2].legend(fontsize=12)
 
         plottitle_ext = " by chemistry & transport"
     else
-        total_transport_prod = zeros(GV.num_layers)
-        total_transport_loss = zeros(GV.num_layers)
+        total_transport_prod = [zeros(GV.num_layers) for ihoriz in 1:n_horiz]
+        total_transport_loss = [zeros(GV.num_layers) for ihoriz in 1:n_horiz]
         minx[2] = 0
         maxx[2] = 1
         ax[2].text(0.1, 225, "Vertical transport is off for $(sp).")
@@ -739,14 +776,16 @@ function plot_rxns(sp::Symbol, atmdict::Dict{Symbol, Vector{Array{ftype_ncur}}},
     total_prod_rate = total_transport_prod .+ total_chem_prod
     total_loss_rate = total_transport_loss .+ total_chem_loss
 
-    prod_without_nans = filter(x->!isnan(x), total_prod_rate)
-    loss_without_nans = filter(x->!isnan(x), total_loss_rate)
+    prod_without_nans = [filter(x->!isnan(x), total_prod_rate[ihoriz]) for ihoriz in 1:n_horiz]
+    loss_without_nans = [filter(x->!isnan(x), total_loss_rate[ihoriz]) for ihoriz in 1:n_horiz]
 
-    ax[3].semilogx(total_prod_rate, GV.plot_grid, color="black", marker=9, markevery=15, linewidth=2, label="Total production", zorder=3) 
-    ax[3].semilogx(total_loss_rate, GV.plot_grid, color="gray", marker=8, markevery=15, linewidth=2, label="Total loss", zorder=3) 
+    for ihoriz in [1:n_horiz;]
+    	ax[3].semilogx(total_prod_rate[ihoriz], GV.plot_grid, color="black", marker=9, markevery=15, linewidth=2, label="Total production", zorder=3) 
+    	ax[3].semilogx(total_loss_rate[ihoriz], GV.plot_grid, color="gray", marker=8, markevery=15, linewidth=2, label="Total loss", zorder=3)
+    end
 
-    minx[3] = minimum([minimum(prod_without_nans), minimum(loss_without_nans)])
-    maxx[3] = maximum([maximum(prod_without_nans), maximum(loss_without_nans)])
+    minx[3] = minimum(minimum([[minimum(prod_without_nans[ihoriz]), minimum(loss_without_nans[ihoriz])] for ihoriz in 1:n_horiz]))
+    maxx[3] = maximum(maximum([[maximum(prod_without_nans[ihoriz]), maximum(loss_without_nans[ihoriz])] for ihoriz in 1:n_horiz]))
     minx[3] = 10^(floor(log10(minx[3])))
     maxx[3] = 10^(ceil(log10(maxx[3])))
 
@@ -764,7 +803,7 @@ function plot_rxns(sp::Symbol, atmdict::Dict{Symbol, Vector{Array{ftype_ncur}}},
     # Final plotting tasks ============================================================
     # check for and correct any ridiculously low limits
     for i in 1:length(minx)
-        if minx[i] < 1e-12
+        if minx[i] < 1e-12 && maxx[i] > 1e-12*10     # the latter half of this if statement prevents cases with maxx[i] values at or just above 1e-12 from not plotting
             minx[i] = 1e-12
         end
     end
@@ -787,6 +826,7 @@ function plot_rxns(sp::Symbol, atmdict::Dict{Symbol, Vector{Array{ftype_ncur}}},
         end
         
     end
+
     suptitle("Production & loss" * plottitle_ext * ", $(string(sp))" * dtstr * titlestr, fontsize=20)
     ax[1].set_ylabel("Altitude (km)")
     ax[1].set_xlabel("Rate ("*L"cm^{-3}s^{-1})")
@@ -795,11 +835,10 @@ function plot_rxns(sp::Symbol, atmdict::Dict{Symbol, Vector{Array{ftype_ncur}}},
         num=extra_title
     end
 
-    
     path_folders = [results_dir[1:end-1], subfolder, plotsfolder, "chem_rates_$(sp)_$(num).png"]
     filter!(e->e≠"", path_folders)  # gets rid of empty names, in case subfolder or plotsfolder hasn't been passed in
     savepathname = join(path_folders, "/")
-    
+
     # Shortcodes as watermarks
     text(0.9, 0.9, GV.hrshortcode, transform=gcf().transFigure, color="dimgrey")
     text(0.9, 0.85, GV.rshortcode, transform=gcf().transFigure, color="dimgrey")
@@ -812,7 +851,7 @@ function plot_rxns(sp::Symbol, atmdict::Dict{Symbol, Vector{Array{ftype_ncur}}},
     end
 end
 
-function plot_reaction_on_demand(atmdict, reactants; print_col_total=false, products=nothing, ax=nothing, rxntype="all", lowerlim=nothing, upperlim=nothing, 
+function plot_reaction_on_demand(atmdict, reactants, n_horiz::Int64; print_col_total=false, products=nothing, ax=nothing, rxntype="all", lowerlim=nothing, upperlim=nothing, 
                                  savepath=nothing, plottitle="", coltotal_loc=[0.5, 0.5], globvars...)
     #=
     A function to plot a single chemical reaction as it happens in atmdict on demand.
@@ -858,20 +897,9 @@ function plot_reaction_on_demand(atmdict, reactants; print_col_total=false, prod
     rxn_strings = [format_chemistry_string(rr[1], rr[2]) for rr in relevant_reactions]
     if length(rxn_strings) == 0
         throw("Error: There are no reactions involving $(join(reactants, "+")) that produce one or more of $(products)")
-    end
+    end    
 
-    # Get volume rates by altitude 
-    by_alt = volume_rate_wrapper(reactants[1], relevant_reactions, rc_funcs, atmdict, Mtot; globvars...) # array format--by alt
-    by_alt_df = DataFrame(by_alt, rxn_strings)
-
-    # also calculate a total rate for all reactions
-    thestr = "Total: $(join(reactants, "+")) --> Products"
-    push!(rxn_strings, thestr)
-    total = sum(by_alt, dims=2)
-    by_alt_df[!, thestr] .= total
-    
-
-    # PLOT -----------------------------------------------------
+    # GET VOLUME RATES BY ALTITUDE AND PLOT -----------------------------------------------------
     if ax == nothing
         fig, ax = subplots(figsize=(7.5, 5))
     end
@@ -891,17 +919,31 @@ function plot_reaction_on_demand(atmdict, reactants; print_col_total=false, prod
     ax.set_xlabel(L"Rate (cm$^{-3}$ s$^{-1}$)")
     ax.set_title(plottitle)
 
-    for rs in rxn_strings[1:end-1]
-        ax.plot(by_alt_df[!, rs], plot_grid, label=string_to_latexstr(rs), linewidth=2)
-    end
-    # PLot the total separately so we can do it in black
-    ax.plot(by_alt_df[!, rxn_strings[end]], plot_grid, label=string_to_latexstr(rxn_strings[end]), linewidth=3, color="black")
-    ax.legend(bbox_to_anchor=(1.01, 1))
+    # Get volume rates by altitude  # MULTICOL WARNING this new for loop might need double checking
+    for ihoriz in [1:n_horiz;]
+    	by_alt = volume_rate_wrapper(reactants[1], relevant_reactions, rc_funcs, atmdict, Mtot, i_horiz; globvars...) # array format--by alt
+    	by_alt_df = DataFrame(by_alt, rxn_strings)
 
-    # Print col total of total line
-    if print_col_total
-        coltotstr = @sprintf "%.2E" sum(total .* GV.dz) # format the number
-        ax.text(coltotal_loc..., "Column total = $(coltotstr)", transform=ax.transAxes)
+    	# also calculate a total rate for all reactions
+    	thestr = "Total: $(join(reactants, "+")) --> Products"
+    	push!(rxn_strings, thestr)
+    	total = sum(by_alt, dims=2)
+    	by_alt_df[!, thestr] .= total
+
+        # Plot
+    	for rs in rxn_strings[1:end-1]
+            ax.plot(by_alt_df[!, rs], plot_grid, label=string_to_latexstr(rs), linewidth=2)
+        end
+	
+        # PLot the total separately so we can do it in black
+    	ax.plot(by_alt_df[!, rxn_strings[end]], plot_grid, label=string_to_latexstr(rxn_strings[end]), linewidth=3, color="black")
+    	ax.legend(bbox_to_anchor=(1.01, 1))
+
+    	# Print col total of total line
+    	if print_col_total
+            coltotstr = @sprintf "%.2E" sum(total .* GV.dz) # format the number
+            ax.text(coltotal_loc..., "Column total = $(coltotstr)", transform=ax.transAxes)
+        end
     end
     
     if savepath==nothing
@@ -1206,7 +1248,7 @@ function set_rc_params(; fs=22, axlab=24, xtls=22, ytls=22, sansserif=nothing, m
     rcParams["ytick.labelsize"] = ytls
 end
 
-function top_mechanisms(x, sp, atmdict, p_or_r; savepath=nothing, filename_extra="", y0=100, count_above=1, lowerlim=nothing, upperlim=nothing, globvars...) 
+function top_mechanisms(x, sp, atmdict, p_or_r, n_horiz; savepath=nothing, filename_extra="", y0=100, count_above=1, lowerlim=nothing, upperlim=nothing, globvars...) 
     #=
     Reports the top x dominant mechanisms for production or loss of species sp, and shows a plot.
 
@@ -1226,72 +1268,75 @@ function top_mechanisms(x, sp, atmdict, p_or_r; savepath=nothing, filename_extra
     required = [:all_species, :alt, :collision_xsect, :ion_species, :Jratedict, :molmass, :monospace_choice, :non_bdy_layers, :num_layers,  
                 :n_alt_index, :reaction_network, :sansserif_choice, :Tn, :Ti, :Te, :dz, :zmax]
     check_requirements(keys(GV), required)
-    
-    # String used for various labels
-    rxntype = p_or_r == "product" ? "production" : "loss"
-    
-    # Build an evalutable network
-    relevant_reactions = filter_network(sp, "all", p_or_r; GV.reaction_network)
-    rc_funcs = Dict([rxn => mk_function(:((Tn, Ti, Te, M) -> $(rxn[3]))) for rxn in relevant_reactions]);
-    
-    # Atmospheric density
-    Mtot = n_tot(atmdict; GV.all_species)
-    
-    # Reaction strings used for labeling dataframes
-    rxn_strings = vec([format_chemistry_string(r[1], r[2]) for r in relevant_reactions])
 
-    # Get volume rates by altitude 
-    by_alt = volume_rate_wrapper(sp, relevant_reactions, rc_funcs, atmdict, Mtot; globvars...) # array format--by alt
-    by_alt_df = DataFrame(by_alt, rxn_strings)
+    for ihoriz in [1:n_horiz;] # MULTICOL WARNING consider whether this is the most useful way to plot multiple columns
     
-    # Get the column value and its sorted equivalent
-    sorted_column_val = get_column_rates(sp, atmdict; which="all", role=p_or_r, startalt_i=count_above, returntype="df", 
+        # String used for various labels
+    	rxntype = p_or_r == "product" ? "production" : "loss"
+    
+	# Build an evalutable network
+    	relevant_reactions = filter_network(sp, "all", p_or_r; GV.reaction_network)
+    	rc_funcs = Dict([rxn => mk_function(:((Tn, Ti, Te, M) -> $(rxn[3]))) for rxn in relevant_reactions]);
+    
+	# Atmospheric density
+    	Mtot = n_tot(atmdict; GV.all_species) # MULTICOL WARNING uses same values for all vertical columns (or perhaps doesn't work at all)
+    
+	# Reaction strings used for labeling dataframes
+    	rxn_strings = vec([format_chemistry_string(r[1], r[2]) for r in relevant_reactions])
+
+    	# Get volume rates by altitude 
+    	by_alt = volume_rate_wrapper(sp, relevant_reactions, rc_funcs, atmdict, Mtot, ihoriz; globvars...) # array format--by alt
+    	by_alt_df = DataFrame(by_alt, rxn_strings)
+    
+	# Get the column value and its sorted equivalent # MULTICOL WARNING enter n_horiz or ihoriz
+    	sorted_column_val = get_column_rates(sp, atmdict; which="all", role=p_or_r, startalt_i=count_above, returntype="df", 
                                         globvars...,
                                         Tn=GV.Tn[2:end-1], Ti=GV.Ti[2:end-1], Te=GV.Te[2:end-1]) # Adjust the temp arrays so they match 
 
-    # Top number of reactions, limit x
-    if nrow(sorted_column_val) < x
-        L = nrow(sorted_column_val)
-    else
-        L = x
-    end
+    	# Top number of reactions, limit x
+    	if nrow(sorted_column_val) < x
+            L = nrow(sorted_column_val)
+        else
+	    L = x
+        end
 
-    println("Top $(L) $(rxntype) reactions above $(non_bdy_layers[count_above] / 1e5) km sorted by highest column value: $(sorted_column_val[1:L, :])")
+        println("Top $(L) $(rxntype) reactions above $(non_bdy_layers[count_above] / 1e5) km sorted by highest column value: $(sorted_column_val[1:L, :])")
 
-    set_rc_params(; fs=18, axlab=20, xtls=18, ytls=18, sansserif=GV.sansserif_choice, monospace=GV.monospace_choice)
+        set_rc_params(; fs=18, axlab=20, xtls=18, ytls=18, sansserif=GV.sansserif_choice, monospace=GV.monospace_choice)
     
     
-    # PLOT -----------------------------------------------------
-    fig, ax = subplots(figsize=(7.5, 5))
-    plot_bg(ax)
-    ax.set_ylabel("Altitude (km)")
-    if lowerlim!=nothing
-        ax.set_xlim(left=lowerlim)
+	# PLOT -----------------------------------------------------
+    	fig, ax = subplots(figsize=(7.5, 5))
+    	plot_bg(ax)
+    	ax.set_ylabel("Altitude (km)")
+    	if lowerlim!=nothing
+            ax.set_xlim(left=lowerlim)
+        end
+    	if upperlim!=nothing
+            ax.set_xlim(right=upperlim) # H plot limits
+        end
+    	ax.tick_params(which="both", labeltop=true, labelbottom=true, top=true)
+    	ax.set_ylim(y0, 250)
+    	ax.set_xscale("log")
+    	spstr = string_to_latexstr(string(sp))
+    	ax.set_title(L"Top %$(L) %$(rxntype) mechanisms, %$(spstr) %$(filename_extra), Vertical column %$(ihoriz)", size=16)
+    	ax.set_xlabel(L"Rate (cm$^{-3}$ s$^{-1}$)")
+    
+	# get the reaction strings for the top L reactions of each panel
+    	top5_rxn_strs = sorted_column_val.Reaction[1:L]
+    
+	for row in eachrow(sorted_column_val)[1:L]
+            ax.plot(by_alt_df[!, row.Reaction], plot_grid, label=string_to_latexstr(row.Reaction), linewidth=2)
+        end
+    	ax.legend(loc=(1.01, 0.5))
+    
+        if savepath==nothing
+            show()
+        else
+            savefig(savepath*"top$(L)_$(rxntype)_$(sp)$(filename_extra)_verticalcol$(ihoriz).png", bbox_inches="tight", dpi=300)
+        end
+        return by_alt_df # MULTICOL WARNING this might only return the values for the last vertical column
     end
-    if upperlim!=nothing
-        ax.set_xlim(right=upperlim) # H plot limits
-    end
-    ax.tick_params(which="both", labeltop=true, labelbottom=true, top=true)
-    ax.set_ylim(y0, 250)
-    ax.set_xscale("log")
-    spstr = string_to_latexstr(string(sp))
-    ax.set_title(L"Top %$(L) %$(rxntype) mechanisms, %$(spstr) %$(filename_extra)", size=16)
-    ax.set_xlabel(L"Rate (cm$^{-3}$ s$^{-1}$)")
-    
-    # get the reaction strings for the top L reactions of each panel
-    top5_rxn_strs = sorted_column_val.Reaction[1:L]
-    
-    for row in eachrow(sorted_column_val)[1:L]
-        ax.plot(by_alt_df[!, row.Reaction], plot_grid, label=string_to_latexstr(row.Reaction), linewidth=2)
-    end
-    ax.legend(loc=(1.01, 0.5))
-    
-    if savepath==nothing
-        show()
-    else
-        savefig(savepath*"top$(L)_$(rxntype)_$(sp)$(filename_extra).png", bbox_inches="tight", dpi=300)
-    end
-    return by_alt_df
 end
 
 function turn_off_borders(ax)

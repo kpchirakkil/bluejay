@@ -702,14 +702,15 @@ function chemical_jacobian(specieslist, dspecieslist; diff_wrt_e=true, diff_wrt_
     return (ivec, jvec, tvec)
 end
 
-function eval_rate_coef(atmdict::Dict{Symbol, Vector{Array{ftype_ncur}}}, krate::Expr; globvars...)
+function eval_rate_coef(atmdict::Dict{Symbol, Vector{Array{ftype_ncur}}}, krate::Expr, ihoriz::Int64; globvars...)
     #=
     Evaluates a chemical reaction rate coefficient, krate, for all levels of the atmosphere. 
 
     Input:
         atmdict: the atmospheric state dictionary
         krate: rate coefficient for a single reaction
-        tn, _i, _e: temperature profiles for neutrals, ions, electrons
+	ihoriz: Vertical column index
+        tn, _i, _e: temperature profiles for neutrals, ions, electrons  # MULTICOL WARNING hardcoded to use the same T values for all vertical columns
     Output:
         rate_coefficient: evaluated rate coefficient at all atmospheric layers
     =#
@@ -720,7 +721,7 @@ function eval_rate_coef(atmdict::Dict{Symbol, Vector{Array{ftype_ncur}}}, krate:
     # Set stuff up
     eval_k = mk_function(:((Tn, Ti, Te, M) -> $krate))
 
-    return eval_k(GV.Tn, GV.Ti, GV.Te, sum([atmdict[sp][1] for sp in GV.all_species])) # MULTICOL WARNING hardcoded to use first vertical column for all columns 
+    return eval_k(GV.Tn, GV.Ti, GV.Te, sum([atmdict[sp][ihoriz] for sp in GV.all_species])) # MULTICOL WARNING hardcoded to use the same T values for all vertical columns 
 end 
 
 function getrate(sp::Symbol; chemistry_on=true, transport_on=true, sepvecs=false, globvars...)
@@ -1038,7 +1039,7 @@ function effusion_velocity(Texo, m; globvars...)
 end
 
 # Nonthermal escape functions: 
-function escape_probability(sp, atmdict; globvars...)::Array
+function escape_probability(sp, atmdict; globvars...)::Array       # MULTICOL WARNING change to use different values for each vertical column
     #=
     Returns an exponential profile of escape probability by altitude that accounts for collisions with the background 
     atmosphere. from Bethan Gregory, A and a for H. Could be redone for D, possibly.
@@ -1062,7 +1063,7 @@ function escape_probability(sp, atmdict; globvars...)::Array
     return params[1] .* exp.(-params[2] .* GV.collision_xsect[sp] .* column_density_above(n_tot(atmdict; GV.all_species, GV.dz); globvars...) ) 
 end
 
-function escaping_hot_atom_production(sp, source_rxns, source_rxn_rc_funcs, atmdict, Mtot; returntype="array", globvars...)
+function escaping_hot_atom_production(sp, source_rxns, source_rxn_rc_funcs, atmdict, Mtot, ihoriz; returntype="array", globvars...)
     #=
     Solves the equation k[R1][R2] * P to get the total volume escape of hot atoms of species sp
     from the exobase region where P is the escape probability.
@@ -1072,6 +1073,7 @@ function escaping_hot_atom_production(sp, source_rxns, source_rxn_rc_funcs, atmd
         source_rxns: reaction network that will cause hot atoms to be produced
         atmdict: present atmospheric state dictionary
         Mtot: total atmospheric density array
+	ihoriz: Vertical column index
     Output: 
         array of production by altitude (rows) and reaction  (columns)
     =#
@@ -1081,13 +1083,13 @@ function escaping_hot_atom_production(sp, source_rxns, source_rxn_rc_funcs, atmd
                 :n_alt_index, :Tn, :Ti, :Te, :dz]
     check_requirements(keys(GV), required)
 
-    produced_hot = volume_rate_wrapper(sp, source_rxns, source_rxn_rc_funcs, atmdict, Mtot; returntype="array", zmax=GV.alt[end], globvars...) 
+    produced_hot = volume_rate_wrapper(sp, source_rxns, source_rxn_rc_funcs, atmdict, Mtot, ihoriz; returntype="array", zmax=GV.alt[end], globvars...) 
 
     # Returns an array where rows represent altitudes and columns are reactions. Multiplies each vertical profile (each column) by escape_probability. 
     if returntype=="array" # Used within the code to easily calculate the total flux later on. 
-        return produced_hot .* escape_probability(sp, atmdict; globvars...)
+        return produced_hot .* escape_probability(sp, atmdict; globvars...)    # MULTICOL WARNING change to use different values for each vertical column
     elseif returntype=="df" # Useful if you want to look at the arrays yourself.
-        return DataFrame(produced_hot .* escape_probability(sp, atmdict; globvars...), vec([format_chemistry_string(r[1], r[2]) for r in source_rxns]))
+        return DataFrame(produced_hot .* escape_probability(sp, atmdict; globvars...), vec([format_chemistry_string(r[1], r[2]) for r in source_rxns]))      # MULTICOL WARNING change to use different values for each vertical column
     end
 end
 
@@ -1414,7 +1416,7 @@ function binary_dcoeff_inCO2(sp, T)
     return diffparams(sp)[1] .* 1e17 .* T .^ (diffparams(sp)[2])
 end
 
-function boundaryconditions(fluxcoef_dict, atmdict, M; nonthermal=true, globvars...)
+function boundaryconditions(fluxcoef_dict, atmdict, M, n_horiz::Int64; nonthermal=true, globvars...)
     #= 
     Inputs:
         fluxcoef_dict: a dictionary containing the K and D flux coefficients for every species throughout
@@ -1423,15 +1425,16 @@ function boundaryconditions(fluxcoef_dict, atmdict, M; nonthermal=true, globvars
                        1st and last elements. 2nd and penultimate elements are for the edge bulk layers.
         atmdict: Atmospheric state dictionary, required for the nonthermal escape boundary condition.
         M: total atmospheric density, required for the nonthermal escape boundary condition.
+	n_horiz: Number of vertical columns in simulation
     Outputs:
         boundary conditions for species in a 2 x 2 matrix, format:
         [n_1 -> n_0, n_0 -> n_1;      
-         n_(nl) -> n_(nl+1), n_(nl+1) -> n_(n_l)]
+         n_(nl) -> n_(nl+1), n_(nl+1) -> n_(n_l)] for each vertical column
 
         where n_0 is the boundary layer from [-1 km, 1 km], n_1 is the first bulk layer from [1 km, 3 km],
         n_(nl) is the topmost bulk layer, and n_(nl+1) is the top boundary layer.
 
-        Form of the output is:
+        Form of the output, for each species for each vertical column is:
 
          Surface [↓, ↑;     [density-dependent, density-independent;    [#/s, #/cm³/s.;
          Top      ↑, ↓]      density-dependent, density-independent]     #/s, #/cm³/s]
@@ -1448,16 +1451,16 @@ function boundaryconditions(fluxcoef_dict, atmdict, M; nonthermal=true, globvars
         change recorded in other functions is always #/cm³/s. 
 
         FROM VENUS VERSION, MIKE:
-        Sign convention: The density-dependent terms (bc_dict[sp][:, 1]) are multiplied by -1 when the
+        Sign convention: The density-dependent terms (bc_dict[sp][ihoriz][:, 1]) are multiplied by -1 when the  
                          transport rates are computed in get_transport_PandL_rate. Density independent 
-                         terms (bc_dict[sp][:, 2]) are not.
+                         terms (bc_dict[sp][ihoriz][:, 2]) are not.
     =#
     
     GV = values(globvars)
     required = [:all_species, :speciesbclist, :dz, :planet]
     check_requirements(keys(GV), required)
     
-    bc_dict = Dict{Symbol, Array{ftype_ncur}}([s=>[0 0; 0 0] for s in GV.all_species])
+    bc_dict = Dict{Symbol, Vector{Array{ftype_ncur}}}([s=>[[0 0; 0 0] for ihoriz in 1:n_horiz] for s in GV.all_species])
 
     for sp in keys(GV.speciesbclist)
         try 
@@ -1471,7 +1474,7 @@ function boundaryconditions(fluxcoef_dict, atmdict, M; nonthermal=true, globvars
         try 
             # lower boundary...
             if GV.planet=="Mars"
-                n_lower = [fluxcoef_dict[sp][2, :][1], fluxcoef_dict[sp][1, :][2]*these_bcs["n"][1]]
+                n_lower = [fluxcoef_dict[sp][2, :][1], fluxcoef_dict[sp][1, :][2]*these_bcs["n"][1]]  # MULTICOL WARNING eventually make fluxcoef_dict to allow for different values for different columns
             elseif GV.planet=="Venus"
                 # get the eddy+molecular mixing velocities at the lower boundary of the atmosphere
                 v_lower_boundary_up = fluxcoef_dict[sp][1, # lower boundary cell, outside atmosphere
@@ -1486,7 +1489,9 @@ function boundaryconditions(fluxcoef_dict, atmdict, M; nonthermal=true, globvars
                 # throw an error if density boundary condition
                 # is specified simultaneous with any flux or velocity condition
                 @assert all(x->!isnan(x), n_lower)
-                bc_dict[sp][1, :] .+= n_lower
+		for ihoriz in [1:n_horiz;]
+                    bc_dict[sp][ihoriz][1, :] .+= n_lower # MULTICOL WARNING make sure n_lower can vary with each vertical column
+		end
             catch y
                 if !isa(y, AssertionError)
                     throw("Unhandled exception in lower density bc: $(y)")
@@ -1512,7 +1517,9 @@ function boundaryconditions(fluxcoef_dict, atmdict, M; nonthermal=true, globvars
                 # throw an error if density boundary condition
                 # is specified simultaneous with any flux or velocity condition
                 @assert all(x->!isnan(x), n_upper)
-                bc_dict[sp][2, :] .+= n_upper
+		for ihoriz in [1:n_horiz;]
+                    bc_dict[sp][ihoriz][2, :] .+= n_upper           # MULTICOL WARNING make sure n_upper can vary with each vertical column
+		end
             catch y
                 if !isa(y, AssertionError)
                     throw("Unhandled exception in upper density bc: $(y)")
@@ -1528,14 +1535,16 @@ function boundaryconditions(fluxcoef_dict, atmdict, M; nonthermal=true, globvars
         try 
             # lower boundary...
             if GV.planet=="Mars"
-                f_lower = [0, -these_bcs["f"][1]/GV.dz]
+                f_lower = [0, -these_bcs["f"][1]/GV.dz]  # MULTICOL WARNING expand for multiple vertical columns
             elseif GV.planet=="Venus"
-                f_lower = [0, these_bcs["f"][1]/GV.dz]
+                f_lower = [0, these_bcs["f"][1]/GV.dz]   # MULTICOL WARNING expand for multiple vertical columns
                 #             ^ no (-) sign, negative flux at lower boundary represents loss to surface
             end
             try        
                 @assert all(x->!isnan(x), f_lower)
-                bc_dict[sp][1, :] .+= f_lower
+		for ihoriz in [1:n_horiz];
+                    bc_dict[sp][ihoriz][1, :] .+= f_lower           # MULTICOL WARNING make sure f_lower can vary with each vertical column
+		end
             catch y
                 if !isa(y, AssertionError)
                     throw("Unhandled exception in lower flux bc: $(y)")
@@ -1547,7 +1556,9 @@ function boundaryconditions(fluxcoef_dict, atmdict, M; nonthermal=true, globvars
                 #             ^ (-) sign needed so that positive flux at upper boundary represents loss to space
                 #             (see "Sign convention" note above)
                 @assert all(x->!isnan(x), f_upper)
-                bc_dict[sp][2, :] .+= f_upper
+		for ihoriz in [1:n_horiz;]
+                    bc_dict[sp][ihoriz][2, :] .+= f_upper                   # MULTICOL WARNING make sure f_upper can vary with each vertical column
+		end
             catch y
                 if !isa(y, AssertionError)
                     throw("Unhandled exception in upper flux bc: $(y)")
@@ -1572,7 +1583,9 @@ function boundaryconditions(fluxcoef_dict, atmdict, M; nonthermal=true, globvars
 
             try
                 @assert all(x->!isnan(x), v_lower)
-                bc_dict[sp][1, :] .+= v_lower
+		for ihoriz in [1:n_horiz;]
+                    bc_dict[sp][ihoriz][1, :] .+= v_lower                             # MULTICOL WARNING make sure v_lower can vary with each vertical column
+		end
             catch y
                 if !isa(y, AssertionError)
                     throw("Unhandled exception in lower velocity bc: $(y)")
@@ -1585,7 +1598,9 @@ function boundaryconditions(fluxcoef_dict, atmdict, M; nonthermal=true, globvars
                 #          ^ no (-) sign needed,  positive velocity at upper boundary represents loss to space
                 #          (see "Sign convention" note above)
                 @assert all(x->!isnan(x), v_upper)
-                bc_dict[sp][2, :] .+= v_upper
+		for ihoriz in [1:n_horiz;]
+                    bc_dict[sp][ihoriz][2, :] .+= v_upper                           # MULTICOL WARNING make sure v_upper can vary with each vertical column
+		end
             catch y
                 if !isa(y, AssertionError)
                     throw("Unhandled exception in lower velocity bc: $(y)")
@@ -1603,10 +1618,12 @@ function boundaryconditions(fluxcoef_dict, atmdict, M; nonthermal=true, globvars
         required = [:hot_H_network, :hot_D_network, :hot_H_rc_funcs, :hot_D_rc_funcs, 
                     :hot_H2_network, :hot_H2_rc_funcs, :hot_HD_network, :hot_HD_rc_funcs, :Jratedict]
         check_requirements(keys(GV), required)
-        prod_hotH = escaping_hot_atom_production(:H, GV.hot_H_network, GV.hot_H_rc_funcs, atmdict, M; globvars...)
-        prod_hotD = escaping_hot_atom_production(:D, GV.hot_D_network, GV.hot_D_rc_funcs, atmdict, M; globvars...)
-        prod_hotH2 = escaping_hot_atom_production(:H2, GV.hot_H2_network, GV.hot_H2_rc_funcs, atmdict, M; globvars...)
-        prod_hotHD = escaping_hot_atom_production(:HD, GV.hot_HD_network, GV.hot_HD_rc_funcs, atmdict, M; globvars...)
+
+        for ihoriz in [1:n_horiz;]
+            prod_hotH = escaping_hot_atom_production(:H, GV.hot_H_network, GV.hot_H_rc_funcs, atmdict, M, ihoriz; globvars...)
+            prod_hotD = escaping_hot_atom_production(:D, GV.hot_D_network, GV.hot_D_rc_funcs, atmdict, M, ihoriz; globvars...)
+            prod_hotH2 = escaping_hot_atom_production(:H2, GV.hot_H2_network, GV.hot_H2_rc_funcs, atmdict, M, ihoriz; globvars...)
+            prod_hotHD = escaping_hot_atom_production(:HD, GV.hot_HD_network, GV.hot_HD_rc_funcs, atmdict, M, ihoriz; globvars...)
 
         # DIAGNOSTIC: produced hot H
         # if :results_dir in keys(GV)
@@ -1620,11 +1637,12 @@ function boundaryconditions(fluxcoef_dict, atmdict, M; nonthermal=true, globvars
         #     close(fig)
         # end
 
-        bc_dict[:H][2, :] .+= [0, -(1/GV.dz)*nonthermal_escape_flux(GV.hot_H_network, prod_hotH; returntype="number", globvars...)]
-        bc_dict[:D][2, :] .+= [0, -(1/GV.dz)*nonthermal_escape_flux(GV.hot_D_network, prod_hotD; returntype="number", globvars...)]
-        bc_dict[:H2][2, :] .+= [0, -(1/GV.dz)*nonthermal_escape_flux(GV.hot_H2_network, prod_hotH2; returntype="number", globvars...)]
-        bc_dict[:HD][2, :] .+= [0, -(1/GV.dz)*nonthermal_escape_flux(GV.hot_HD_network, prod_hotHD; returntype="number", globvars...)]
-    end 
+            bc_dict[:H][ihoriz][2, :] .+= [0, -(1/GV.dz)*nonthermal_escape_flux(GV.hot_H_network, prod_hotH; returntype="number", globvars...)]
+            bc_dict[:D][ihoriz][2, :] .+= [0, -(1/GV.dz)*nonthermal_escape_flux(GV.hot_D_network, prod_hotD; returntype="number", globvars...)]
+            bc_dict[:H2][ihoriz][2, :] .+= [0, -(1/GV.dz)*nonthermal_escape_flux(GV.hot_H2_network, prod_hotH2; returntype="number", globvars...)]
+            bc_dict[:HD][ihoriz][2, :] .+= [0, -(1/GV.dz)*nonthermal_escape_flux(GV.hot_HD_network, prod_hotHD; returntype="number", globvars...)]
+	end
+    end
     return bc_dict
 end
 
@@ -2039,18 +2057,22 @@ function update_transport_coefficients(species_list, atmdict::Dict{Symbol, Vecto
     # Get flux coefficients
     fluxcoefs_all = fluxcoefs(species_list, K_eddy_arr, Dcoef_dict, H0_dict; globvars...)
     
-    # Transport coefficients, non-boundary layers
+    # Transport coefficients, non-boundary layers   # MULTICOL WARNING enter different values for different columns
     tup = fill(-999., length(GV.transport_species), GV.num_layers)
     tdown = fill(-999., length(GV.transport_species), GV.num_layers)
     for (i, s) in enumerate(GV.transport_species)
         tup[i, :] .= fluxcoefs_all[s][2:end-1, 2]
         tdown[i, :] .= fluxcoefs_all[s][2:end-1, 1]
     end
-    bc_dict = boundaryconditions(fluxcoefs_all, atmdict, M; nonthermal=calc_nonthermal, globvars...)
+    bc_dict = boundaryconditions(fluxcoefs_all, atmdict, M, n_horiz; nonthermal=calc_nonthermal, globvars...)
 
     # transport coefficients for boundary layers
-    tlower = permutedims(reduce(hcat, [bc_dict[sp][1,:] for sp in GV.transport_species]))  # MULTICOL WARNING hardcoded to use first vertical column for all columns
-    tupper = permutedims(reduce(hcat, [bc_dict[sp][2,:] for sp in GV.transport_species]))  # MULTICOL WARNING hardcoded to use first vertical column for all columns
+    tlower = Vector{Array{Float64}}(undef, n_horiz) # MULTICOL WARNING might need to change or remove this definition
+    tupper = Vector{Array{Float64}}(undef, n_horiz) # MULTICOL WARNING might need to change or remove this definition
+    for ihoriz in [1:n_horiz;]
+    	tlower[ihoriz] = permutedims(reduce(hcat, [bc_dict[sp][ihoriz][1,:] for sp in GV.transport_species]))
+    	tupper[ihoriz] = permutedims(reduce(hcat, [bc_dict[sp][ihoriz][2,:] for sp in GV.transport_species]))
+    end
 
     return tlower, tup, tdown, tupper
 end
