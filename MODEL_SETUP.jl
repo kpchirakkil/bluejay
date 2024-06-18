@@ -61,13 +61,13 @@ ignored_species = [:CNpl,:HCNpl,:HCNHpl,:HN2Opl,:NH2pl,:NH3pl,:N2Opl,:NO2pl,:CH,
 
 #                                        Neutrals
 # =======================================================================================================
-const orig_neutrals = [:Ar, :CO, :CO2, :H, :H2, :H2O, :H2O2, 
-                       :HO2, :HOCO, :N2, 
-                       :O, :O1D, :O2, :O3, :OH,
-                       :D, :DO2, :DOCO, :HD, :HDO, :HDO2, :OD,
+const orig_neutrals = [:O,
+                    #   :HO2, :HOCO, 
+                        :O2, :O3,
+                    #   :D, :DO2, :DOCO, :HD, :HDO, :HDO2, :OD,
 
                        # Turn these off for minimal ionosphere:
-                       :C, :DCO, :HCN, :HCO, :N, :NO, :Nup2D, 
+                     #  :C, :HCN, :HCO, :N, :NO, 
                        ]; 
 const conv_neutrals = remove_ignored_species==true ? setdiff(orig_neutrals, ignored_species) : orig_neutrals
 const new_neutrals = [];
@@ -75,15 +75,15 @@ const neutral_species = [conv_neutrals..., new_neutrals...];
 
 #                                          Ions
 # =======================================================================================================
-const orig_ions = [:CO2pl, :HCO2pl, :Opl, :O2pl, # Nair minimal ionosphere 
-                   :Arpl, :ArHpl, :ArDpl, 
-                   :Cpl, :CHpl,  :COpl, 
-                   :Hpl, :Dpl, :H2pl, :HDpl, :H3pl, :H2Dpl, :HD2pl, 
-                   :H2Opl,  :HDOpl, :H3Opl, :H2DOpl, 
-                   :HO2pl, :HCOpl, :DCOpl, :HOCpl, :DOCpl, :DCO2pl, 
-                   :HNOpl,   
-                   :Npl, :NHpl, :N2pl, :N2Hpl, :N2Dpl, :NOpl,
-                   :OHpl, :ODpl];
+const orig_ions = [:Opl] #, :Opl, :O2pl, :COpl];# Nair minimal ionosphere 
+               #    :Arpl, :ArHpl, :ArDpl, 
+               #    :Cpl, :CHpl,  :COpl, 
+               #    :Hpl, :Dpl, :H2pl, :HDpl, :H3pl, :H2Dpl, :HD2pl, 
+               #    :H2Opl,  :HDOpl, :H3Opl, :H2DOpl, 
+               #    :HO2pl, :HCOpl, :DCOpl, :HOCpl, :DOCpl, :DCO2pl, 
+               #    :HNOpl,   
+               #    :Npl, :NHpl, :N2pl, :N2Hpl, :N2Dpl, :NOpl,
+               #    :OHpl, :ODpl];
 const new_ions = [];
 const ion_species = remove_ignored_species==true ? setdiff([orig_ions..., new_ions...], ignored_species) : [orig_ions..., new_ions...]
 const nontherm = ions_included==true ? true : false   # whether to do non-thermal escape; this has to be here because it's needed in short order to do Jrates.
@@ -592,7 +592,7 @@ push!(PARAMETERS_CONDITIONS, ("WATER_BDY", waterbdy, "km"))
 
 # This is so ugly because the XLSX package won't write columns of different lengths, so I have to pad all the shorter lists
 # with blanks up to the length of the longest list and also transform all the symbols into strings. 
-L = max(length(all_species), length(neutral_species), length(ion_species), length(no_chem_species), length(no_transport_species))
+L = max(length(all_species), length(neutral_species), length(ion_species), length(no_chem_species), length(no_transport_species), length(Jratelist))
 PARAMETERS_SPLISTS = DataFrame(AllSpecies=[[string(a) for a in all_species]..., ["" for i in 1:L-length(all_species)]...], 
                                Neutrals=[[string(n) for n in neutral_species]..., ["" for i in 1:L-length(neutral_species)]...], 
                                Ions=[[string(i) for i in ion_species]..., ["" for i in 1:L-length(ion_species)]...],

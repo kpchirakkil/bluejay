@@ -1620,10 +1620,11 @@ function boundaryconditions(fluxcoef_dict, atmdict, M, n_horiz::Int64; nontherma
         check_requirements(keys(GV), required)
 
         for ihoriz in [1:n_horiz;]
-            prod_hotH = escaping_hot_atom_production(:H, GV.hot_H_network, GV.hot_H_rc_funcs, atmdict, M, ihoriz; globvars...)
-            prod_hotD = escaping_hot_atom_production(:D, GV.hot_D_network, GV.hot_D_rc_funcs, atmdict, M, ihoriz; globvars...)
-            prod_hotH2 = escaping_hot_atom_production(:H2, GV.hot_H2_network, GV.hot_H2_rc_funcs, atmdict, M, ihoriz; globvars...)
-            prod_hotHD = escaping_hot_atom_production(:HD, GV.hot_HD_network, GV.hot_HD_rc_funcs, atmdict, M, ihoriz; globvars...)
+	    if :H in keys(atmdict) && :D in keys(atmdict) && :H2 in keys(atmdict) && :HD in keys(atmdict) 
+               prod_hotH = escaping_hot_atom_production(:H, GV.hot_H_network, GV.hot_H_rc_funcs, atmdict, M, ihoriz; globvars...)
+               prod_hotD = escaping_hot_atom_production(:D, GV.hot_D_network, GV.hot_D_rc_funcs, atmdict, M, ihoriz; globvars...)
+               prod_hotH2 = escaping_hot_atom_production(:H2, GV.hot_H2_network, GV.hot_H2_rc_funcs, atmdict, M, ihoriz; globvars...)
+               prod_hotHD = escaping_hot_atom_production(:HD, GV.hot_HD_network, GV.hot_HD_rc_funcs, atmdict, M, ihoriz; globvars...)
 
         # DIAGNOSTIC: produced hot H
         # if :results_dir in keys(GV)
@@ -1637,10 +1638,13 @@ function boundaryconditions(fluxcoef_dict, atmdict, M, n_horiz::Int64; nontherma
         #     close(fig)
         # end
 
-            bc_dict[:H][ihoriz][2, :] .+= [0, -(1/GV.dz)*nonthermal_escape_flux(GV.hot_H_network, prod_hotH; returntype="number", globvars...)]
-            bc_dict[:D][ihoriz][2, :] .+= [0, -(1/GV.dz)*nonthermal_escape_flux(GV.hot_D_network, prod_hotD; returntype="number", globvars...)]
-            bc_dict[:H2][ihoriz][2, :] .+= [0, -(1/GV.dz)*nonthermal_escape_flux(GV.hot_H2_network, prod_hotH2; returntype="number", globvars...)]
-            bc_dict[:HD][ihoriz][2, :] .+= [0, -(1/GV.dz)*nonthermal_escape_flux(GV.hot_HD_network, prod_hotHD; returntype="number", globvars...)]
+                bc_dict[:H][ihoriz][2, :] .+= [0, -(1/GV.dz)*nonthermal_escape_flux(GV.hot_H_network, prod_hotH; returntype="number", globvars...)]
+            	bc_dict[:D][ihoriz][2, :] .+= [0, -(1/GV.dz)*nonthermal_escape_flux(GV.hot_D_network, prod_hotD; returntype="number", globvars...)]
+            	bc_dict[:H2][ihoriz][2, :] .+= [0, -(1/GV.dz)*nonthermal_escape_flux(GV.hot_H2_network, prod_hotH2; returntype="number", globvars...)]
+            	bc_dict[:HD][ihoriz][2, :] .+= [0, -(1/GV.dz)*nonthermal_escape_flux(GV.hot_HD_network, prod_hotHD; returntype="number", globvars...)]
+	    else
+	        println("At least one of H, D, H2 and HD is not in the model.",'\n')
+            end
 	end
     end
     return bc_dict

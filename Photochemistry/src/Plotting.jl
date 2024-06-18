@@ -180,6 +180,8 @@ function plot_atm(atmdict::Dict{Symbol, Vector{Array{ftype_ncur}}}, savepath::St
             atm_ax[i, 2].tick_params(which="both", labeltop=false, top=true, labelbottom=true, bottom=true)
         end
         atm_ax[3, 2].set_xlabel(xlab)
+
+      #  temp_markers = ["x","_","|"]
          
         # plot the neutrals according to logical groups -------------------------------------------------------
         for sp in GV.neutral_species
@@ -189,7 +191,7 @@ function plot_atm(atmdict::Dict{Symbol, Vector{Array{ftype_ncur}}}, savepath::St
                                            linewidth=2, label=string_to_latexstr(string(sp)), linestyle=get(GV.speciesstyle, sp, "-"), zorder=2)
 		else
 		    atm_ax[axes_by_sp[sp], 1].plot(convert(Array{Float64}, atmdict[sp][ihoriz]), GV.plot_grid, color=get(GV.speciescolor, sp, "black"),
-                                           linewidth=2, linestyle=get(GV.speciesstyle, sp, "-"), zorder=2)
+                                           linewidth=2, linestyle=get(GV.speciesstyle, sp, "-"), zorder=2) #,marker=temp_markers[ihoriz])
 		end
 	    end
         end
@@ -199,10 +201,10 @@ function plot_atm(atmdict::Dict{Symbol, Vector{Array{ftype_ncur}}}, savepath::St
 	    for ihoriz in [1:n_horiz;] # MULTICOL WARNING -- might want to dictate which columns to plot instead, rather than plotting all
 	        if ihoriz == 1
             	    atm_ax[axes_by_sp[sp], 2].plot(convert(Array{Float64}, atmdict[sp][ihoriz]), GV.plot_grid, color=get(GV.speciescolor, sp, "black"),
-                                           linewidth=2, label=string_to_latexstr(string(sp)), linestyle=get(GV.speciesstyle, sp, "-"), zorder=2)
+                                           linewidth=2, label=string_to_latexstr(string(sp)), linestyle=get(GV.speciesstyle, sp, "-"), zorder=2) #,marker=temp_markers[ihoriz])
 		else
 		    atm_ax[axes_by_sp[sp], 2].plot(convert(Array{Float64}, atmdict[sp][ihoriz]), GV.plot_grid, color=get(GV.speciescolor, sp, "black"),
-                                           linewidth=2, linestyle=get(GV.speciesstyle, sp, "-"), zorder=2)
+                                           linewidth=2, linestyle=get(GV.speciesstyle, sp, "-"), zorder=2) #, marker=temp_markers[ihoriz])
 		end
 	    end
         end
@@ -212,7 +214,7 @@ function plot_atm(atmdict::Dict{Symbol, Vector{Array{ftype_ncur}}}, savepath::St
 	    if ihoriz == 1
                 atm_ax[1, 2].plot(convert(Array{Float64}, E_prof[ihoriz]), GV.plot_grid, color="black", linewidth=2, linestyle=":", zorder=10, label=L"e$^-$")
             else
-	        atm_ax[1, 2].plot(convert(Array{Float64}, E_prof[ihoriz]), GV.plot_grid, color="black", linewidth=2, linestyle=":", zorder=10) 
+	        atm_ax[1, 2].plot(convert(Array{Float64}, E_prof[ihoriz]), GV.plot_grid, color="black", linewidth=2, linestyle=":", zorder=10) #, marker=temp_markers[ihoriz])
 	    end
 	end
 

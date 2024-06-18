@@ -248,11 +248,14 @@ function chemJmat(n_active_longlived, n_active_shortlived, n_inactive, Jrates, t
               M[1]; E[1][1];                          # total density and electrons, # MULTICOL WARNING hardcoded to use info from first column for all columns.
               tup[:,1]; tlower[1][:,1];                  # local_transport_rates        # MULTICOL WARNING change tlower[1][...] to tlower[ihoriz][...]
               tdown[:,2]; tlower[1][:,2]]                                               # MULTICOL WARNING change tlower[1][...] to tlower[ihoriz][...]
+
     argvec = convert(Array{ftype_chem}, argvec)
 
-    (tclocal, tcupper, tclower) = chemJmat_local(argvec...) 
+    (tclocal, tcupper, tclower) = chemJmat_local(argvec...)
+    print("tclocal, tcupper, tclower for z=1: ",tclocal,'\n',tcupper,'\n',tclower,'\n')
 
     # add the influence of the local densities
+    print("tclocal: ",tclocal,'\t',tclocal[1],'\n')
     append!(chemJi, tclocal[1])
     append!(chemJj, tclocal[2])
     append!(chemJval, tclocal[3])
@@ -261,6 +264,8 @@ function chemJmat(n_active_longlived, n_active_shortlived, n_inactive, Jrates, t
     append!(chemJi, tcupper[1])
     append!(chemJj, tcupper[2] .+ length(GV.active_longlived))
     append!(chemJval, tcupper[3])
+
+    print("after append: ",chemJi,'\n')
 
     for ialt in 2:(GV.num_layers-1)
         argvec = [nmat_llsp[:, ialt, 1];    # MULTICOL WARNING hardcoded to use info from first column for all columns.
@@ -278,6 +283,7 @@ function chemJmat(n_active_longlived, n_active_shortlived, n_inactive, Jrates, t
         argvec = convert(Array{ftype_chem}, argvec)        
 
         (tclocal, tcupper, tclower) = chemJmat_local(argvec...)
+	print("tclocal, tcupper, tclower for z=",ialt,": ",tclocal,'\n',tcupper,'\n',tclower,'\n')
 
         # add the influence of the local densities
         append!(chemJi, tclocal[1].+(ialt-1)*length(GV.active_longlived))
@@ -291,6 +297,7 @@ function chemJmat(n_active_longlived, n_active_shortlived, n_inactive, Jrates, t
         append!(chemJi, tclower[1].+(ialt-1)*length(GV.active_longlived))
         append!(chemJj, tclower[2].+(ialt-2)*length(GV.active_longlived))
         append!(chemJval, tclower[3])
+	print("after further appends: ",chemJi,'\n')
     end
 
     argvec = [nmat_llsp[:,end, 1];          # MULTICOL WARNING hardcoded to use info from first column for all columns.
@@ -306,6 +313,7 @@ function chemJmat(n_active_longlived, n_active_shortlived, n_inactive, Jrates, t
     argvec = convert(Array{ftype_chem}, argvec)
     
     (tclocal, tcupper, tclower) = chemJmat_local(argvec...)
+    print("tclocal, tcupper, tclower for z=top: ",tclocal,'\n',tcupper,'\n',tclower,'\n')
 
     # add the influence of the local densities
     append!(chemJi, tclocal[1].+(GV.num_layers-1)*length(GV.active_longlived))
@@ -1239,8 +1247,13 @@ const active_longlived_below = [Symbol(string(s)*"_below") for s in active_longl
 # Create symbolic expressions for the chemical jacobian at a local layer with influence from that same layer, 
 # the one above, and the one below
 const chemJ_local = chemical_jacobian(active_longlived, active_longlived; diff_wrt_e=ediff, diff_wrt_m=mdiff, ion_species, chem_species, transport_species, chemnet=reaction_network, transportnet);
+print("chemJ_local: ",'\t',chemJ_local,'\n')
+print('\n')
 const chemJ_above = chemical_jacobian(active_longlived, active_longlived_above; diff_wrt_e=ediff, diff_wrt_m=mdiff, ion_species, chem_species, transport_species, chemnet=reaction_network, transportnet);
+print("chemJ_above: ",'\t',chemJ_above,'\n')
+print('\n')
 const chemJ_below = chemical_jacobian(active_longlived, active_longlived_below; diff_wrt_e=ediff, diff_wrt_m=mdiff, ion_species, chem_species, transport_species, chemnet=reaction_network, transportnet);
+print("chemJ_below: ",'\t',chemJ_below,'\n')
 
 #                     Photochemical equilibrium setup                           #
 #===============================================================================#
@@ -1453,11 +1466,11 @@ solarflux[:,2] = solarflux[:,2] * cosd(SZA)  # Adjust the flux according to spec
 
 lambdas = Float64[]
 for j in Jratelist, ialt in 1:length(alt)
-    global lambdas = union(lambdas, crosssection[j][ialt][:,1])
+    global lambdas = union(lambdas, crosssection[j][ialt][:,1]) # MULTICOL WARNING expand crosssection to include values for all vertical columns
 end
 
 if !(setdiff(solarflux[:,1],lambdas)==[])
-    throw("Solar flux wavelengths don't match cross section wavelengths!")
+    throw("Solar flux wavelengths don't match cross section wavelengths!") # this might be triggered if some photolysis reactions are missing; solarflux is length 2000 and lambdas might end up shorter
 end
 
 # pad all cross-sections to solar
