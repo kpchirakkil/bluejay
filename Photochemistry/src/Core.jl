@@ -1311,7 +1311,7 @@ function T_Venus(Tsurf::Float64, Tmeso::Float64, Texo::Float64, file_for_interp;
         Tn_interped = [interp_ion(a) for a in new_a];
         Tn[i_upper] .= Tn_interped # upper_atmo_neutrals(GV.alt[i_upper])
 
-        return Tn 
+        return Tn
     end 
 
     function ELECTRONS(;spc="electron") 
@@ -1358,7 +1358,7 @@ function T_Venus(Tsurf::Float64, Tmeso::Float64, Texo::Float64, file_for_interp;
     # i_meso_top = findfirst(z->z==z_meso_top, GV.alt)
 
     # For interpolating upper atmo temperatures from Fox & Sung 2001
-    new_a = collect(90e5:2e5:250e5) # TODO: Remove hard coded values
+    new_a = collect(90e5:2e5:106e5) # TODO: Remove hard coded values
 
     return Dict("neutrals"=>NEUTRALS(), "ions"=>IONS(), "electrons"=>ELECTRONS())
 end

@@ -75,7 +75,7 @@ function get_ncurrent(readfile::String, n_horiz::Int64)
     n_current = Dict{Symbol, Vector{Array{ftype_ncur}}}()
 
     for ispecies in [1:length(n_current_tag_list);]
-        n_current[n_current_tag_list[ispecies]] = fill(reshape(n_current_mat[:,ispecies], length(n_current_mat[:, ispecies])),n_horiz) # MULTICOL WARNING hardcoded to use same values for each vertical column
+        n_current[n_current_tag_list[ispecies]] = fill(reshape(n_current_mat[1:7,ispecies], length(n_current_mat[1:7, ispecies])),n_horiz) # MULTICOL WARNING hardcoded to use same values for each vertical column
     end
     return n_current
 end

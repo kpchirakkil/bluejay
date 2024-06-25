@@ -252,10 +252,8 @@ function chemJmat(n_active_longlived, n_active_shortlived, n_inactive, Jrates, t
     argvec = convert(Array{ftype_chem}, argvec)
 
     (tclocal, tcupper, tclower) = chemJmat_local(argvec...)
-    print("tclocal, tcupper, tclower for z=1: ",tclocal,'\n',tcupper,'\n',tclower,'\n')
 
     # add the influence of the local densities
-    print("tclocal: ",tclocal,'\t',tclocal[1],'\n')
     append!(chemJi, tclocal[1])
     append!(chemJj, tclocal[2])
     append!(chemJval, tclocal[3])
@@ -265,7 +263,6 @@ function chemJmat(n_active_longlived, n_active_shortlived, n_inactive, Jrates, t
     append!(chemJj, tcupper[2] .+ length(GV.active_longlived))
     append!(chemJval, tcupper[3])
 
-    print("after append: ",chemJi,'\n')
 
     for ialt in 2:(GV.num_layers-1)
         argvec = [nmat_llsp[:, ialt, 1];    # MULTICOL WARNING hardcoded to use info from first column for all columns.
@@ -280,10 +277,9 @@ function chemJmat(n_active_longlived, n_active_shortlived, n_inactive, Jrates, t
                   tdown[:, ialt];
                   tdown[:, ialt+1];
                   tup[:, ialt-1]]
-        argvec = convert(Array{ftype_chem}, argvec)        
+        argvec = convert(Array{ftype_chem}, argvec)
 
         (tclocal, tcupper, tclower) = chemJmat_local(argvec...)
-	print("tclocal, tcupper, tclower for z=",ialt,": ",tclocal,'\n',tcupper,'\n',tclower,'\n')
 
         # add the influence of the local densities
         append!(chemJi, tclocal[1].+(ialt-1)*length(GV.active_longlived))
@@ -297,7 +293,6 @@ function chemJmat(n_active_longlived, n_active_shortlived, n_inactive, Jrates, t
         append!(chemJi, tclower[1].+(ialt-1)*length(GV.active_longlived))
         append!(chemJj, tclower[2].+(ialt-2)*length(GV.active_longlived))
         append!(chemJval, tclower[3])
-	print("after further appends: ",chemJi,'\n')
     end
 
     argvec = [nmat_llsp[:,end, 1];          # MULTICOL WARNING hardcoded to use info from first column for all columns.
@@ -313,7 +308,6 @@ function chemJmat(n_active_longlived, n_active_shortlived, n_inactive, Jrates, t
     argvec = convert(Array{ftype_chem}, argvec)
     
     (tclocal, tcupper, tclower) = chemJmat_local(argvec...)
-    print("tclocal, tcupper, tclower for z=top: ",tclocal,'\n',tcupper,'\n',tclower,'\n')
 
     # add the influence of the local densities
     append!(chemJi, tclocal[1].+(GV.num_layers-1)*length(GV.active_longlived))
@@ -373,6 +367,7 @@ function ratefn(n_active_longlived, n_active_shortlived, n_inactive, Jrates, tup
     nmat_inactive = reshape(n_inactive, (length(GV.inactive_species), GV.num_layers, n_horiz))
     returnrates = zeros(size(nmat_llsp))
     
+    
     # fill the first altitude entry with information for all species
     argvec = [nmat_llsp[:,1, 1];                      # densities for active_longlived;  # MULTICOL WARNING hardcoded to use info from first column for all columns.
               nmat_llsp[:,2, 1];                      # active_longlived_above; # MULTICOL WARNING hardcoded to use info from first column for all columns.
@@ -386,6 +381,7 @@ function ratefn(n_active_longlived, n_active_shortlived, n_inactive, Jrates, tup
     argvec = convert(Array{ftype_chem}, argvec)
     
     returnrates[:,1,1] .= ratefn_local(argvec...) # local_transport_rates # MULTICOL WARNING hardcoded to use info from first column for all columns.
+    
 
     # iterate through other altitudes in the lower atmosphere
     for ialt in 2:(GV.num_layers-1)
@@ -1247,13 +1243,8 @@ const active_longlived_below = [Symbol(string(s)*"_below") for s in active_longl
 # Create symbolic expressions for the chemical jacobian at a local layer with influence from that same layer, 
 # the one above, and the one below
 const chemJ_local = chemical_jacobian(active_longlived, active_longlived; diff_wrt_e=ediff, diff_wrt_m=mdiff, ion_species, chem_species, transport_species, chemnet=reaction_network, transportnet);
-print("chemJ_local: ",'\t',chemJ_local,'\n')
-print('\n')
 const chemJ_above = chemical_jacobian(active_longlived, active_longlived_above; diff_wrt_e=ediff, diff_wrt_m=mdiff, ion_species, chem_species, transport_species, chemnet=reaction_network, transportnet);
-print("chemJ_above: ",'\t',chemJ_above,'\n')
-print('\n')
 const chemJ_below = chemical_jacobian(active_longlived, active_longlived_below; diff_wrt_e=ediff, diff_wrt_m=mdiff, ion_species, chem_species, transport_species, chemnet=reaction_network, transportnet);
-print("chemJ_below: ",'\t',chemJ_below,'\n')
 
 #                     Photochemical equilibrium setup                           #
 #===============================================================================#
