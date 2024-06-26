@@ -229,125 +229,129 @@ function chemJmat(n_active_longlived, n_active_shortlived, n_inactive, Jrates, t
     @assert all(x->x in keys(GV), [:active_longlived, :active_shortlived, :H2Oi, :HDOi, :inactive_species, :num_layers, :Tn, :Ti, :Te, :upper_lower_bdy_i])
 
     nmat_llsp = reshape(n_active_longlived, (length(GV.active_longlived), GV.num_layers, n_horiz))
-    nmat_slsp = reshape(n_active_shortlived, (length(GV.active_shortlived), GV.num_layers))
-    nmat_inactive = reshape(n_inactive, (length(GV.inactive_species), GV.num_layers))
+
+    nmat_slsp = reshape(n_active_shortlived, (length(GV.active_shortlived), GV.num_layers, n_horiz))
+    nmat_inactive = reshape(n_inactive, (length(GV.inactive_species), GV.num_layers, n_horiz))
     
     # For storing the jacobian indices and values
     chemJi = Int64[]
     chemJj = Int64[]
     chemJval = ftype_chem[]
 
-    # tc___ are the coordinate tuples containing (I, J, V) to be used to fill a sparse matrix.
-    argvec = [nmat_llsp[:, 1, 1];                     # active_longlived; # MULTICOL WARNING hardcoded to use info from first column for all columns.
-              nmat_llsp[:, 2, 1];                     # active_longlived_above; # MULTICOL WARNING hardcoded to use info from first column for all columns.
+    # Start loop over vertical columns
+    for ihoriz in [1:n_horiz;]
+
+        # tc___ are the coordinate tuples containing (I, J, V) to be used to fill a sparse matrix.
+    	argvec = [nmat_llsp[:, 1, ihoriz];                     # active_longlived; # MULTICOL WARNING hardcoded to use info from first column for all columns. Mid-fix
+              nmat_llsp[:, 2, ihoriz];                     # active_longlived_above; # MULTICOL WARNING hardcoded to use info from first column for all columns. Mid-fix
               fill(1.0, length(GV.active_longlived)); # active_longlived_below;
-              nmat_slsp[:, 1, 1];                     # active_shortlived; # MULTICOL WARNING hardcoded to use info from first column for all columns.
-              nmat_inactive[:,1];                     # inactive_species;
+              nmat_slsp[:, 1, ihoriz];                     # active_shortlived; # MULTICOL WARNING hardcoded to use info from first column for all columns. Mid-fix
+              nmat_inactive[:,1, ihoriz];                     # inactive_species;
               Jrates[:,1];                            # Jratelist;
-              GV.Tn[1]; GV.Ti[1]; GV.Te[1];           #:Tn; :Ti; :Te;
-              M[1]; E[1][1];                          # total density and electrons, # MULTICOL WARNING hardcoded to use info from first column for all columns.
-              tup[:,1]; tlower[1][:,1];                  # local_transport_rates        # MULTICOL WARNING change tlower[1][...] to tlower[ihoriz][...]
-              tdown[:,2]; tlower[1][:,2]]                                               # MULTICOL WARNING change tlower[1][...] to tlower[ihoriz][...]
+              GV.Tn[1]; GV.Ti[1]; GV.Te[1];           #:Tn; :Ti; :Te; # MULTICOL WARNING allow to use different values for different vertical columns
+              M[1]; E[ihoriz][1];                          # total density and electrons, # MULTICOL WARNING hardcoded to use info from first column for all columns.
+              tup[:,1]; tlower[ihoriz][:,1];                  # local_transport_rates        # MULTICOL WARNING change tlower[1][...] to tlower[ihoriz][...]. Mid-fix. Also will need to allow for different transport values for different vertical columns
+              tdown[:,2]; tlower[ihoriz][:,2]]                                               # MULTICOL WARNING change tlower[1][...] to tlower[ihoriz][...]. Mid-fix. Also will need to allow for different transport values for different vertical columns
 
-    argvec = convert(Array{ftype_chem}, argvec)
-
-    (tclocal, tcupper, tclower) = chemJmat_local(argvec...)
-
-    # add the influence of the local densities
-    append!(chemJi, tclocal[1])
-    append!(chemJj, tclocal[2])
-    append!(chemJval, tclocal[3])
-
-    # and the upper densities
-    append!(chemJi, tcupper[1])
-    append!(chemJj, tcupper[2] .+ length(GV.active_longlived))
-    append!(chemJval, tcupper[3])
-
-
-    for ialt in 2:(GV.num_layers-1)
-        argvec = [nmat_llsp[:, ialt, 1];    # MULTICOL WARNING hardcoded to use info from first column for all columns.
-                  nmat_llsp[:, ialt+1, 1];  # MULTICOL WARNING hardcoded to use info from first column for all columns.
-                  nmat_llsp[:, ialt-1, 1];  # MULTICOL WARNING hardcoded to use info from first column for all columns.
-                  nmat_slsp[:, ialt, 1];    # MULTICOL WARNING hardcoded to use info from first column for all columns.
-                  nmat_inactive[:, ialt];
-                  Jrates[:, ialt];
-                  GV.Tn[ialt]; GV.Ti[ialt]; GV.Te[ialt];
-                  M[ialt]; E[1][ialt];      # MULTICOL WARNING hardcoded to use info from first column for all columns.
-                  tup[:, ialt];
-                  tdown[:, ialt];
-                  tdown[:, ialt+1];
-                  tup[:, ialt-1]]
         argvec = convert(Array{ftype_chem}, argvec)
 
-        (tclocal, tcupper, tclower) = chemJmat_local(argvec...)
+    	(tclocal, tcupper, tclower) = chemJmat_local(argvec...)
 
-        # add the influence of the local densities
-        append!(chemJi, tclocal[1].+(ialt-1)*length(GV.active_longlived))
-        append!(chemJj, tclocal[2].+(ialt-1)*length(GV.active_longlived))
-        append!(chemJval, tclocal[3])
-        # and the upper densities
-        append!(chemJi, tcupper[1].+(ialt-1)*length(GV.active_longlived))
-        append!(chemJj, tcupper[2].+(ialt  )*length(GV.active_longlived))
-        append!(chemJval, tcupper[3])
-        # and the lower densities
-        append!(chemJi, tclower[1].+(ialt-1)*length(GV.active_longlived))
-        append!(chemJj, tclower[2].+(ialt-2)*length(GV.active_longlived))
-        append!(chemJval, tclower[3])
-    end
+    	# add the influence of the local densities
+    	append!(chemJi, (ihoriz-1)*(length(GV.active_longlived)*GV.num_layers) .+ tclocal[1])
+    	append!(chemJj, (ihoriz-1)*(length(GV.active_longlived)*GV.num_layers) .+ tclocal[2])
+    	append!(chemJval, tclocal[3])
 
-    argvec = [nmat_llsp[:,end, 1];          # MULTICOL WARNING hardcoded to use info from first column for all columns.
-              fill(1.0, length(GV.active_longlived));
-              nmat_llsp[:,end-1, 1];        # MULTICOL WARNING hardcoded to use info from first column for all columns.
-              nmat_slsp[:, end, 1];         # MULTICOL WARNING hardcoded to use info from first column for all columns.
-              nmat_inactive[:,end];
-              Jrates[:,end];
-              GV.Tn[end]; GV.Ti[end]; GV.Te[end];
-              M[end]; E[1][end]; # E FIX ATTEMPT   # MULTICOL WARNING hardcoded to use info from first column for all columns.
-              tupper[1][:,1]; tdown[:,end];           # MULTICOL WARNING change tupper[1][...] to tupper[ihoriz][...]
-              tupper[1][:,2]; tup[:,end-1]]           # MULTICOL WARNING change tupper[1][...] to tupper[ihoriz][...]
-    argvec = convert(Array{ftype_chem}, argvec)
+    	# and the upper densities
+    	append!(chemJi, (ihoriz-1)*(length(GV.active_longlived)*GV.num_layers) .+ tcupper[1])
+    	append!(chemJj, (ihoriz-1)*(length(GV.active_longlived)*GV.num_layers) .+ tcupper[2] .+ length(GV.active_longlived))
+    	append!(chemJval, tcupper[3])
+
+        for ialt in 2:(GV.num_layers-1)
+            argvec = [nmat_llsp[:, ialt, ihoriz];    # MULTICOL WARNING hardcoded to use info from first column for all columns. Mid-fix
+                      nmat_llsp[:, ialt+1, ihoriz];  # MULTICOL WARNING hardcoded to use info from first column for all columns. Mid-fix
+                      nmat_llsp[:, ialt-1, ihoriz];  # MULTICOL WARNING hardcoded to use info from first column for all columns. Mid-fix
+                      nmat_slsp[:, ialt, ihoriz];    # MULTICOL WARNING hardcoded to use info from first column for all columns. Mid-fix
+                      nmat_inactive[:, ialt, ihoriz];
+                      Jrates[:, ialt];
+                      GV.Tn[ialt]; GV.Ti[ialt]; GV.Te[ialt];
+                      M[ialt]; E[ihoriz][ialt];      # MULTICOL WARNING hardcoded to use info from first column for all columns.
+                      tup[:, ialt];                  # MULTICOL WARNING will need to allow for different transport values for different vertical columns
+                      tdown[:, ialt];                # MULTICOL WARNING will need to allow for different transport values for different vertical columns
+                      tdown[:, ialt+1];              # MULTICOL WARNING will need to allow for different transport values for different vertical columns
+                      tup[:, ialt-1]]                # MULTICOL WARNING will need to allow for different transport values for different vertical columns
+            argvec = convert(Array{ftype_chem}, argvec)
+
+            (tclocal, tcupper, tclower) = chemJmat_local(argvec...)
+
+            # add the influence of the local densities
+            append!(chemJi, tclocal[1] .+ (ihoriz-1)*length(GV.active_longlived)*GV.num_layers .+ (ialt-1)*length(GV.active_longlived))
+            append!(chemJj, tclocal[2] .+ (ihoriz-1)*length(GV.active_longlived)*GV.num_layers .+ (ialt-1)*length(GV.active_longlived))
+            append!(chemJval, tclocal[3])
+            # and the upper densities
+            append!(chemJi, tcupper[1] .+ (ihoriz-1)*length(GV.active_longlived)*GV.num_layers .+ (ialt-1)*length(GV.active_longlived))
+            append!(chemJj, tcupper[2] .+ (ihoriz-1)*length(GV.active_longlived)*GV.num_layers .+ (ialt  )*length(GV.active_longlived))
+            append!(chemJval, tcupper[3])
+            # and the lower densities
+            append!(chemJi, tclower[1] .+ (ihoriz-1)*length(GV.active_longlived)*GV.num_layers .+ (ialt-1)*length(GV.active_longlived))
+            append!(chemJj, tclower[2] .+ (ihoriz-1)*length(GV.active_longlived)*GV.num_layers .+ (ialt-2)*length(GV.active_longlived))
+            append!(chemJval, tclower[3])
+        end
+
+    	argvec = [nmat_llsp[:,end, ihoriz];          # MULTICOL WARNING hardcoded to use info from first column for all columns. Mid-fix
+                  fill(1.0, length(GV.active_longlived));
+              	  nmat_llsp[:,end-1, ihoriz];        # MULTICOL WARNING hardcoded to use info from first column for all columns. Mid-fix
+              	  nmat_slsp[:, end, ihoriz];         # MULTICOL WARNING hardcoded to use info from first column for all columns. Mid-fix
+              	  nmat_inactive[:, end, ihoriz];
+              	  Jrates[:,end];
+              	  GV.Tn[end]; GV.Ti[end]; GV.Te[end];
+              	  M[end]; E[ihoriz][end]; # E FIX ATTEMPT   # MULTICOL WARNING hardcoded to use info from first column for all columns. Mid-fix
+              	  tupper[ihoriz][:,1]; tdown[:,end];           # MULTICOL WARNING change tupper[1][...] to tupper[ihoriz][...]. Mid-fix. Also will need to allow for different transport values for different vertical columns
+              	  tupper[ihoriz][:,2]; tup[:,end-1]]           # MULTICOL WARNING change tupper[1][...] to tupper[ihoriz][...]. Mid-fix. Also will need to allow for different transport values for different vertical columns
+        argvec = convert(Array{ftype_chem}, argvec)
     
-    (tclocal, tcupper, tclower) = chemJmat_local(argvec...)
+	(tclocal, tcupper, tclower) = chemJmat_local(argvec...)
 
-    # add the influence of the local densities
-    append!(chemJi, tclocal[1].+(GV.num_layers-1)*length(GV.active_longlived))
-    append!(chemJj, tclocal[2].+(GV.num_layers-1)*length(GV.active_longlived))
-    append!(chemJval, tclocal[3])
+    	# add the influence of the local densities
+    	append!(chemJi, tclocal[1] .+ (ihoriz-1)*length(GV.active_longlived)*GV.num_layers .+ (GV.num_layers-1)*length(GV.active_longlived))
+    	append!(chemJj, tclocal[2] .+ (ihoriz-1)*length(GV.active_longlived)*GV.num_layers .+ (GV.num_layers-1)*length(GV.active_longlived))
+    	append!(chemJval, tclocal[3])
 
-    # and the lower densities
-    append!(chemJi, tclower[1].+(GV.num_layers-1)*length(GV.active_longlived))
-    append!(chemJj, tclower[2].+(GV.num_layers-2)*length(GV.active_longlived))
-    append!(chemJval, tclower[3])
+    	# and the lower densities
+    	append!(chemJi, tclower[1] .+ (ihoriz-1)*length(GV.active_longlived)*GV.num_layers .+ (GV.num_layers-1)*length(GV.active_longlived))
+    	append!(chemJj, tclower[2] .+ (ihoriz-1)*length(GV.active_longlived)*GV.num_layers .+ (GV.num_layers-2)*length(GV.active_longlived))
+    	append!(chemJval, tclower[3])
 
-    # fix water below whatever we set as upper/lower atmosphere boundary.
-    # This only runs if water is designated as an active species; if it's in inactive_species, this won't run,
-    # When it is active, this finds all the H2O and HDO indices for the lower atmosphere. 
-    # It's like above where we add (ialt-1)*length(active_species), but this way it's outside the loop.
-    if remove_rates_flag == true 
-        if planet=="Venus"
-            throw("Not supposed to delete things from water rates for Venus")
-        end
-        if in(:H2O, GV.active_longlived) && in(:HDO, GV.active_longlived)
-            H2Opositions = GV.H2Oi .+ length(GV.active_longlived)*collect(0:GV.upper_lower_bdy_i-1)
-            HDOpositions = GV.HDOi .+ length(GV.active_longlived)*collect(0:GV.upper_lower_bdy_i-1)
-            water_positions = sort(union(H2Opositions, HDOpositions))
+    	# fix water below whatever we set as upper/lower atmosphere boundary.
+    	# This only runs if water is designated as an active species; if it's in inactive_species, this won't run,
+    	# When it is active, this finds all the H2O and HDO indices for the lower atmosphere. 
+    	# It's like above where we add (ialt-1)*length(active_species), but this way it's outside the loop.
+    	if remove_rates_flag == true 
+            if planet=="Venus"
+               throw("Not supposed to delete things from water rates for Venus")
+            end
+            if in(:H2O, GV.active_longlived) && in(:HDO, GV.active_longlived)   # MULTICOL WARNING need to deal with this if loop for Mars
+                H2Opositions = GV.H2Oi .+ length(GV.active_longlived)*collect(0:GV.upper_lower_bdy_i-1)
+            	HDOpositions = GV.HDOi .+ length(GV.active_longlived)*collect(0:GV.upper_lower_bdy_i-1)
+            	water_positions = sort(union(H2Opositions, HDOpositions))
 
-            i_remove = findall(x->in(x, water_positions), chemJi)
-            j_remove = findall(x->in(x, water_positions), chemJj) # these are removed because if a species is inert, a derivative with respect to it is a derivative of a constant 
-            remove_these = sort(union(i_remove, j_remove)) # This makes a set, since it describes the locations where the H2O and HDO indices are.
+            	i_remove = findall(x->in(x, water_positions), chemJi)
+            	j_remove = findall(x->in(x, water_positions), chemJj) # these are removed because if a species is inert, a derivative with respect to it is a derivative of a constant 
+            	remove_these = sort(union(i_remove, j_remove)) # This makes a set, since it describes the locations where the H2O and HDO indices are.
                                                            # Kinda confusing since we're talking about indices of indices.
-            chemJval[remove_these] .= 0 
-        end
-    end 
+            	chemJval[remove_these] .= 0 
+            end
+        end 
 
-    # Uncomment the following to check the eigenvalues of the jacobian. Requires a global variable called stiffness.
-    # J = sparse(chemJi, chemJj, chemJval, length(nthis), length(nthis), +) 
-    # println("checking eigenvalues")
-    # if check_eigen==true
-    #     check_jacobian_eigenvalues(J, results_dir*sim_folder_name)
-    #     append!(stiffness, calculate_stiffness(J))
-    # end
+    	# Uncomment the following to check the eigenvalues of the jacobian. Requires a global variable called stiffness.
+    	# J = sparse(chemJi, chemJj, chemJval, length(nthis), length(nthis), +) 
+    	# println("checking eigenvalues")
+    	# if check_eigen==true
+    	#     check_jacobian_eigenvalues(J, results_dir*sim_folder_name)
+    	#     append!(stiffness, calculate_stiffness(J))
+    	# end
 
+    end
     return sparse(chemJi, chemJj, chemJval, length(n_active_longlived), length(n_active_longlived), +)
 end
 
@@ -367,69 +371,69 @@ function ratefn(n_active_longlived, n_active_shortlived, n_inactive, Jrates, tup
     nmat_inactive = reshape(n_inactive, (length(GV.inactive_species), GV.num_layers, n_horiz))
     returnrates = zeros(size(nmat_llsp))
     
-    
-    # fill the first altitude entry with information for all species
-    argvec = [nmat_llsp[:,1, 1];                      # densities for active_longlived;  # MULTICOL WARNING hardcoded to use info from first column for all columns.
-              nmat_llsp[:,2, 1];                      # active_longlived_above; # MULTICOL WARNING hardcoded to use info from first column for all columns.
-              fill(1.0, length(GV.active_longlived)); # active_longlived_below;
-              nmat_slsp[:, 1, 1];                     # active_shortlived;      # MULTICOL WARNING hardcoded to use info from first column for all columns.
-              nmat_inactive[:,1, 1];                  # inactive_species;       # MULTICOL WARNING hardcoded to use info from first column for all columns.
-              Jrates[:,1];                            # Jratelist;
-              GV.Tn[1]; GV.Ti[1]; GV.Te[1];           # :Tn; :Ti; :Te;
-              M[1]; E[1][1];                          # MULTICOL WARNING hardcoded to use info from first column for all columns.
-              tup[:,1]; tlower[1][:,1]; tdown[:,2]; tlower[1][:,2]] # MULTICOL WARNING change tlower[1][...] to tlower[ihoriz][...] 
-    argvec = convert(Array{ftype_chem}, argvec)
-    
-    returnrates[:,1,1] .= ratefn_local(argvec...) # local_transport_rates # MULTICOL WARNING hardcoded to use info from first column for all columns.
-    
-
-    # iterate through other altitudes in the lower atmosphere
-    for ialt in 2:(GV.num_layers-1)
-        argvec = [nmat_llsp[:, ialt, 1]; # active_longlived;  # MULTICOL WARNING hardcoded to use info from first column for all columns.
-                  nmat_llsp[:, ialt+1, 1];                    # MULTICOL WARNING hardcoded to use info from first column for all columns.
-                  nmat_llsp[:, ialt-1, 1];                    # MULTICOL WARNING hardcoded to use info from first column for all columns.
-                  nmat_slsp[:, ialt, 1]; # active_shortlived; # MULTICOL WARNING hardcoded to use info from first column for all columns.
-                  nmat_inactive[:,ialt, 1];                   # MULTICOL WARNING hardcoded to use info from first column for all columns.
-                  Jrates[:,ialt];
-                  GV.Tn[ialt]; GV.Ti[ialt]; GV.Te[ialt];
-                  M[ialt]; E[1][ialt];                        # MULTICOL WARNING hardcoded to use info from first column for all columns.
-                  tup[:, ialt];
-                  tdown[:, ialt];
-                  tdown[:, ialt+1];
-                  tup[:, ialt-1]]
+    for ihoriz in [1:n_horiz;]
+        # fill the first altitude entry with information for all species
+    	argvec = [nmat_llsp[:,1, ihoriz];                      # densities for active_longlived;  # MULTICOL WARNING hardcoded to use info from first column for all columns. Mid-fix
+                  nmat_llsp[:,2, ihoriz];                      # active_longlived_above; # MULTICOL WARNING hardcoded to use info from first column for all columns. Mid-fix
+              	  fill(1.0, length(GV.active_longlived));      # active_longlived_below;
+              	  nmat_slsp[:, 1, ihoriz];                     # active_shortlived;      # MULTICOL WARNING hardcoded to use info from first column for all columns. Mid-fix
+              	  nmat_inactive[:,1, ihoriz];                  # inactive_species;       # MULTICOL WARNING hardcoded to use info from first column for all columns. Mid-fix
+              	  Jrates[:,1];                                 # Jratelist;
+              	  GV.Tn[1]; GV.Ti[1]; GV.Te[1];                # :Tn; :Ti; :Te;
+              	  M[1]; E[ihoriz][1];                          # MULTICOL WARNING hardcoded to use info from first column for all columns. Mid-fix
+              	  tup[:,1]; tlower[ihoriz][:,1]; tdown[:,2]; tlower[ihoriz][:,2]] # MULTICOL WARNING change tlower[1][...] to tlower[ihoriz][...]. Mid-fix. Also will need to allow for different transport values for different vertical columns
         argvec = convert(Array{ftype_chem}, argvec)
+    
+	returnrates[:,1,ihoriz] .= ratefn_local(argvec...) # local_transport_rates # MULTICOL WARNING hardcoded to use info from first column for all columns. Mid-fix. Check this is right.
+    
+
+        # iterate through other altitudes in the lower atmosphere
+    	for ialt in 2:(GV.num_layers-1)
+            argvec = [nmat_llsp[:, ialt, ihoriz]; # active_longlived;  # MULTICOL WARNING hardcoded to use info from first column for all columns. Mid-fix
+                      nmat_llsp[:, ialt+1, ihoriz];                    # MULTICOL WARNING hardcoded to use info from first column for all columns. Mid-fix
+                      nmat_llsp[:, ialt-1, ihoriz];                    # MULTICOL WARNING hardcoded to use info from first column for all columns. Mid-fix
+                      nmat_slsp[:, ialt, ihoriz]; # active_shortlived; # MULTICOL WARNING hardcoded to use info from first column for all columns. Mid-fix
+                      nmat_inactive[:,ialt, ihoriz];                   # MULTICOL WARNING hardcoded to use info from first column for all columns. Mid-fix
+                      Jrates[:,ialt];
+                      GV.Tn[ialt]; GV.Ti[ialt]; GV.Te[ialt];
+                      M[ialt]; E[ihoriz][ialt];                        # MULTICOL WARNING hardcoded to use info from first column for all columns. Mid-fix
+                      tup[:, ialt];                                    # MULTICOL WARNING will need to allow for different transport values for different vertical columns
+                      tdown[:, ialt];				       # MULTICOL WARNING will need to allow for different transport values for different vertical columns
+                      tdown[:, ialt+1];				       # MULTICOL WARNING will need to allow for different transport values for different vertical columns
+                      tup[:, ialt-1]]				       # MULTICOL WARNING will need to allow for different transport values for different vertical columns
+            argvec = convert(Array{ftype_chem}, argvec)
         
-        returnrates[:,ialt,1] .= ratefn_local(argvec...)      # MULTICOL WARNING hardcoded to use info from first column for all columns.
-    end
-
-    # fill in the last level of altitude
-    argvec = [nmat_llsp[:, end, 1];                           # MULTICOL WARNING hardcoded to use info from first column for all columns.
-              fill(1.0, length(GV.active_longlived));
-              nmat_llsp[:, end-1, 1];                         # MULTICOL WARNING hardcoded to use info from first column for all columns.
-              nmat_slsp[:, end, 1]; # active_shortlived;      # MULTICOL WARNING hardcoded to use info from first column for all columns.
-              nmat_inactive[:,end, 1];                        # MULTICOL WARNING hardcoded to use info from first column for all columns.
-              Jrates[:,end];
-              GV.Tn[end]; GV.Ti[end]; GV.Te[end];
-              M[end]; E[1][end];                              # MULTICOL WARNING hardcoded to use info from first column for all columns.
-              tupper[1][:,1];                                    # MULTICOL WARNING tupper[1][...] to tupper[ihoriz][...]
-              tdown[:,end];
-              tupper[1][:,2];                                    # MULTICOL WARNING tupper[1][...] to tupper[ihoriz][...]
-              tup[:,end-1]]
-    argvec = convert(Array{ftype_chem}, argvec)
-    returnrates[:,end,1] .= ratefn_local(argvec...)           # MULTICOL WARNING hardcoded to use info from first column for all columns.
-
-    # NEW: Overwrite the entries for water in the lower atmosphere with 0s so that it will behave as fixed.
-    # Only runs when water is in the active_species list. If neutrals are set to inactive, it will be taken care of already.
-    if remove_rates_flag == true # This won't run for Venus
-        if planet=="Venus"
-            throw("Not supposed to run for Venus")
+	    returnrates[:,ialt,ihoriz] .= ratefn_local(argvec...)      # MULTICOL WARNING hardcoded to use info from first column for all columns. Mid-fix
         end
-        if in(:H2O, GV.active_longlived) && in(:HDO, GV.active_longlived)
-            returnrates[GV.H2Oi, 1:GV.upper_lower_bdy_i] .= 0
-            returnrates[GV.HDOi, 1:GV.upper_lower_bdy_i] .= 0
+
+    	# fill in the last level of altitude
+    	argvec = [nmat_llsp[:, end, ihoriz];                           # MULTICOL WARNING hardcoded to use info from first column for all columns. Mid-fix
+                  fill(1.0, length(GV.active_longlived));
+              	  nmat_llsp[:, end-1, ihoriz];                         # MULTICOL WARNING hardcoded to use info from first column for all columns. Mid-fix
+              	  nmat_slsp[:, end, ihoriz]; # active_shortlived;      # MULTICOL WARNING hardcoded to use info from first column for all columns. Mid-fix
+              	  nmat_inactive[:,end, ihoriz];                        # MULTICOL WARNING hardcoded to use info from first column for all columns. Mid-fix
+              	  Jrates[:,end];
+              	  GV.Tn[end]; GV.Ti[end]; GV.Te[end];
+              	  M[end]; E[ihoriz][end];                              # MULTICOL WARNING hardcoded to use info from first column for all columns. Mid-fix
+              	  tupper[ihoriz][:,1];                                    # MULTICOL WARNING tupper[1][...] to tupper[ihoriz][...]. Mid-fix. Also will need to allow for different transport values for different vertical columns
+              	  tdown[:,end];						  # MULTICOL WARNING will need to allow for different transport values for different vertical columns
+              	  tupper[ihoriz][:,2];                                    # MULTICOL WARNING tupper[1][...] to tupper[ihoriz][...]. Mid-fix. Also will need to allow for different transport values for different vertical columns
+              	  tup[:,end-1]]						  # MULTICOL WARNING will need to allow for different transport values for different vertical columns
+        argvec = convert(Array{ftype_chem}, argvec)
+        returnrates[:,end,ihoriz] .= ratefn_local(argvec...)           # MULTICOL WARNING hardcoded to use info from first column for all columns.
+
+    	# NEW: Overwrite the entries for water in the lower atmosphere with 0s so that it will behave as fixed.
+    	# Only runs when water is in the active_species list. If neutrals are set to inactive, it will be taken care of already.
+    	if remove_rates_flag == true # This won't run for Venus
+            if planet=="Venus"
+               throw("Not supposed to run for Venus")
+            end
+            if in(:H2O, GV.active_longlived) && in(:HDO, GV.active_longlived) # MULTICOL WARNING need to deal with this if loop for Mars
+               returnrates[GV.H2Oi, 1:GV.upper_lower_bdy_i] .= 0
+               returnrates[GV.HDOi, 1:GV.upper_lower_bdy_i] .= 0
+            end
         end
     end
-
     return [returnrates...;]
 end
 
