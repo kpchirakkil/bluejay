@@ -47,8 +47,15 @@ function make_jacobian(n, p, t)
                                                                # Tn, Tp, Hs_dict, bcdict=speciesbclist, 
                                                                # all_species, neutral_species, transport_species, molmass, n_alt_index, 
                                                                # polarizability, alt, num_layers, n_all_layers, dz, T_for_diff=Tprof_for_diffusion, q)
+
+    # MULTICOL WARNING the below returns zero values, for now
+    # MULTICOL WARNING tbackedge and tfrontedge will eventually need another dimension
+    tbackedge, tforwards, tbackwards, tfrontedge =  update_horiz_transport_coefficients(GV.transport_species, updated_ncur_all, D_arr, M, n_horiz; 
+                                                               calc_nonthermal=nontherm, results_dir, sim_folder_name, 
+                                                               Jratedict=Dict([j=>n_cur_all[j] for j in GV.Jratelist]), # Needed for nonthermal BCs
+                                                               globvars...) # MULTICOL WARNING cull the arguments passed here
     
-    return chemJmat(n, n_short, GV.n_inactive, Jrates, tup, tdown, tlower, tupper, M, E; globvars...)
+    return chemJmat(n, n_short, GV.n_inactive, Jrates, tup, tdown, tlower, tupper, tforwards, tbackwards, tfrontedge, tbackedge, M, E; globvars...)
                     # active_longlived, active_shortlived, inactive_species, Tn, Ti, Te, num_layers, H2Oi, HDOi, upper_lower_bdy_i)
 end
 
@@ -107,8 +114,11 @@ function PnL_eqn(dndt, n, p, t)
 
     # Get the updated transport coefficients, taking into account short-lived species update
     updated_ncur_all = compile_ncur_all(n, n_short_updated, GV.n_inactive; GV...)#active_longlived, active_shortlived, inactive_species, num_layers)
-    tlower, tup, tdown, tupper = update_transport_coefficients(GV.transport_species, updated_ncur_all, D_arr, M; 
+    tlower, tup, tdown, tupper = update_transport_coefficients(GV.transport_species, updated_ncur_all, D_arr, M, n_horiz;
                                                                calc_nonthermal=nontherm, globvars...)
 
-    dndt .= ratefn(n, n_short_updated, GV.n_inactive, Jrates, tup, tdown, tlower, tupper, M, E; globvars...)
+    tbackedge, tforwards, tbackwards, tfrontedge =  update_horiz_transport_coefficients(GV.transport_species, updated_ncur_all, D_arr, M, n_horiz; 
+                                                               calc_nonthermal=nontherm, globvars...) # MULTICOL WARNING cull the arguments passed here
+
+    dndt .= ratefn(n, n_short_updated, GV.n_inactive, Jrates, tup, tdown, tlower, tupper, tforwards, tbackwards, tfrontedge, tbackedge, M, E; globvars...)
 end

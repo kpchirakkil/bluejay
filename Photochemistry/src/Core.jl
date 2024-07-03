@@ -577,7 +577,7 @@ function check_jacobian_eigenvalues(J, path)
     end
 end
 
-function chemical_jacobian(specieslist, dspecieslist; diff_wrt_e=true, diff_wrt_m=true, globvars...)
+function chemical_jacobian(specieslist, dspecieslist; diff_wrt_e=true, diff_wrt_m=true, transportnet_horiz, globvars...) # MULTICOL WARNING consider where transportnet_horiz should be
     #= 
     Compute the symbolic chemical jacobian of a supplied chemnet and transportnet
     for the specified specieslist. 
@@ -599,7 +599,7 @@ function chemical_jacobian(specieslist, dspecieslist; diff_wrt_e=true, diff_wrt_
     =#
 
     GV = values(globvars)
-    required = [:chem_species, :transport_species, :chemnet, :transportnet]
+    required = [:chem_species, :transport_species, :chemnet, :transportnet] # MULTICOL WARNING work out whether to put :transportnet_horiz here
     check_requirements(keys(GV), required)
 
     # set up output vectors: indices and values
@@ -609,6 +609,7 @@ function chemical_jacobian(specieslist, dspecieslist; diff_wrt_e=true, diff_wrt_
 
     nspecies = length(specieslist)  # this is the active species. 
     ndspecies = length(dspecieslist)  # this is the species with respect to which we differentiate
+
     if diff_wrt_e==true
         required = [:ion_species]
         check_requirements(keys(GV), required)
@@ -626,10 +627,12 @@ function chemical_jacobian(specieslist, dspecieslist; diff_wrt_e=true, diff_wrt_
             peqn = [peqn; production_equations(ispecies, GV.chemnet)] 
             leqn = [leqn; loss_equations(ispecies, GV.chemnet)]
         end
-        if issubset([ispecies],GV.transport_species)
+        if issubset([ispecies],GV.transport_species) #MULTICOL WARNING consider making transport_species_horiz too in case flexibility is required
             peqn = [peqn; production_equations(ispecies, GV.transportnet)]
             leqn = [leqn; loss_equations(ispecies, GV.transportnet)]
-        end
+	    peqn = [peqn; production_equations(ispecies, transportnet_horiz)]
+	    leqn = [leqn; loss_equations(ispecies, transportnet_horiz)]
+	end
 
         # Account for e's
         if diff_wrt_e
@@ -1642,8 +1645,8 @@ function boundaryconditions(fluxcoef_dict, atmdict, M, n_horiz::Int64; nontherma
             	bc_dict[:D][ihoriz][2, :] .+= [0, -(1/GV.dz)*nonthermal_escape_flux(GV.hot_D_network, prod_hotD; returntype="number", globvars...)]
             	bc_dict[:H2][ihoriz][2, :] .+= [0, -(1/GV.dz)*nonthermal_escape_flux(GV.hot_H2_network, prod_hotH2; returntype="number", globvars...)]
             	bc_dict[:HD][ihoriz][2, :] .+= [0, -(1/GV.dz)*nonthermal_escape_flux(GV.hot_HD_network, prod_hotHD; returntype="number", globvars...)]
-	    else
-	        println("At least one of H, D, H2 and HD is not in the model.",'\n')
+	 #   else
+	 #       println("At least one of H, D, H2 and HD is not in the model.",'\n')
             end
 	end
     end
@@ -2055,30 +2058,88 @@ function update_transport_coefficients(species_list, atmdict::Dict{Symbol, Vecto
                :polarizability, :q, :R_P, :Tn, :Ti, :Te, :Tp, :Tprof_for_diffusion, :transport_species, :use_ambipolar, :use_molec_diff, :zmax]
     check_requirements(keys(GV), required)
     
-    # Update the diffusion coefficients and scale heights
+    # Update the diffusion coefficients and scale heights  # MULTICOL temporary comment -- K_eddy_arr = vector of length 9; H0_dict = dictionary{"ion"=>vector of length 9; "neutral"=>vector of length 9}; Dcoef_dict = dictionary{ vector of length 9 for each species, in the order O2, Opl, O, O3}
     K_eddy_arr, H0_dict, Dcoef_dict = update_diffusion_and_scaleH(species_list, atmdict, D_coefs, n_horiz; globvars...)
 
     # Get flux coefficients
-    fluxcoefs_all = fluxcoefs(species_list, K_eddy_arr, Dcoef_dict, H0_dict; globvars...)
+    fluxcoefs_all = fluxcoefs(species_list, K_eddy_arr, Dcoef_dict, H0_dict; globvars...) #  MULTICOL temporary comment -- dictionary {array 2x9 for each species} i.e. X X; X X; X X;...
     
     # Transport coefficients, non-boundary layers   # MULTICOL WARNING enter different values for different columns
     tup = fill(-999., length(GV.transport_species), GV.num_layers)
     tdown = fill(-999., length(GV.transport_species), GV.num_layers)
     for (i, s) in enumerate(GV.transport_species)
-        tup[i, :] .= fluxcoefs_all[s][2:end-1, 2]
-        tdown[i, :] .= fluxcoefs_all[s][2:end-1, 1]
+        tup[i, :] .= fluxcoefs_all[s][2:end-1, 2] # MULTICOL temporary comment - ends up being 7x4 array, i.e. X X X X X X X; X X X X X X X...
+        tdown[i, :] .= fluxcoefs_all[s][2:end-1, 1] # MULTICOL temporary comment - ends up being 7x4 array, i.e. X X X X X X X; X X X X X X X...
     end
-    bc_dict = boundaryconditions(fluxcoefs_all, atmdict, M, n_horiz; nonthermal=calc_nonthermal, globvars...)
+    bc_dict = boundaryconditions(fluxcoefs_all, atmdict, M, n_horiz; nonthermal=calc_nonthermal, globvars...) # MULTICOL temporary comment -- three 2x2 arrays for each species (lower,down lower,up; upper,up upper,down) 
 
     # transport coefficients for boundary layers
-    tlower = Vector{Array{Float64}}(undef, n_horiz) # MULTICOL WARNING might need to change or remove this definition
-    tupper = Vector{Array{Float64}}(undef, n_horiz) # MULTICOL WARNING might need to change or remove this definition
+    tlower = Vector{Array{Float64}}(undef, n_horiz)
+    tupper = Vector{Array{Float64}}(undef, n_horiz)
     for ihoriz in [1:n_horiz;]
-    	tlower[ihoriz] = permutedims(reduce(hcat, [bc_dict[sp][ihoriz][1,:] for sp in GV.transport_species]))
-    	tupper[ihoriz] = permutedims(reduce(hcat, [bc_dict[sp][ihoriz][2,:] for sp in GV.transport_species]))
+    	tlower[ihoriz] = permutedims(reduce(hcat, [bc_dict[sp][ihoriz][1,:] for sp in GV.transport_species])) # MULTICOL temporary comment - ends up being three 2x4 arrays
+    	tupper[ihoriz] = permutedims(reduce(hcat, [bc_dict[sp][ihoriz][2,:] for sp in GV.transport_species])) # MULTICOL temporary comment - ends up being three 2x4 arrays
     end
 
     return tlower, tup, tdown, tupper
+end
+
+function update_horiz_transport_coefficients(species_list, atmdict::Dict{Symbol, Vector{Array{ftype_ncur}}}, D_coefs, M, n_horiz::Int64; 
+                                       calc_nonthermal=true, globvars...) # MULTICOL WARNING don't need all these inputs here
+    #= # MULTICOL WARNING  - change comments here
+    Input:
+        species_list: Species which will have transport coefficients updated
+        atmdict: Atmospheric state dictionary for bulk layers
+        tspecies: species which need transport coefficients calculated. May vary depending on sim parameters.
+        Tn, Tp: Neutrals and plasma temperatures
+        D_coefs: placeholder for molecular diffusion coefficients # MULTICOL WARNING - remove
+        bcdict: Dictionary of boundary conditions, needed for pretty much everything.
+        species_list: Species for which to generate molecular diffusion coefficients. This allows the code to only do it for
+                 transport species during the main simulation run, and for all species when trying to plot 
+                 rate balances after the run.
+
+    Return: 
+        Horizontal transport coefficients for all atmospheric layers, units 1/s
+
+        tbackedge: horizontal transport coefficients at the back edge. shape: a vector of GV.num_layers arrays of size (2 x length(GV.transport_species))
+        tforwards: forward-moving (lower to higher vertical column number) coefficients for all columns. shape: length(GV.transport_species) * GV.num_layers
+        tbackwards: backward-moving (higher to lower vertical column number) coefficients for all columns. shape: length(GV.transport_species) * GV.num_layers
+        tfrontedge: horizontal transport coefficients at the front edge. shape: a vector of GV.num_layers arrays of size (2 x GV.transport_species)
+    =#
+
+    GV = values(globvars)
+    required = [:all_species, :alt, :speciesbclist, :dz, :hot_H_network, :hot_H_rc_funcs, :hot_D_network, :hot_D_rc_funcs, 
+               :hot_H2_network, :hot_H2_rc_funcs, :hot_HD_network, :hot_HD_rc_funcs, :Hs_dict, 
+               :ion_species, :M_P, :molmass, :neutral_species, :non_bdy_layers, :num_layers, :n_all_layers, :n_alt_index, 
+               :polarizability, :q, :R_P, :Tn, :Ti, :Te, :Tp, :Tprof_for_diffusion, :transport_species, :use_ambipolar, :use_molec_diff, :zmax]
+    check_requirements(keys(GV), required)
+
+    # Get flux coefficients
+    fluxcoefs_horiz_all = Dict{Symbol, Array{Float64}}(s=>zeros(9,2) for s in GV.all_species)   # MULTICOL WARNING Work out better way to define this when have numbers. Make fluxcoefs_horiz_all and fluxcoefs_all have the same dimensions, because there should be values for each vertical column and altitude bin
+    for s in GV.transport_species
+        fluxcoefs_horiz_all[s] = zeros(9,2) # first column backwards, second column forwards
+    end
+    
+    # Transport coefficients, non-boundary layers   # MULTICOL WARNING enter different values for different columns
+    tforwards = fill(-999., length(GV.transport_species), GV.num_layers) # MULTICOL WARNING add another dimension for different columns here
+    tbackwards = fill(-999., length(GV.transport_species), GV.num_layers) # MULTICOL WARNING add another dimension for different columns here
+    for (i, s) in enumerate(GV.transport_species)
+        tforwards[i, :] .= fluxcoefs_horiz_all[s][2:end-1, 2] # MULTICOL WARNING Assume one array with altitude that dictates horizontal transport for all columns (backwards [1] and forwards [2]), for now.
+        tbackwards[i, :] .= fluxcoefs_horiz_all[s][2:end-1, 1]
+    end
+
+    # MULTICOL WARNING boundary conditions hardcoded here
+    bc_dict_horiz = Dict{Symbol, Vector{Array{ftype_ncur}}}([s=>[[0 0; 0 0] for ialt in 1:GV.num_layers] for s in GV.all_species]) # MULTICOL temporary comment - should be 7 2x2 arrays of 0s
+
+    # transport coefficients for boundaries # MULTICOL WARNING should this be boundary layers like for the vertical transport?
+    tbackedge = Vector{Array{Float64}}(undef, GV.num_layers) # MULTICOL temporary comment - ends up being 7 2x4 (XX;XX;XX;XX) arrays
+    tfrontedge = Vector{Array{Float64}}(undef, GV.num_layers) # MULTICOL temporary comment - ends up being 7 2x4 (XX;XX;XX;XX) arrays
+    for ialt in [1:GV.num_layers;]
+    	tbackedge[ialt] = permutedims(reduce(hcat, [bc_dict_horiz[sp][ialt][1,:] for sp in GV.transport_species]))
+    	tfrontedge[ialt] = permutedims(reduce(hcat, [bc_dict_horiz[sp][ialt][2,:] for sp in GV.transport_species]))
+    end
+
+    return tbackedge, tforwards, tbackwards, tfrontedge
 end
 
 #===============================================================================#
