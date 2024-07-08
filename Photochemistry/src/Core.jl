@@ -2116,13 +2116,10 @@ function update_horiz_transport_coefficients(species_list, atmdict::Dict{Symbol,
 
     # Get flux coefficients
     fluxcoefs_horiz_all = Dict{Symbol, Array{Float64}}(s=>zeros(9,2) for s in GV.all_species)   # MULTICOL WARNING Work out better way to define this when have numbers. Make fluxcoefs_horiz_all and fluxcoefs_all have the same dimensions, because there should be values for each vertical column and altitude bin
-    for s in GV.transport_species
-        fluxcoefs_horiz_all[s] = zeros(9,2) # first column backwards, second column forwards
-    end
     
     # Transport coefficients, non-boundary layers   # MULTICOL WARNING enter different values for different columns
-    tforwards = fill(-999., length(GV.transport_species), GV.num_layers) # MULTICOL WARNING add another dimension for different columns here
-    tbackwards = fill(-999., length(GV.transport_species), GV.num_layers) # MULTICOL WARNING add another dimension for different columns here
+    tforwards = fill(-999., length(species_list), GV.num_layers) # MULTICOL WARNING add another dimension for different columns here
+    tbackwards = fill(-999., length(species_list), GV.num_layers) # MULTICOL WARNING add another dimension for different columns here
     for (i, s) in enumerate(GV.transport_species)
         tforwards[i, :] .= fluxcoefs_horiz_all[s][2:end-1, 2] # MULTICOL WARNING Assume one array with altitude that dictates horizontal transport for all columns (backwards [1] and forwards [2]), for now.
         tbackwards[i, :] .= fluxcoefs_horiz_all[s][2:end-1, 1]
