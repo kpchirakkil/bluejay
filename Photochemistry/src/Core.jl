@@ -1653,6 +1653,98 @@ function boundaryconditions(fluxcoef_dict, atmdict, M, n_horiz::Int64; nontherma
     return bc_dict
 end
 
+function boundaryconditions_horiz(M; globvars...) # MULTICOL WARNING -- note that M is not reqired by this function, but something is needed before the ; to make this work as is
+    #= 
+    Inputs:
+        M: total atmospheric density, required for the nonthermal escape boundary condition.
+    Outputs:
+        boundary conditions for species in a 2 x 2 matrix, format:  
+        [n_1 -> n_0, n_0 -> n_1;      
+         n_(nhoriz) -> n_(nhoriz+1), n_(nhoriz+1) -> n_(nhoriz)] for each bulk layer altitude bin
+
+        where n_0 is outside the model behind the back edge, n_1 is the first vertical column (ihoriz=1),
+        n_(nhoriz) is the front-most verical column (ihoriz=n_horiz), and n_(nhoriz+1) is outside the model in front of the front edge.
+
+        Form of the output, for each species for each vertical column is:
+
+         Back edge   [←, →;     [density-dependent, density-independent;    [#/s, #/cm³/s.;
+         Front edge   →, ←]      density-dependent, density-independent]     #/s, #/cm³/s]
+         where ← is backwards from higher to lower values of ihoriz; → is forwards from lower to higher
+
+        Each row has two elements:
+            1st element: inside model  -> outside model (depends on species concentration in cell)
+            2nd element: outside model -> inside moel (independent of species concentration in cell)
+
+            note, technically, these are chemical equations.
+
+        More specifically, when the return value of this function is used in other functions, the first
+        element in each row will eventually be multiplied by a density taken from the atmospheric 
+        state dictionary, and the second element will be used as-is. That way, eventually the total
+        change recorded in other functions is always #/cm³/s. 
+
+        FROM VENUS VERSION, MIKE:
+        Sign convention: The density-dependent terms (bc_dict[sp][ialt][:, 1]) are multiplied by -1 when the  
+                         transport rates are computed in get_transport_PandL_rate. Density independent 
+                         terms (bc_dict[sp][ialt][:, 2]) are not. # MULTICOL WARNING - to do
+
+        However, please note that the model is currently set up to use zero flux edge boundary conditions only. The above comments have been left for future development and flexibility.
+    =#
+    
+    GV = values(globvars)
+    required = [:all_species, :speciesbclist_horiz, :dx, :planet]
+    check_requirements(keys(GV), required)
+    
+    bc_dict_horiz = Dict{Symbol, Vector{Array{ftype_ncur}}}([s=>[[0.0 0.0; 0.0 0.0] for ihoriz in 1:GV.num_layers] for s in GV.all_species])
+
+    for sp in keys(GV.speciesbclist_horiz)
+        try 
+            global these_bcs_horiz = GV.speciesbclist_horiz[sp]
+        catch KeyError
+            println("No entry $(sp) in bcdict")
+            continue
+        end
+ 
+        # FLUX
+        for ialt in [1:GV.num_layers;]
+            try 
+                # back edge boundary...
+                if GV.planet=="Mars"
+                    f_backedge = [0, -these_bcs_horiz["f"][1][ialt]/GV.dx]
+                elseif GV.planet=="Venus"
+                    f_backedge = [0, these_bcs_horiz["f"][1][ialt]/GV.dx]
+                    #             ^ no (-) sign, negative flux at lower boundary represents loss to surface
+                end
+                try        
+                    @assert all(x->!isnan(x), f_backedge)
+                    bc_dict_horiz[sp][ialt][1, :] .+= f_backedge
+                catch y
+                    if !isa(y, AssertionError)
+                        throw("Unhandled exception in back edge flux bc: $(y)")
+                    end
+                end
+                try 
+                    # front edge boundary...
+                    f_frontedge = [0, -these_bcs_horiz["f"][2][ialt]/GV.dx]
+                    #             ^ (-) sign needed so that positive flux at upper boundary represents loss across front edge boundary
+                    #             (see "Sign convention" note above)
+                    @assert all(x->!isnan(x), f_frontedge)
+                    bc_dict_horiz[sp][ialt][2, :] .+= f_frontedge
+                catch y
+                    if !isa(y, AssertionError)
+                        throw("Unhandled exception in front edge flux bc: $(y)")
+                    end
+                end
+            catch y
+                if !isa(y, KeyError)
+                    throw("Unhandled exception in edge flux bcs for $(sp)")
+                end
+            end
+        end
+    end
+    
+    return bc_dict_horiz
+end
+
 function Dcoef_neutrals(z, sp::Symbol, b, atmdict::Dict{Symbol, Vector{ftype_ncur}}; globvars...)
     #=
     Calculate the basic diffusion coefficient, AT^s/n.
@@ -2108,7 +2200,7 @@ function update_horiz_transport_coefficients(species_list, atmdict::Dict{Symbol,
     =#
 
     GV = values(globvars)
-    required = [:all_species, :alt, :speciesbclist, :dz, :hot_H_network, :hot_H_rc_funcs, :hot_D_network, :hot_D_rc_funcs, 
+    required = [:all_species, :alt, :speciesbclist, :dx, :hot_H_network, :hot_H_rc_funcs, :hot_D_network, :hot_D_rc_funcs, 
                :hot_H2_network, :hot_H2_rc_funcs, :hot_HD_network, :hot_HD_rc_funcs, :Hs_dict, 
                :ion_species, :M_P, :molmass, :neutral_species, :non_bdy_layers, :num_layers, :n_all_layers, :n_alt_index, 
                :polarizability, :q, :R_P, :Tn, :Ti, :Te, :Tp, :Tprof_for_diffusion, :transport_species, :use_ambipolar, :use_molec_diff, :zmax]
@@ -2126,7 +2218,7 @@ function update_horiz_transport_coefficients(species_list, atmdict::Dict{Symbol,
     end
 
     # MULTICOL WARNING boundary conditions hardcoded here
-    bc_dict_horiz = Dict{Symbol, Vector{Array{ftype_ncur}}}([s=>[[0 0; 0 0] for ialt in 1:GV.num_layers] for s in GV.all_species]) # MULTICOL temporary comment - should be 7 2x2 arrays of 0s
+    bc_dict_horiz = boundaryconditions_horiz(M; globvars...)  # MULTICOL temporary comment - should be 7 2x2 arrays of 0s
 
     # transport coefficients for boundaries # MULTICOL WARNING should this be boundary layers like for the vertical transport?
     tbackedge = Vector{Array{Float64}}(undef, GV.num_layers) # MULTICOL temporary comment - ends up being 7 2x4 (XX;XX;XX;XX) arrays

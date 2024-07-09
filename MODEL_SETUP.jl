@@ -222,6 +222,7 @@ const e_profile_type = ions_included==true ? "quasineutral" : "none"
 # =======================================================================================================
 const zmin = Dict("Venus"=>90e5, "Mars"=>0.)[planet]
 const dz = 2e5  # Discretized layer thickness
+const dx = 2e5  # Width of one vertical column -- could be used to calculate horizontal transport flux boundary condition (if it wasn't 0)
 const zmax = 106e5  # Top altitude (cm)
 const alt = convert(Array, (zmin:dz:zmax)) # These are the layer centers.
 const n_all_layers = length(alt)
@@ -344,7 +345,7 @@ end
 const Hs_dict = Dict{Symbol, Vector{Float64}}([sp=>scaleH(alt, sp, Tprof_for_Hs[charge_type(sp)]; molmass, M_P, R_P) for sp in all_species])
 
 
-#                                     Boundary conditions
+#                                     Boundary conditions (lower and upper)
 # =======================================================================================================
 # "n": density boundary condition; "f": flux bc; "v": velocity bc; 
 # "see boundaryconditions()" -- nonthermal escape depends on the dynamic density of the
@@ -422,6 +423,21 @@ elseif planet=="Venus"
 
     const speciesbclist = deepcopy(auto_speciesbclist)
 end
+
+#                                     Boundary conditions (back edge and front edge)
+# =======================================================================================================
+# "n": density boundary condition; "f": flux bc; "v": velocity bc; 
+# The default boundary conditions are zero flux boundary conditions at the back edge and the front edge. If different boundary conditions are required, they will need to be implemented here and in the boundaryconditions_horiz function.
+# The zero flux boundary conditions will be input as vectors with altitude.
+# For each species, there are two vectors of length num_layers. The first directs the BC values at the first vertical column and the second directs the BC values at the last vertical column
+
+# add in zero flux edge boundary conditions on both edges for all species
+auto_speciesbclist_horiz = Dict()
+for sp in all_species
+    auto_speciesbclist_horiz[sp] = Dict("f"=>[[0.0 for ialt in 1:num_layers] for c in 1:2])
+end
+
+const speciesbclist_horiz = deepcopy(auto_speciesbclist_horiz)
 
 # ***************************************************************************************************** #
 #                                                                                                       #
@@ -602,6 +618,7 @@ PARAMETERS_SPLISTS = DataFrame(AllSpecies=[[string(a) for a in all_species]..., 
 PARAMETERS_SOLVER = DataFrame(Field=[], Value=[]);
 PARAMETERS_XSECTS = DataFrame(Species=[], Description=[], Filename=[]);
 PARAMETERS_BCS = DataFrame(Species=[], Type=[], Lower=[], Upper=[]);
+PARAMETERS_BCS_HORIZ = DataFrame(Species=[], Type=[], BackEdge=[], FrontEdge=[]);
 
 # LOG THE TEMPERATURES
 PARAMETERS_TEMPERATURE_ARRAYS = DataFrame(Neutrals=Tn_arr, Ions=Ti_arr, Electrons=Te_arr); 

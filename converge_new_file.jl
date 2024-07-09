@@ -112,13 +112,13 @@ function evolve_atmosphere(atm_init::Dict{Symbol, Vector{Array{ftype_ncur}}}, lo
     =#
     GV = values(globvars)
     @assert all(x->x in keys(GV), [:absorber, :active_species, :active_longlived, :active_shortlived, :all_species, :alt, 
-                                   :collision_xsect, :crosssection, :Dcoef_arr_template, :dt_decr_factor, :dt_incr_factor, :dz, 
+                                   :collision_xsect, :crosssection, :Dcoef_arr_template, :dt_decr_factor, :dt_incr_factor, :dz, :dx,
                                    :e_profile_type, :error_checking_scheme, :timestep_type, :H2Oi, :HDOi, 
                                    :hot_H_network, :hot_H_rc_funcs, :hot_D_network, :hot_D_rc_funcs, 
                                    :hot_H2_network, :hot_H2_rc_funcs, :hot_HD_network, :hot_HD_rc_funcs, :Hs_dict, 
                                    :inactive_species, :ion_species, :Jratelist, :logfile, :M_P, :molmass, :n_all_layers, :n_alt_index, :n_inactive, :n_steps, 
                                    :neutral_species, :non_bdy_layers, :num_layers, :plot_grid, :polarizability, :q, :R_P, :reaction_network, 
-                                   :season_length_in_sec, :sol_in_sec, :solarflux, :speciesbclist, :speciescolor, :speciesstyle, 
+                                   :season_length_in_sec, :sol_in_sec, :solarflux, :speciesbclist, :speciesbclist_horiz, :speciescolor, :speciesstyle, 
                                    :Te, :Ti, :Tn, :Tp, :Tprof_for_diffusion, :transport_species, 
                                    :upper_lower_bdy_i, :zmax])
         
@@ -959,10 +959,11 @@ function converge(n_current::Dict{Symbol, Vector{Array{ftype_ncur}}}, log_t_star
 
     GV = values(globvars)
     @assert all(x->x in keys(GV), [:absorber, :active_species, :active_longlived, :active_shortlived, :all_species, :alt, :crosssection, 
-                                   :Dcoef_arr_template, :dt_decr_factor, :dt_incr_factor, :dz, :e_profile_type, :error_checking_scheme, 
+                                   :Dcoef_arr_template, :dt_decr_factor, :dt_incr_factor, :dz, :dx, :e_profile_type, :error_checking_scheme, 
                                    :H2Oi, :HDOi, :Hs_dict, :inactive_species, :ion_species, :Jratelist, :logfile, :molmass, 
                                    :n_all_layers, :n_alt_index, :n_inactive, :n_steps, :neutral_species, :non_bdy_layers, :num_layers, 
-                                   :plot_grid, :polarizability, :q, :reaction_network, :season_length_in_sec, :sol_in_sec, :solarflux, :speciesbclist, :speciescolor, :speciesstyle, 
+                                   :plot_grid, :polarizability, :q, :reaction_network, :season_length_in_sec, :sol_in_sec, :solarflux, :speciesbclist, :speciesbclist_horiz,
+                                   :speciescolor, :speciesstyle, 
                                    :Te, :Ti, :Tn, :Tp, :timestep_type, :Tprof_for_diffusion, :upper_lower_bdy_i, :zmax])
     
     # A combination of log timesteps when simulation time is low, and linear after
@@ -1108,13 +1109,13 @@ function get_rates_and_jacobian(n, p, t; globvars...)
 
     GV = values(globvars)
     @assert all(x->x in keys(GV), [:absorber, :active_species, :active_longlived, :active_shortlived, :all_species, :alt, 
-                                   :collision_xsect, :crosssection, :dz, :H2Oi, :HDOi, :Hs_dict,  
+                                   :collision_xsect, :crosssection, :dz, :dx, :H2Oi, :HDOi, :Hs_dict,  
                                    :hot_H_network, :hot_H_rc_funcs, :hot_D_network, :hot_D_rc_funcs, 
                                    :hot_H2_network, :hot_H2_rc_funcs, :hot_HD_network, :hot_HD_rc_funcs,
                                    :inactive_species, :ion_species,  :Jratelist,
                                    :molmass, :neutral_species, :non_bdy_layers, :num_layers, :n_all_layers, :n_alt_index, :n_inactive, 
-                                   :plot_grid, :polarizability, :q, :reaction_network, :solarflux, :speciesbclist, :speciescolor, :speciesstyle, :Tn, :Ti, :Te, :Tp, :Tprof_for_diffusion, 
-                                   :transport_species, :upper_lower_bdy_i, :zmax])
+                                   :plot_grid, :polarizability, :q, :reaction_network, :solarflux, :speciesbclist, :speciesbclist_horiz, :speciescolor, :speciesstyle,
+                                   :Tn, :Ti, :Te, :Tp, :Tprof_for_diffusion, :transport_species, :upper_lower_bdy_i, :zmax])
     # Unpack the parameters ---------------------------------------------------------------
     D_arr, M, E = p 
 
@@ -1186,13 +1187,13 @@ function next_timestep(nstart, params, t, dt; reltol=1e-2, abstol=1e-12, verbose
 
     GV = values(globvars)
     @assert all(x->x in keys(GV), [:absorber, :active_species, :active_longlived, :active_shortlived, :all_species, :alt, 
-                                   :collision_xsect, :crosssection, :dz, :e_profile_type, :error_checking_scheme, 
+                                   :collision_xsect, :crosssection, :dz, :dx, :e_profile_type, :error_checking_scheme, 
                                    :H2Oi, :HDOi, :hot_H_network, :hot_H_rc_funcs, :hot_D_network, :hot_D_rc_funcs, 
                                    :hot_H2_network, :hot_H2_rc_funcs, :hot_HD_network, :hot_HD_rc_funcs, :Hs_dict, 
                                    :inactive_species, :ion_species,  :Jratelist, :logfile, :molmass, 
                                    :n_all_layers, :n_alt_index, :n_inactive, :neutral_species, :non_bdy_layers, :num_layers, 
-                                   :plot_grid, :polarizability, :q, :reaction_network,  :speciesbclist, :speciescolor, :speciesstyle, :Te, :Ti, :Tn, :Tp, 
-                                   :Tprof_for_diffusion, :upper_lower_bdy_i, :zmax])
+                                   :plot_grid, :polarizability, :q, :reaction_network,  :speciesbclist, :speciesbclist_horiz, :speciescolor, :speciesstyle,
+                                   :Te, :Ti, :Tn, :Tp, :Tprof_for_diffusion, :upper_lower_bdy_i, :zmax])
 
     # absolute and relative tolerance on rate update
     f_abstol = 1e-2
@@ -1403,11 +1404,11 @@ function update!(n_current::Dict{Symbol, Vector{Array{ftype_ncur}}}, t, dt; abst
 
     GV = values(globvars)
     @assert all(x->x in keys(GV), [:absorber, :active_species, :active_longlived, :active_shortlived, :all_species, :alt, :crosssection, 
-                                   :Dcoef_arr_template, :dz, :e_profile_type, :error_checking_scheme, :H2Oi, :HDOi, :Hs_dict, 
+                                   :Dcoef_arr_template, :dz, :dx, :e_profile_type, :error_checking_scheme, :H2Oi, :HDOi, :Hs_dict, 
                                    :inactive_species, :ion_species, :Jratelist, :logfile, :molmass, 
                                    :n_all_layers, :n_alt_index, :n_inactive, :neutral_species, :non_bdy_layers, :num_layers, 
-                                   :plot_grid, :polarizability, :q, :reaction_network, :solarflux, :speciesbclist, :speciescolor, :speciesstyle, :Te, :Ti, :Tn, :Tp, :Tprof_for_diffusion, 
-                                   :upper_lower_bdy_i, :zmax,])
+                                   :plot_grid, :polarizability, :q, :reaction_network, :solarflux, :speciesbclist, :speciesbclist_horiz, :speciescolor, :speciesstyle,
+                                   :Te, :Ti, :Tn, :Tp, :Tprof_for_diffusion, :upper_lower_bdy_i, :zmax,])
         
 
     M = n_tot(n_current; GV.all_species) 
@@ -1996,6 +1997,13 @@ for k in keys(speciesbclist)
     end
 end
 
+bc_type_horiz = Dict("n"=>"density", "f"=>"flux", "v"=>"velocity")
+for k in keys(speciesbclist_horiz)
+    for k2 in keys(speciesbclist_horiz[k])
+        push!(PARAMETERS_BCS_HORIZ, ("$(string(k))", "$(bc_type_horiz[string(k2)])", "$(speciesbclist_horiz[k][k2][1])", "$(speciesbclist_horiz[k][k2][2])")) 
+    end
+end
+
 # Crosssection log messages
 for k in keys(photochem_data_files)  # cross sections
     for k2 in keys(photochem_data_files[k])
@@ -2120,19 +2128,19 @@ try
     global atm_soln, sim_time = evolve_atmosphere(n_current, mindt, maxdt; t_to_save=times_to_save, abstol=atol, reltol=rel_tol, 
                                  # glob vars from here.  
                                  absorber, active_species, active_longlived, active_shortlived, all_species, alt, 
-                                 collision_xsect, crosssection, Dcoef_arr_template, dt_incr_factor, dt_decr_factor, dz, 
+                                 collision_xsect, crosssection, Dcoef_arr_template, dt_incr_factor, dt_decr_factor, dz, dx,
                                  e_profile_type, error_checking_scheme, timestep_type, H2Oi, HDOi, 
                                  hot_H_network, hot_H_rc_funcs, hot_D_network, hot_D_rc_funcs, hot_H2_network, hot_H2_rc_funcs, hot_HD_network, hot_HD_rc_funcs,
                                  hrshortcode, Hs_dict,
                                  ion_species, inactive_species, Jratelist, logfile, M_P, molmass, monospace_choice, sansserif_choice,
                                  neutral_species, non_bdy_layers, num_layers, n_all_layers, n_alt_index, n_inactive, n_steps, 
                                  polarizability, planet, plot_grid, q, R_P, reaction_network, rshortcode, 
-                                 season_length_in_sec, sol_in_sec, solarflux, speciesbclist, speciescolor, speciesstyle, 
+                                 season_length_in_sec, sol_in_sec, solarflux, speciesbclist, speciesbclist_horiz, speciescolor, speciesstyle, 
                                  Tn=Tn_arr, Ti=Ti_arr, Te=Te_arr, Tp=Tplasma_arr, Tprof_for_diffusion, transport_species, opt="",
                                  upper_lower_bdy_i, use_ambipolar, use_molec_diff, zmax)
 catch y
     XLSX.writetable("$(results_dir)$(sim_folder_name)/PARAMETERS.xlsx", "General"=>PARAMETERS_GEN, "AtmosphericConditions"=>PARAMETERS_CONDITIONS, "SpeciesLists"=>PARAMETERS_SPLISTS,
-                    "Solver"=>PARAMETERS_SOLVER, "Crosssections"=>PARAMETERS_XSECTS, "BoundaryConditions"=>PARAMETERS_BCS)
+                    "Solver"=>PARAMETERS_SOLVER, "Crosssections"=>PARAMETERS_XSECTS, "BoundaryConditions"=>PARAMETERS_BCS, "BoundaryConditionsHorizontal"=>PARAMETERS_BCS_HORIZ)
     write_to_log(logfile, "Terminated before completion at $(format_sec_or_min(time()-ti))", mode="a")
     throw("ERROR: Simulation terminated before completion with exception:")
 end
@@ -2169,10 +2177,10 @@ if problem_type == "SS"
     write_to_log(logfile, "$(Dates.format(now(), "(HH:MM:SS)")) Making production/loss plots", mode="a")
     println("Making production/loss plots (this tends to take several minutes)")
     plot_production_and_loss(nc_all, results_dir, sim_folder_name, n_horiz; nonthermal=nontherm, all_species, alt, chem_species, collision_xsect, 
-                              dz, hot_D_rc_funcs, hot_H_rc_funcs, hot_H2_rc_funcs, hot_HD_rc_funcs, Hs_dict, 
+                              dz, dx, hot_D_rc_funcs, hot_H_rc_funcs, hot_H2_rc_funcs, hot_HD_rc_funcs, Hs_dict, 
                               hot_H_network, hot_D_network, hot_H2_network, hot_HD_network, hrshortcode, ion_species, Jratedict,
                               molmass, neutral_species, non_bdy_layers, num_layers, n_all_layers, n_alt_index, polarizability, 
-                              plot_grid, q, rshortcode, reaction_network, speciesbclist, Tn=Tn_arr, Ti=Ti_arr, Te=Te_arr, Tp=Tplasma_arr, 
+                              plot_grid, q, rshortcode, reaction_network, speciesbclist, speciesbclist_horiz, Tn=Tn_arr, Ti=Ti_arr, Te=Te_arr, Tp=Tplasma_arr, 
                               Tprof_for_Hs, Tprof_for_diffusion, transport_species, upper_lower_bdy_i, upper_lower_bdy, zmax)
 elseif problem_type == "ODE"
 
@@ -2206,10 +2214,10 @@ elseif problem_type == "ODE"
             write_to_log(logfile, "$(Dates.format(now(), "(HH:MM:SS)")) Making production/loss plots", mode="a")
             println("Making production/loss plots (this tends to take several minutes)")
             plot_production_and_loss(nc_all, results_dir, sim_folder_name, n_horiz; nonthermal=nontherm, all_species, alt, chem_species, collision_xsect, 
-                                      dz, hot_D_rc_funcs, hot_H_rc_funcs, hot_H2_rc_funcs, hot_HD_rc_funcs, Hs_dict, 
+                                      dz, dx, hot_D_rc_funcs, hot_H_rc_funcs, hot_H2_rc_funcs, hot_HD_rc_funcs, Hs_dict, 
                                       hot_H_network, hot_D_network, hot_H2_network, hot_HD_network, hrshortcode, ion_species, Jratedict,
                                       molmass, neutral_species, non_bdy_layers, num_layers, n_all_layers, n_alt_index, polarizability, 
-                                      plot_grid, q, rshortcode, reaction_network, speciesbclist, Tn=Tn_arr, Ti=Ti_arr, Te=Te_arr, Tp=Tplasma_arr, 
+                                      plot_grid, q, rshortcode, reaction_network, speciesbclist, speciesbclist_horiz, Tn=Tn_arr, Ti=Ti_arr, Te=Te_arr, Tp=Tplasma_arr, 
                                       Tprof_for_Hs, Tprof_for_diffusion, transport_species, upper_lower_bdy_i, upper_lower_bdy, zmax)
 
         end
@@ -2238,10 +2246,10 @@ elseif problem_type == "Gear"
     # make production and loss plots
     if make_P_and_L_plots
         plot_production_and_loss(atm_soln, results_dir, sim_folder_name, n_horiz; nonthermal=nontherm, all_species, alt, chem_species, collision_xsect, 
-                                  dz, hot_D_rc_funcs, hot_H_rc_funcs, hot_H2_rc_funcs, hot_HD_rc_funcs, Hs_dict, 
+                                  dz, dx, hot_D_rc_funcs, hot_H_rc_funcs, hot_H2_rc_funcs, hot_HD_rc_funcs, Hs_dict, 
                                   hot_H_network, hot_D_network, hot_H2_network, hot_HD_network, hrshortcode, ion_species, Jratedict, M_P, 
                                   molmass, monospace_choice, neutral_species, non_bdy_layers, num_layers, n_all_layers, n_alt_index, polarizability, planet,
-                                  plot_grid, q, R_P, rshortcode, reaction_network, sansserif_choice, speciesbclist, Tn=Tn_arr, Ti=Ti_arr, Te=Te_arr, Tp=Tplasma_arr, 
+                                  plot_grid, q, R_P, rshortcode, reaction_network, sansserif_choice, speciesbclist, speciesbclist_horiz, Tn=Tn_arr, Ti=Ti_arr, Te=Te_arr, Tp=Tplasma_arr, 
                                   Tprof_for_Hs, Tprof_for_diffusion, transport_species, upper_lower_bdy_i, upper_lower_bdy, use_ambipolar, use_molec_diff, zmax)
     end
 
@@ -2259,7 +2267,8 @@ XLSX.writetable("$(results_dir)$(sim_folder_name)/PARAMETERS.xlsx", "General"=>P
                                                                     "SpeciesLists"=>PARAMETERS_SPLISTS,
                                                                     "Solver"=>PARAMETERS_SOLVER, 
                                                                     "Crosssections"=>PARAMETERS_XSECTS, 
-                                                                    "BoundaryConditions"=>PARAMETERS_BCS, 
+                                                                    "BoundaryConditions"=>PARAMETERS_BCS,
+                                                                    "BoundaryConditionsHorizontal"=>PARAMETERS_BCS_HORIZ, 
                                                                     "TemperatureArrays"=>PARAMETERS_TEMPERATURE_ARRAYS)
 println("Saved parameter spreadsheet")
 write_to_log(logfile, "Simulation total runtime $(format_sec_or_min(t7-t1))", mode="a")
