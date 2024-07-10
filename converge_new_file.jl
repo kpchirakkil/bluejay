@@ -246,17 +246,17 @@ function chemJmat(n_active_longlived, n_active_shortlived, n_inactive, Jrates, t
         if ihoriz == 1 # MULTICOL WARNING -- eventually hardcode ones in here and remove this line
             for ialt in [1;] # MULTICOL WARNING -- eventually hardcode ones in here and remove this line
                 # fill the first altitude entry with information for all species (ihoriz = 1)
-                argvec = [nmat_llsp[:, 1, ihoriz];                     # active_longlived; # MULTICOL WARNING hardcoded to use info from first column for all columns. Mid-fix
-                          nmat_llsp[:, 2, ihoriz];                     # active_longlived_above; # MULTICOL WARNING hardcoded to use info from first column for all columns. Mid-fix
+                argvec = [nmat_llsp[:, 1, ihoriz];                     # active_longlived;
+                          nmat_llsp[:, 2, ihoriz];                     # active_longlived_above;
                           fill(1.0, length(GV.active_longlived)); # active_longlived_below;
-                          nmat_slsp[:, 1, ihoriz];                     # active_shortlived; # MULTICOL WARNING hardcoded to use info from first column for all columns. Mid-fix
+                          nmat_slsp[:, 1, ihoriz];                     # active_shortlived;
                           nmat_inactive[:,1, ihoriz];                     # inactive_species;
                           Jrates[:,1];                            # Jratelist;
                           GV.Tn[1]; GV.Ti[1]; GV.Te[1];           #:Tn; :Ti; :Te; # MULTICOL WARNING allow to use different values for different vertical columns
                           M[1]; E[ihoriz][1];                          # total density and electrons, # MULTICOL WARNING hardcoded to use info from first column for all columns.
-                          tup[:,1]; tlower[ihoriz][:,1];                  # local_transport_rates        # MULTICOL WARNING change tlower[1][...] to tlower[ihoriz][...]. Mid-fix. Also will need to allow for different transport values for different vertical columns
-                          tdown[:,2]; tlower[ihoriz][:,2];
-                          tforwards[:,ihoriz]; tbackedge[ialt][:,1]; tbackwards[:,ihoriz+1]; tbackedge[ialt][:,2]] # MULTICOL WARNING edge boundary conditions need defining. There should be a different edge boundary condition (in and out) for each altitude bin, so the indices will have to change. tbackedge[1] indicates the values for the first altitude column.
+                          tup[ihoriz, 1, :]; tlower[ihoriz][:,1];                  # local_transport_rates # MULTICOL WARNING allow use of different transport values for each column
+                          tdown[ihoriz, 2, :]; tlower[ihoriz][:,2];
+                          tforwards[ihoriz, ialt, :]; tbackedge[ialt][:,1]; tbackwards[ihoriz+1, ialt, :]; tbackedge[ialt][:,2]]
     	
                 argvec = convert(Array{ftype_chem}, argvec)
 
@@ -279,22 +279,22 @@ function chemJmat(n_active_longlived, n_active_shortlived, n_inactive, Jrates, t
             end
 
             for ialt in 2:(GV.num_layers-1)
-                argvec = [nmat_llsp[:, ialt, ihoriz];    # MULTICOL WARNING hardcoded to use info from first column for all columns. Mid-fix
-                      nmat_llsp[:, ialt+1, ihoriz];  # MULTICOL WARNING hardcoded to use info from first column for all columns. Mid-fix
-                      nmat_llsp[:, ialt-1, ihoriz];  # MULTICOL WARNING hardcoded to use info from first column for all columns. Mid-fix
-                      nmat_slsp[:, ialt, ihoriz];    # MULTICOL WARNING hardcoded to use info from first column for all columns. Mid-fix
+                argvec = [nmat_llsp[:, ialt, ihoriz];
+                      nmat_llsp[:, ialt+1, ihoriz];
+                      nmat_llsp[:, ialt-1, ihoriz];
+                      nmat_slsp[:, ialt, ihoriz];
                       nmat_inactive[:, ialt, ihoriz];
                       Jrates[:, ialt];
                       GV.Tn[ialt]; GV.Ti[ialt]; GV.Te[ialt];
-                      M[ialt]; E[ihoriz][ialt];      # MULTICOL WARNING hardcoded to use info from first column for all columns.
-                      tup[:, ialt];                  # MULTICOL WARNING will need to allow for different transport values for different vertical columns
-                      tdown[:, ialt];                # MULTICOL WARNING will need to allow for different transport values for different vertical columns
-                      tdown[:, ialt+1];              # MULTICOL WARNING will need to allow for different transport values for different vertical columns
-                      tup[:, ialt-1];                # MULTICOL WARNING will need to allow for different transport values for different vertical columns
-                      tforwards[:,ihoriz];                           # MULTICOL WARNING forwards from current column
+                      M[ialt]; E[ihoriz][ialt];      # MULTICOL WARNING need to allow for different values for different vertical columns
+                      tup[ihoriz, ialt, :];                  # MULTICOL WARNING will need to allow for different transport values for different vertical columns
+                      tdown[ihoriz, ialt, :];                # MULTICOL WARNING will need to allow for different transport values for different vertical columns
+                      tdown[ihoriz, ialt+1, :];              # MULTICOL WARNING will need to allow for different transport values for different vertical columns
+                      tup[ihoriz, ialt-1, :];                # MULTICOL WARNING will need to allow for different transport values for different vertical columns
+                      tforwards[ihoriz, ialt, :];                           # MULTICOL WARNING forwards from current column
                       tbackedge[ialt][:,1];                   # MULTICOL WARNING backwards from current column
-                      tbackwards[:,ihoriz+1];                            # MULTICOL WARNING backwards from column in front
-                      tbackedge[ialt][:,2]] # MULTICOL WARNING forwards to current column across boundary. edge boundary conditions need defining. There should be a different edge boundary condition (in and out) for each altitude bin, so the indices will have to change. tbackedge[1] indicates the values for the first altitude column.
+                      tbackwards[ihoriz+1, ialt, :];                            # MULTICOL WARNING backwards from column in front
+                      tbackedge[ialt][:,2]] # MULTICOL WARNING forwards to current column across boundary.
                 argvec = convert(Array{ftype_chem}, argvec)
 
                 (tclocal, tcupper, tclower, tcbehind, tcinfront) = chemJmat_local(argvec...)
@@ -317,20 +317,20 @@ function chemJmat(n_active_longlived, n_active_shortlived, n_inactive, Jrates, t
                 append!(chemJval, tcinfront[3])
             end
 
-    	    argvec = [nmat_llsp[:,end, ihoriz];          # MULTICOL WARNING hardcoded to use info from first column for all columns. Mid-fix
+    	    argvec = [nmat_llsp[:,end, ihoriz];
                   fill(1.0, length(GV.active_longlived));
-              	  nmat_llsp[:,end-1, ihoriz];        # MULTICOL WARNING hardcoded to use info from first column for all columns. Mid-fix
-              	  nmat_slsp[:, end, ihoriz];         # MULTICOL WARNING hardcoded to use info from first column for all columns. Mid-fix
+              	  nmat_llsp[:,end-1, ihoriz];
+              	  nmat_slsp[:, end, ihoriz];
               	  nmat_inactive[:, end, ihoriz];
               	  Jrates[:,end];
               	  GV.Tn[end]; GV.Ti[end]; GV.Te[end];
-              	  M[end]; E[ihoriz][end]; # E FIX ATTEMPT   # MULTICOL WARNING hardcoded to use info from first column for all columns. Mid-fix
-              	  tupper[ihoriz][:,1]; tdown[:,end];           # MULTICOL WARNING change tupper[1][...] to tupper[ihoriz][...]. Mid-fix. Also will need to allow for different transport values for different vertical columns
-              	  tupper[ihoriz][:,2]; tup[:,end-1];           # MULTICOL WARNING change tupper[1][...] to tupper[ihoriz][...]. Mid-fix. Also will need to allow for different transport values for different vertical columns
-                  tforwards[:,ihoriz];                           # MULTICOL WARNING forwards from current column
+              	  M[end]; E[ihoriz][end]; # E FIX ATTEMPT   # MULTICOL WARNING allow use of different values for each column
+              	  tupper[ihoriz][:,1]; tdown[ihoriz, end, :];           # MULTICOL WARNING  Allow for different transport values for different vertical columns
+              	  tupper[ihoriz][:,2]; tup[ihoriz, end-1, :];           # MULTICOL WARNING Allow for different transport values for different vertical columns
+                  tforwards[ihoriz, end, :];                           # MULTICOL WARNING forwards from current column
                   tbackedge[end][:,1];                   # MULTICOL WARNING backwards from current column
-                  tbackwards[:,ihoriz+1];                            # MULTICOL WARNING backwards from column in front
-                  tbackedge[end][:,2]] # MULTICOL WARNING forwards to current column across boundary. edge boundary conditions need defining. There should be a different edge boundary condition (in and out) for each altitude bin, so the indices will have to change. tbackedge[1] indicates the values for the first altitude column
+                  tbackwards[ihoriz+1, end, :];                            # MULTICOL WARNING backwards from column in front
+                  tbackedge[end][:,2]] # MULTICOL WARNING forwards to current column across boundary. edge boundary conditions need defining.
             argvec = convert(Array{ftype_chem}, argvec)
     
 	    (tclocal, tcupper, tclower, tcbehind, tcinfront) = chemJmat_local(argvec...)
@@ -383,20 +383,20 @@ function chemJmat(n_active_longlived, n_active_shortlived, n_inactive, Jrates, t
             # fill the middle vertical columns next (next three blocks)
             for ialt in [1;] # MULTICOL WARNING -- eventually hardcode ones in here and remove this line
                 # fill the first altitude entry with information for all species (ihoriz = 1)
-                argvec = [nmat_llsp[:, 1, ihoriz];                     # active_longlived; # MULTICOL WARNING hardcoded to use info from first column for all columns. Mid-fix
-                          nmat_llsp[:, 2, ihoriz];                     # active_longlived_above; # MULTICOL WARNING hardcoded to use info from first column for all columns. Mid-fix
+                argvec = [nmat_llsp[:, 1, ihoriz];                     # active_longlived;
+                          nmat_llsp[:, 2, ihoriz];                     # active_longlived_above; 
                           fill(1.0, length(GV.active_longlived)); # active_longlived_below;
-                          nmat_slsp[:, 1, ihoriz];                     # active_shortlived; # MULTICOL WARNING hardcoded to use info from first column for all columns. Mid-fix
+                          nmat_slsp[:, 1, ihoriz];                     # active_shortlived;
                           nmat_inactive[:,1, ihoriz];                     # inactive_species;
                           Jrates[:,1];                            # Jratelist;
-                          GV.Tn[1]; GV.Ti[1]; GV.Te[1];           #:Tn; :Ti; :Te; # MULTICOL WARNING allow to use different values for different vertical columns
-                          M[1]; E[ihoriz][1];                          # total density and electrons, # MULTICOL WARNING hardcoded to use info from first column for all columns.
-                          tup[:,1]; tlower[ihoriz][:,1];                  # local_transport_rates        # MULTICOL WARNING change tlower[1][...] to tlower[ihoriz][...]. Mid-fix. Also will need to allow for different transport values for different vertical columns
-                          tdown[:,2]; tlower[ihoriz][:,2];
-                          tforwards[:,ihoriz];
-                          tbackwards[:, ihoriz];
-                          tbackwards[:, ihoriz+1];
-                          tforwards[:, ihoriz-1]] # MULTICOL WARNING edge boundary conditions need defining
+                          GV.Tn[1]; GV.Ti[1]; GV.Te[1];           #:Tn; :Ti; :Te; # MULTICOL WARNING need to allow use of different values for different vertical columns
+                          M[1]; E[ihoriz][1];                          # total density and electrons, # MULTICOL WARNING need to allow use of different values for different vertical columns
+                          tup[ihoriz, 1, :]; tlower[ihoriz][:,1];                  # local_transport_rates        # MULTICOL WARNING Will need to allow for different transport values for different vertical columns
+                          tdown[ihoriz, 2, :]; tlower[ihoriz][:,2];
+                          tforwards[ihoriz, ialt, :];
+                          tbackwards[ihoriz, ialt, :];
+                          tbackwards[ihoriz+1, ialt, :];
+                          tforwards[ihoriz-1, ialt, :]]
     	
                 argvec = convert(Array{ftype_chem}, argvec)
 
@@ -424,22 +424,22 @@ function chemJmat(n_active_longlived, n_active_shortlived, n_inactive, Jrates, t
             end
             
             for ialt in 2:(GV.num_layers-1)
-                argvec = [nmat_llsp[:, ialt, ihoriz];    # MULTICOL WARNING hardcoded to use info from first column for all columns. Mid-fix
-                      nmat_llsp[:, ialt+1, ihoriz];  # MULTICOL WARNING hardcoded to use info from first column for all columns. Mid-fix
-                      nmat_llsp[:, ialt-1, ihoriz];  # MULTICOL WARNING hardcoded to use info from first column for all columns. Mid-fix
-                      nmat_slsp[:, ialt, ihoriz];    # MULTICOL WARNING hardcoded to use info from first column for all columns. Mid-fix
+                argvec = [nmat_llsp[:, ialt, ihoriz];
+                      nmat_llsp[:, ialt+1, ihoriz];
+                      nmat_llsp[:, ialt-1, ihoriz];
+                      nmat_slsp[:, ialt, ihoriz];
                       nmat_inactive[:, ialt, ihoriz];
                       Jrates[:, ialt];
                       GV.Tn[ialt]; GV.Ti[ialt]; GV.Te[ialt];
-                      M[ialt]; E[ihoriz][ialt];      # MULTICOL WARNING hardcoded to use info from first column for all columns.
-                      tup[:, ialt];                  # MULTICOL WARNING will need to allow for different transport values for different vertical columns
-                      tdown[:, ialt];                # MULTICOL WARNING will need to allow for different transport values for different vertical columns
-                      tdown[:, ialt+1];              # MULTICOL WARNING will need to allow for different transport values for different vertical columns
-                      tup[:, ialt-1];                # MULTICOL WARNING will need to allow for different transport values for different vertical columns
-                      tforwards[:,ihoriz];                           # MULTICOL WARNING forwards from current column
-                      tbackwards[:, ihoriz];
-                      tbackwards[:, ihoriz+1];
-                      tforwards[:, ihoriz-1]]
+                      M[ialt]; E[ihoriz][ialt];      # MULTICOL WARNING will need to allow for different values for different vertical columns
+                      tup[ihoriz, ialt, :];                  # MULTICOL WARNING will need to allow for different transport values for different vertical columns
+                      tdown[ihoriz, ialt, :];                # MULTICOL WARNING will need to allow for different transport values for different vertical columns
+                      tdown[ihoriz, ialt+1, :];              # MULTICOL WARNING will need to allow for different transport values for different vertical columns
+                      tup[ihoriz, ialt-1, :];                # MULTICOL WARNING will need to allow for different transport values for different vertical columns
+                      tforwards[ihoriz, ialt, :];                           # MULTICOL WARNING forwards from current column
+                      tbackwards[ihoriz, ialt, :];
+                      tbackwards[ihoriz+1, ialt, :];
+                      tforwards[ihoriz-1, ialt, :]]
                 argvec = convert(Array{ftype_chem}, argvec)
 
                 (tclocal, tcupper, tclower, tcbehind, tcinfront) = chemJmat_local(argvec...)
@@ -465,21 +465,21 @@ function chemJmat(n_active_longlived, n_active_shortlived, n_inactive, Jrates, t
                 append!(chemJj, ihoriz*(length(GV.active_longlived)*GV.num_layers) .+ tcinfront[2] .+ (ialt-1)*length(GV.active_longlived))
                 append!(chemJval, tcinfront[3])
             end
-            
-            argvec = [nmat_llsp[:,end, ihoriz];          # MULTICOL WARNING hardcoded to use info from first column for all columns. Mid-fix
+
+            argvec = [nmat_llsp[:,end, ihoriz];
                   fill(1.0, length(GV.active_longlived));
-              	  nmat_llsp[:,end-1, ihoriz];        # MULTICOL WARNING hardcoded to use info from first column for all columns. Mid-fix
-              	  nmat_slsp[:, end, ihoriz];         # MULTICOL WARNING hardcoded to use info from first column for all columns. Mid-fix
+              	  nmat_llsp[:,end-1, ihoriz];
+              	  nmat_slsp[:, end, ihoriz];
               	  nmat_inactive[:, end, ihoriz];
               	  Jrates[:,end];
               	  GV.Tn[end]; GV.Ti[end]; GV.Te[end];
-              	  M[end]; E[ihoriz][end]; # E FIX ATTEMPT   # MULTICOL WARNING hardcoded to use info from first column for all columns. Mid-fix
-              	  tupper[ihoriz][:,1]; tdown[:,end];           # MULTICOL WARNING change tupper[1][...] to tupper[ihoriz][...]. Mid-fix. Also will need to allow for different transport values for different vertical columns
-              	  tupper[ihoriz][:,2]; tup[:,end-1];           # MULTICOL WARNING change tupper[1][...] to tupper[ihoriz][...]. Mid-fix. Also will need to allow for different transport values for different vertical columns
-                  tforwards[:,ihoriz];                           # MULTICOL WARNING forwards from current column
-                  tbackwards[:, ihoriz];
-                  tbackwards[:, ihoriz+1];
-                  tforwards[:, ihoriz-1]]
+              	  M[end]; E[ihoriz][end]; # E FIX ATTEMPT   # MULTICOL WARNING will need to allow for different values for different vertical columns
+              	  tupper[ihoriz][:,1]; tdown[ihoriz, end, :];           # MULTICOL WARNING  will need to allow for different transport values for different vertical columns
+              	  tupper[ihoriz][:,2]; tup[ihoriz, end-1, :];           # MULTICOL WARNING  will need to allow for different transport values for different vertical columns
+                  tforwards[ihoriz, end, :];                           # MULTICOL WARNING forwards from current column
+                  tbackwards[ihoriz, end, :];
+                  tbackwards[ihoriz+1, end, :];
+                  tforwards[ihoriz-1, end, :]]
             argvec = convert(Array{ftype_chem}, argvec)
     
 	    (tclocal, tcupper, tclower, tcbehind, tcinfront) = chemJmat_local(argvec...)
@@ -537,20 +537,20 @@ function chemJmat(n_active_longlived, n_active_shortlived, n_inactive, Jrates, t
             # fill the final vertical column  (next three blocks)
             for ialt in [1;] # MULTICOL WARNING -- eventually hardcode ones in here and remove this line
                 # fill the first altitude entry with information for all species (ihoriz = 1)
-                argvec = [nmat_llsp[:, 1, ihoriz];                     # active_longlived; # MULTICOL WARNING hardcoded to use info from first column for all columns. Mid-fix
-                          nmat_llsp[:, 2, ihoriz];                     # active_longlived_above; # MULTICOL WARNING hardcoded to use info from first column for all columns. Mid-fix
+                argvec = [nmat_llsp[:, 1, ihoriz];                     # active_longlived;
+                          nmat_llsp[:, 2, ihoriz];                     # active_longlived_above;
                           fill(1.0, length(GV.active_longlived)); # active_longlived_below;
-                          nmat_slsp[:, 1, ihoriz];                     # active_shortlived; # MULTICOL WARNING hardcoded to use info from first column for all columns. Mid-fix
+                          nmat_slsp[:, 1, ihoriz];                     # active_shortlived;
                           nmat_inactive[:,1, ihoriz];                     # inactive_species;
                           Jrates[:,1];                            # Jratelist;
-                          GV.Tn[1]; GV.Ti[1]; GV.Te[1];           #:Tn; :Ti; :Te; # MULTICOL WARNING allow to use different values for different vertical columns
-                          M[1]; E[ihoriz][1];                          # total density and electrons, # MULTICOL WARNING hardcoded to use info from first column for all columns.
-                          tup[:,1]; tlower[ihoriz][:,1];                  # local_transport_rates        # MULTICOL WARNING change tlower[1][...] to tlower[ihoriz][...]. Mid-fix. Also will need to allow for different transport values for different vertical columns
-                          tdown[:,2]; tlower[ihoriz][:,2];
-                          tfrontedge[ihoriz][:,1];                              # MULTICOL WARNING include side boundary conditions
-                          tbackwards[:,ihoriz];
-                          tfrontedge[ihoriz][:,2];                              # MULTICOL WARNING include side boundary conditions
-                          tforwards[:,ihoriz-1]]
+                          GV.Tn[1]; GV.Ti[1]; GV.Te[1];           #:Tn; :Ti; :Te; # MULTICOL WARNING need to allow to use different values for different vertical columns
+                          M[1]; E[ihoriz][1];                          # total density and electrons, # MULTICOL WARNING need to allow to use different values for different vertical columns
+                          tup[ihoriz, 1, :]; tlower[ihoriz][:,1];                  # local_transport_rates        # MULTICOL WARNING will need to allow for different transport values for different vertical columns
+                          tdown[ihoriz, 2, :]; tlower[ihoriz][:,2];
+                          tfrontedge[ihoriz][:,1];                              # MULTICOL include edge boundary conditions
+                          tbackwards[ihoriz, ialt, :];
+                          tfrontedge[ihoriz][:,2];                              # MULTICOL include edge boundary conditions
+                          tforwards[ihoriz-1, ialt, :]]
     	
                 argvec = convert(Array{ftype_chem}, argvec)
 
@@ -574,22 +574,22 @@ function chemJmat(n_active_longlived, n_active_shortlived, n_inactive, Jrates, t
             end
             
             for ialt in 2:(GV.num_layers-1)
-                argvec = [nmat_llsp[:, ialt, ihoriz];    # MULTICOL WARNING hardcoded to use info from first column for all columns. Mid-fix
-                      nmat_llsp[:, ialt+1, ihoriz];  # MULTICOL WARNING hardcoded to use info from first column for all columns. Mid-fix
-                      nmat_llsp[:, ialt-1, ihoriz];  # MULTICOL WARNING hardcoded to use info from first column for all columns. Mid-fix
-                      nmat_slsp[:, ialt, ihoriz];    # MULTICOL WARNING hardcoded to use info from first column for all columns. Mid-fix
+                argvec = [nmat_llsp[:, ialt, ihoriz];
+                      nmat_llsp[:, ialt+1, ihoriz];
+                      nmat_llsp[:, ialt-1, ihoriz];
+                      nmat_slsp[:, ialt, ihoriz];
                       nmat_inactive[:, ialt, ihoriz];
                       Jrates[:, ialt];
                       GV.Tn[ialt]; GV.Ti[ialt]; GV.Te[ialt];
-                      M[ialt]; E[ihoriz][ialt];      # MULTICOL WARNING hardcoded to use info from first column for all columns.
-                      tup[:, ialt];                  # MULTICOL WARNING will need to allow for different transport values for different vertical columns
-                      tdown[:, ialt];                # MULTICOL WARNING will need to allow for different transport values for different vertical columns
-                      tdown[:, ialt+1];              # MULTICOL WARNING will need to allow for different transport values for different vertical columns
-                      tup[:, ialt-1];                # MULTICOL WARNING will need to allow for different transport values for different vertical columns
-                      tfrontedge[ihoriz][:,1];                              # MULTICOL WARNING include side boundary conditions
-                      tbackwards[:,ihoriz];
-                      tfrontedge[ihoriz][:,2];                              # MULTICOL WARNING include side boundary conditions
-                      tforwards[:,ihoriz-1]]
+                      M[ialt]; E[ihoriz][ialt];      # MULTICOL WARNING will need to allow for different values for different vertical columns
+                      tup[ihoriz, ialt, :];                  # MULTICOL WARNING will need to allow for different transport values for different vertical columns
+                      tdown[ihoriz, ialt, :];                # MULTICOL WARNING will need to allow for different transport values for different vertical columns
+                      tdown[ihoriz, ialt+1, :];              # MULTICOL WARNING will need to allow for different transport values for different vertical columns
+                      tup[ihoriz, ialt-1, :];                # MULTICOL WARNING will need to allow for different transport values for different vertical columns
+                      tfrontedge[ihoriz][:,1];                              # MULTICOL include edge boundary conditions
+                      tbackwards[ihoriz, ialt, :];
+                      tfrontedge[ihoriz][:,2];                              # MULTICOL include edge boundary conditions
+                      tforwards[ihoriz-1, ialt, :]]
                 argvec = convert(Array{ftype_chem}, argvec)
 
                 (tclocal, tcupper, tclower, tcbehind, tcinfront) = chemJmat_local(argvec...)
@@ -611,21 +611,21 @@ function chemJmat(n_active_longlived, n_active_shortlived, n_inactive, Jrates, t
                 append!(chemJj, (ihoriz-2)*(length(GV.active_longlived)*GV.num_layers) .+ tcbehind[2] .+ (ialt-1)*length(GV.active_longlived))
                 append!(chemJval, tcbehind[3])
             end
-            
-            argvec = [nmat_llsp[:,end, ihoriz];          # MULTICOL WARNING hardcoded to use info from first column for all columns. Mid-fix
+
+            argvec = [nmat_llsp[:,end, ihoriz];
                   fill(1.0, length(GV.active_longlived));
-              	  nmat_llsp[:,end-1, ihoriz];        # MULTICOL WARNING hardcoded to use info from first column for all columns. Mid-fix
-              	  nmat_slsp[:, end, ihoriz];         # MULTICOL WARNING hardcoded to use info from first column for all columns. Mid-fix
+              	  nmat_llsp[:,end-1, ihoriz];
+              	  nmat_slsp[:, end, ihoriz];
               	  nmat_inactive[:, end, ihoriz];
               	  Jrates[:,end];
               	  GV.Tn[end]; GV.Ti[end]; GV.Te[end];
-              	  M[end]; E[ihoriz][end]; # E FIX ATTEMPT   # MULTICOL WARNING hardcoded to use info from first column for all columns. Mid-fix
-              	  tupper[ihoriz][:,1]; tdown[:,end];           # MULTICOL WARNING change tupper[1][...] to tupper[ihoriz][...]. Mid-fix. Also will need to allow for different transport values for different vertical columns
-              	  tupper[ihoriz][:,2]; tup[:,end-1];           # MULTICOL WARNING change tupper[1][...] to tupper[ihoriz][...]. Mid-fix. Also will need to allow for different transport values for different vertical columns
-                  tfrontedge[ihoriz][:,1];                              # MULTICOL WARNING include side boundary conditions
-                  tbackwards[:,ihoriz];
-                  tfrontedge[ihoriz][:,2];                              # MULTICOL WARNING include side boundary conditions
-                  tforwards[:,ihoriz-1]]
+              	  M[end]; E[ihoriz][end]; # E FIX ATTEMPT   # MULTICOL WARNING will need to allow for different transport values for different vertical columns
+              	  tupper[ihoriz][:,1]; tdown[ihoriz, end, :];           # MULTICOL WARNING will need to allow for different transport values for different vertical columns
+              	  tupper[ihoriz][:,2]; tup[ihoriz, end-1, :];           # MULTICOL WARNING will need to allow for different transport values for different vertical columns
+                  tfrontedge[ihoriz][:,1];                              # MULTICOL include edge boundary conditions
+                  tbackwards[ihoriz, end, :];
+                  tfrontedge[ihoriz][:,2];                              # MULTICOL include edge boundary conditions
+                  tforwards[ihoriz-1, end, :]]
             argvec = convert(Array{ftype_chem}, argvec)
     
 	    (tclocal, tcupper, tclower, tcbehind, tcinfront) = chemJmat_local(argvec...)
@@ -671,16 +671,16 @@ function ratefn(n_active_longlived, n_active_shortlived, n_inactive, Jrates, tup
     ihoriz = 1 # MULTICOL WARNING -- eventually hardcode ones in here and remove this line
     for ialt in [1;] # MULTICOL WARNING -- eventually hardcode ones in here and remove this line
     # fill the first altitude entry with information for all species (ihoriz = 1)
-        argvec = [nmat_llsp[:,1, ihoriz];                      # densities for active_longlived;  # MULTICOL WARNING hardcoded to use info from first column for all columns. Mid-fix
-              nmat_llsp[:,2, ihoriz];                      # active_longlived_above; # MULTICOL WARNING hardcoded to use info from first column for all columns. Mid-fix
+        argvec = [nmat_llsp[:,1, ihoriz];                      # densities for active_longlived;
+              nmat_llsp[:,2, ihoriz];                      # active_longlived_above;
               fill(1.0, length(GV.active_longlived));      # active_longlived_below;
-              nmat_slsp[:, 1, ihoriz];                     # active_shortlived;      # MULTICOL WARNING hardcoded to use info from first column for all columns. Mid-fix
-              nmat_inactive[:,1, ihoriz];                  # inactive_species;       # MULTICOL WARNING hardcoded to use info from first column for all columns. Mid-fix
+              nmat_slsp[:, 1, ihoriz];                     # active_shortlived;
+              nmat_inactive[:,1, ihoriz];                  # inactive_species;
               Jrates[:,1];                                 # Jratelist;
               GV.Tn[1]; GV.Ti[1]; GV.Te[1];                # :Tn; :Ti; :Te;
-              M[1]; E[ihoriz][1];                          # MULTICOL WARNING hardcoded to use info from first column for all columns. Mid-fix
-              tup[:,1]; tlower[ihoriz][:,1]; tdown[:,2]; tlower[ihoriz][:,2] # MULTICOL WARNING change tlower[1][...] to tlower[ihoriz][...]. Mid-fix. Also will need to allow for different transport values for different vertical columns
-              tforwards[:,ihoriz]; tbackedge[ialt][:,1]; tbackwards[:,ihoriz+1]; tbackedge[ialt][:,2]] # MULTICOL WARNING edge boundary conditions need defining. There should be a different edge boundary condition (in and out) for each altitude bin, so the indices will have to change. tbackedge[1] indicates the values for the first altitude column. Check structure of any boundary conditions that there might be...
+              M[1]; E[ihoriz][1];                          # MULTICOL WARNING will need to allow for different values for different vertical columns
+              tup[ihoriz, 1, :]; tlower[ihoriz][:,1]; tdown[ihoriz, 2, :]; tlower[ihoriz][:,2] # MULTICOL WARNING will need to allow for different transport values for different vertical columns
+              tforwards[ihoriz, ialt, :]; tbackedge[ialt][:,1]; tbackwards[ihoriz+1, ialt, :]; tbackedge[ialt][:,2]] # MULTICOL horizontal transport, including edge boundary conditions
         argvec = convert(Array{ftype_chem}, argvec)
  
         returnrates[:,1,ihoriz] .= ratefn_local(argvec...) # local_transport_rates # MULTICOL WARNING hardcoded to use info from first column for all columns. Mid-fix. Check this is right.
@@ -688,47 +688,47 @@ function ratefn(n_active_longlived, n_active_shortlived, n_inactive, Jrates, tup
 
     # iterate through other altitudes in the lower atmosphere (ihoriz = 1)
     for ialt in 2:(GV.num_layers-1)
-        argvec = [nmat_llsp[:, ialt, ihoriz]; # active_longlived;  # MULTICOL WARNING hardcoded to use info from first column for all columns. Mid-fix
-                  nmat_llsp[:, ialt+1, ihoriz];                    # MULTICOL WARNING hardcoded to use info from first column for all columns. Mid-fix
-                  nmat_llsp[:, ialt-1, ihoriz];                    # MULTICOL WARNING hardcoded to use info from first column for all columns. Mid-fix
-                  nmat_slsp[:, ialt, ihoriz]; # active_shortlived; # MULTICOL WARNING hardcoded to use info from first column for all columns. Mid-fix
-                  nmat_inactive[:,ialt, ihoriz];                   # MULTICOL WARNING hardcoded to use info from first column for all columns. Mid-fix
+        argvec = [nmat_llsp[:, ialt, ihoriz]; # active_longlived;
+                  nmat_llsp[:, ialt+1, ihoriz];
+                  nmat_llsp[:, ialt-1, ihoriz];
+                  nmat_slsp[:, ialt, ihoriz]; # active_shortlived;
+                  nmat_inactive[:,ialt, ihoriz];
                   Jrates[:,ialt];
                   GV.Tn[ialt]; GV.Ti[ialt]; GV.Te[ialt];
-                  M[ialt]; E[ihoriz][ialt];                        # MULTICOL WARNING hardcoded to use info from first column for all columns. Mid-fix
-                  tup[:, ialt];                                    # MULTICOL WARNING will need to allow for different transport values for different vertical columns
-                  tdown[:, ialt];				       # MULTICOL WARNING will need to allow for different transport values for different vertical columns
-                  tdown[:, ialt+1];				       # MULTICOL WARNING will need to allow for different transport values for different vertical columns
-                  tup[:, ialt-1];				       # MULTICOL WARNING will need to allow for different transport values for different vertical columns
-                  tforwards[:,ihoriz];                           # MULTICOL WARNING forwards from current column
-                  tbackedge[ialt][:,1];                   # MULTICOL WARNING backwards from current column
-                  tbackwards[:,ihoriz+1];                            # MULTICOL WARNING backwards from column in front
-                  tbackedge[ialt][:,2]] # MULTICOL WARNING forwards to current column across boundary. edge boundary conditions need defining. There should be a different edge boundary condition (in and out) for each altitude bin, so the indices will have to change. tbackedge[1] indicates the values for the first altitude column. Check structure of any boundary conditions that there might be...
+                  M[ialt]; E[ihoriz][ialt];                        # MULTICOL WARNING will need to allow for different values for different vertical columns
+                  tup[ihoriz, ialt, :];                                    # MULTICOL WARNING will need to allow for different transport values for different vertical columns
+                  tdown[ihoriz, ialt, :];				       # MULTICOL WARNING will need to allow for different transport values for different vertical columns
+                  tdown[ihoriz, ialt+1, :];				       # MULTICOL WARNING will need to allow for different transport values for different vertical columns
+                  tup[ihoriz, ialt-1, :];				       # MULTICOL WARNING will need to allow for different transport values for different vertical columns
+                  tforwards[ihoriz, ialt, :];                           # MULTICOL forwards from current column
+                  tbackedge[ialt][:,1];                   # MULTICOL backwards from current column
+                  tbackwards[ihoriz+1, ialt, :];                            # MULTICOL backwards from column in front
+                  tbackedge[ialt][:,2]] # MULTICOL forwards to current column across boundary.
             
         argvec = convert(Array{ftype_chem}, argvec)
         
-	returnrates[:,ialt,ihoriz] .= ratefn_local(argvec...)      # MULTICOL WARNING hardcoded to use info from first column for all columns. Mid-fix
+	returnrates[:,ialt,ihoriz] .= ratefn_local(argvec...)
     end
 
     # fill in the last level of altitude (ihoriz = 1)
-    argvec = [nmat_llsp[:, end, ihoriz];                           # MULTICOL WARNING hardcoded to use info from first column for all columns. Mid-fix
+    argvec = [nmat_llsp[:, end, ihoriz];
               fill(1.0, length(GV.active_longlived));
-              nmat_llsp[:, end-1, ihoriz];                         # MULTICOL WARNING hardcoded to use info from first column for all columns. Mid-fix
-              nmat_slsp[:, end, ihoriz]; # active_shortlived;      # MULTICOL WARNING hardcoded to use info from first column for all columns. Mid-fix
-              nmat_inactive[:,end, ihoriz];                        # MULTICOL WARNING hardcoded to use info from first column for all columns. Mid-fix
+              nmat_llsp[:, end-1, ihoriz];
+              nmat_slsp[:, end, ihoriz]; # active_shortlived;
+              nmat_inactive[:,end, ihoriz];
               Jrates[:,end];
               GV.Tn[end]; GV.Ti[end]; GV.Te[end];
-              M[end]; E[ihoriz][end];                              # MULTICOL WARNING hardcoded to use info from first column for all columns. Mid-fix
-              tupper[ihoriz][:,1];                                    # MULTICOL WARNING tupper[1][...] to tupper[ihoriz][...]. Mid-fix. Also will need to allow for different transport values for different vertical columns
-              tdown[:,end];						  # MULTICOL WARNING will need to allow for different transport values for different vertical columns
-              tupper[ihoriz][:,2];                                    # MULTICOL WARNING tupper[1][...] to tupper[ihoriz][...]. Mid-fix. Also will need to allow for different transport values for different vertical columns
-              tup[:,end-1];                                         # MULTICOL WARNING will need to allow for different transport values for different vertical columns
-              tforwards[:,ihoriz];                           # MULTICOL WARNING forwards from current column
-              tbackedge[end][:,1];                   # MULTICOL WARNING backwards from current column
-              tbackwards[:,ihoriz+1];                            # MULTICOL WARNING backwards from column in front
-              tbackedge[end][:,2]] # MULTICOL WARNING forwards to current column across boundary. edge boundary conditions need defining. There should be a different edge boundary condition (in and out) for each altitude bin, so the indices will have to change. tbackedge[1] indicates the values for the first altitude column. Check structure of any boundary conditions that there might be...						 
+              M[end]; E[ihoriz][end];                              # MULTICOL WARNING will need to allow for different values for different vertical columns
+              tupper[ihoriz][:,1];                                    # MULTICOL WARNING will need to allow for different transport values for different vertical columns
+              tdown[ihoriz, end, :];						  # MULTICOL WARNING will need to allow for different transport values for different vertical columns
+              tupper[ihoriz][:,2];                                    # MULTICOL WARNING will need to allow for different transport values for different vertical columns
+              tup[ihoriz, end-1, :];                                         # MULTICOL WARNING will need to allow for different transport values for different vertical columns
+              tforwards[ihoriz, end, :];                           # MULTICOL forwards from current column
+              tbackedge[end][:,1];                   # MULTICOL backwards from current column
+              tbackwards[ihoriz+1, end, :];                            # MULTICOL backwards from column in front
+              tbackedge[end][:,2]] # MULTICOL forwards to current column across boundary.
     argvec = convert(Array{ftype_chem}, argvec)
-    returnrates[:,end,ihoriz] .= ratefn_local(argvec...)           # MULTICOL WARNING hardcoded to use info from first column for all columns.
+    returnrates[:,end,ihoriz] .= ratefn_local(argvec...)
 
     #(ihoriz=1)
     # NEW: Overwrite the entries for water in the lower atmosphere with 0s so that it will behave as fixed.
@@ -747,68 +747,68 @@ function ratefn(n_active_longlived, n_active_shortlived, n_inactive, Jrates, tup
     for ihoriz in [2:n_horiz-1;]
         for ialt in [1;] # MULTICOL WARNING -- eventually hardcode ones in here and remove this line
         # fill the first altitude entry with information for all species (ihoriz = 2:n_horiz-1)
-    	    argvec = [nmat_llsp[:,1, ihoriz];                      # densities for active_longlived;  # MULTICOL WARNING hardcoded to use info from first column for all columns. Mid-fix
-                  nmat_llsp[:,2, ihoriz];                      # active_longlived_above; # MULTICOL WARNING hardcoded to use info from first column for all columns. Mid-fix
+    	    argvec = [nmat_llsp[:,1, ihoriz];                      # densities for active_longlived;
+                  nmat_llsp[:,2, ihoriz];                      # active_longlived_above;
               	  fill(1.0, length(GV.active_longlived));      # active_longlived_below;
-              	  nmat_slsp[:, 1, ihoriz];                     # active_shortlived;      # MULTICOL WARNING hardcoded to use info from first column for all columns. Mid-fix
-              	  nmat_inactive[:,1, ihoriz];                  # inactive_species;       # MULTICOL WARNING hardcoded to use info from first column for all columns. Mid-fix
+              	  nmat_slsp[:, 1, ihoriz];                     # active_shortlived;
+              	  nmat_inactive[:,1, ihoriz];                  # inactive_species;
               	  Jrates[:,1];                                 # Jratelist;
               	  GV.Tn[1]; GV.Ti[1]; GV.Te[1];                # :Tn; :Ti; :Te;
-              	  M[1]; E[ihoriz][1];                          # MULTICOL WARNING hardcoded to use info from first column for all columns. Mid-fix
-              	  tup[:,1]; tlower[ihoriz][:,1]; tdown[:,2]; tlower[ihoriz][:,2]; # MULTICOL WARNING change tlower[1][...] to tlower[ihoriz][...]. Mid-fix. Also will need to allow for different transport values for different vertical columns
-                  tforwards[:, ihoriz];
-                  tbackwards[:, ihoriz];
-                  tbackwards[:, ihoriz+1];
-                  tforwards[:, ihoriz-1]] # MULTICOL WARNING edge boundary conditions need defining
+              	  M[1]; E[ihoriz][1];                          # MULTICOL will need to allow for different values for different vertical columns
+              	  tup[ihoriz, 1, :]; tlower[ihoriz][:,1]; tdown[ihoriz, 2, :]; tlower[ihoriz][:,2]; # MULTICOL WARNING will need to allow for different transport values for different vertical columns
+                  tforwards[ihoriz, ialt, :];
+                  tbackwards[ihoriz, ialt, :];
+                  tbackwards[ihoriz+1, ialt, :];
+                  tforwards[ihoriz-1, ialt, :]]
             argvec = convert(Array{ftype_chem}, argvec)
     
-	    returnrates[:,1,ihoriz] .= ratefn_local(argvec...) # local_transport_rates # MULTICOL WARNING hardcoded to use info from first column for all columns. Mid-fix. Check this is right.
+	    returnrates[:,1,ihoriz] .= ratefn_local(argvec...)
         end
     
 
         # iterate through other altitudes in the lower atmosphere (ihoriz = 2:n_horiz-1)
     	for ialt in 2:(GV.num_layers-1)
-            argvec = [nmat_llsp[:, ialt, ihoriz]; # active_longlived;  # MULTICOL WARNING hardcoded to use info from first column for all columns. Mid-fix
-                      nmat_llsp[:, ialt+1, ihoriz];                    # MULTICOL WARNING hardcoded to use info from first column for all columns. Mid-fix
-                      nmat_llsp[:, ialt-1, ihoriz];                    # MULTICOL WARNING hardcoded to use info from first column for all columns. Mid-fix
-                      nmat_slsp[:, ialt, ihoriz]; # active_shortlived; # MULTICOL WARNING hardcoded to use info from first column for all columns. Mid-fix
-                      nmat_inactive[:,ialt, ihoriz];                   # MULTICOL WARNING hardcoded to use info from first column for all columns. Mid-fix
+            argvec = [nmat_llsp[:, ialt, ihoriz]; # active_longlived;
+                      nmat_llsp[:, ialt+1, ihoriz];
+                      nmat_llsp[:, ialt-1, ihoriz];
+                      nmat_slsp[:, ialt, ihoriz]; # active_shortlived;
+                      nmat_inactive[:,ialt, ihoriz];
                       Jrates[:,ialt];
                       GV.Tn[ialt]; GV.Ti[ialt]; GV.Te[ialt];
-                      M[ialt]; E[ihoriz][ialt];                        # MULTICOL WARNING hardcoded to use info from first column for all columns. Mid-fix
-                      tup[:, ialt];                                    # MULTICOL WARNING will need to allow for different transport values for different vertical columns
-                      tdown[:, ialt];				       # MULTICOL WARNING will need to allow for different transport values for different vertical columns
-                      tdown[:, ialt+1];				       # MULTICOL WARNING will need to allow for different transport values for different vertical columns
-                      tup[:, ialt-1];				       # MULTICOL WARNING will need to allow for different transport values for different vertical columns
-                      tforwards[:, ihoriz];
-                      tbackwards[:, ihoriz];
-                      tbackwards[:, ihoriz+1];
-                      tforwards[:, ihoriz-1]]
+                      M[ialt]; E[ihoriz][ialt];                        # MULTICOL WARNING will need to allow for different values for different vertical columns
+                      tup[ihoriz, ialt, :];                                    # MULTICOL WARNING will need to allow for different transport values for different vertical columns
+                      tdown[ihoriz, ialt, :];				       # MULTICOL WARNING will need to allow for different transport values for different vertical columns
+                      tdown[ihoriz, ialt+1, :];				       # MULTICOL WARNING will need to allow for different transport values for different vertical columns
+                      tup[ihoriz, ialt-1, :];				       # MULTICOL WARNING will need to allow for different transport values for different vertical columns
+                      tforwards[ihoriz, ialt, :];
+                      tbackwards[ihoriz, ialt, :];
+                      tbackwards[ihoriz+1, ialt, :];
+                      tforwards[ihoriz-1, ialt, :]]
             
             argvec = convert(Array{ftype_chem}, argvec)
         
-	    returnrates[:,ialt,ihoriz] .= ratefn_local(argvec...)      # MULTICOL WARNING hardcoded to use info from first column for all columns. Mid-fix
+	    returnrates[:,ialt,ihoriz] .= ratefn_local(argvec...)
         end
         
         # fill in the last level of altitude (ihoriz = 2:n_horiz-1)
-        argvec = [nmat_llsp[:, end, ihoriz];                           # MULTICOL WARNING hardcoded to use info from first column for all columns. Mid-fix. Make sure 'end' is doing the right thing here
+        argvec = [nmat_llsp[:, end, ihoriz];
                   fill(1.0, length(GV.active_longlived));
-              	  nmat_llsp[:, end-1, ihoriz];                         # MULTICOL WARNING hardcoded to use info from first column for all columns. Mid-fix
-              	  nmat_slsp[:, end, ihoriz]; # active_shortlived;      # MULTICOL WARNING hardcoded to use info from first column for all columns. Mid-fix
-              	  nmat_inactive[:,end, ihoriz];                        # MULTICOL WARNING hardcoded to use info from first column for all columns. Mid-fix
+              	  nmat_llsp[:, end-1, ihoriz];
+              	  nmat_slsp[:, end, ihoriz]; # active_shortlived;
+              	  nmat_inactive[:,end, ihoriz];
               	  Jrates[:,end];
               	  GV.Tn[end]; GV.Ti[end]; GV.Te[end];
-              	  M[end]; E[ihoriz][end];                              # MULTICOL WARNING hardcoded to use info from first column for all columns. Mid-fix
-              	  tupper[ihoriz][:,1];                                    # MULTICOL WARNING tupper[1][...] to tupper[ihoriz][...]. Mid-fix. Also will need to allow for different transport values for different vertical columns
-              	  tdown[:,end];						  # MULTICOL WARNING will need to allow for different transport values for different vertical columns
-              	  tupper[ihoriz][:,2];                                    # MULTICOL WARNING tupper[1][...] to tupper[ihoriz][...]. Mid-fix. Also will need to allow for different transport values for different vertical columns
-              	  tup[:,end-1];                                         # MULTICOL WARNING will need to allow for different transport values for different vertical columns
-                  tforwards[:, ihoriz];
-                  tbackwards[:, ihoriz];
-                  tbackwards[:, ihoriz+1];
-                  tforwards[:, ihoriz-1]]						 
+              	  M[end]; E[ihoriz][end];                              # MULTICOL WARNING will need to allow for different values for different vertical columns
+              	  tupper[ihoriz][:,1];                                    # MULTICOL WARNING will need to allow for different transport values for different vertical columns
+              	  tdown[ihoriz, end, :];						  # MULTICOL WARNING will need to allow for different transport values for different vertical columns
+              	  tupper[ihoriz][:,2];                                    # MULTICOL WARNING  will need to allow for different transport values for different vertical columns
+              	  tup[ihoriz, end-1, :];                                         # MULTICOL WARNING will need to allow for different transport values for different vertical columns
+                  tforwards[ihoriz, end, :];
+                  tbackwards[ihoriz, end, :];
+                  tbackwards[ihoriz+1, end, :];
+                  tforwards[ihoriz-1, end, :]]						 
         argvec = convert(Array{ftype_chem}, argvec)
-        returnrates[:,end,ihoriz] .= ratefn_local(argvec...)           # MULTICOL WARNING hardcoded to use info from first column for all columns.
+        returnrates[:,end,ihoriz] .= ratefn_local(argvec...)
         
         # NEW: Overwrite the entries for water in the lower atmosphere with 0s so that it will behave as fixed.
     	# Only runs when water is in the active_species list. If neutrals are set to inactive, it will be taken care of already.
@@ -827,67 +827,67 @@ function ratefn(n_active_longlived, n_active_shortlived, n_inactive, Jrates, tup
     ihoriz = n_horiz # MULTICOL WARNING -- eventually hardcode ones in here and remove this line
     for ialt in [1;] # MULTICOL WARNING -- eventually hardcode ones in here and remove this line
         # fill the first altitude entry with information for all species (ihoriz = n_horiz)
-    	argvec = [nmat_llsp[:,1, ihoriz];                      # densities for active_longlived;  # MULTICOL WARNING hardcoded to use info from first column for all columns. Mid-fix
-                  nmat_llsp[:,2, ihoriz];                      # active_longlived_above; # MULTICOL WARNING hardcoded to use info from first column for all columns. Mid-fix
+    	argvec = [nmat_llsp[:,1, ihoriz];                      # densities for active_longlived;
+                  nmat_llsp[:,2, ihoriz];                      # active_longlived_above;
               	  fill(1.0, length(GV.active_longlived));      # active_longlived_below;
-              	  nmat_slsp[:, 1, ihoriz];                     # active_shortlived;      # MULTICOL WARNING hardcoded to use info from first column for all columns. Mid-fix
-              	  nmat_inactive[:,1, ihoriz];                  # inactive_species;       # MULTICOL WARNING hardcoded to use info from first column for all columns. Mid-fix
+              	  nmat_slsp[:, 1, ihoriz];                     # active_shortlived;
+              	  nmat_inactive[:,1, ihoriz];                  # inactive_species;
               	  Jrates[:,1];                                 # Jratelist;
               	  GV.Tn[1]; GV.Ti[1]; GV.Te[1];                # :Tn; :Ti; :Te;
-              	  M[1]; E[ihoriz][1];                          # MULTICOL WARNING hardcoded to use info from first column for all columns. Mid-fix
-              	  tup[:,1]; tlower[ihoriz][:,1]; tdown[:,2]; tlower[ihoriz][:,2]; # MULTICOL WARNING change tlower[1][...] to tlower[ihoriz][...]. Mid-fix. Also will need to allow for different transport values for different vertical columns
-                  tfrontedge[ihoriz][:,1];                              # MULTICOL WARNING include side boundary conditions
-                  tbackwards[:,ihoriz];
-                  tfrontedge[ihoriz][:,2];                              # MULTICOL WARNING include side boundary conditions
-                  tforwards[:,ihoriz-1]]
+              	  M[1]; E[ihoriz][1];                          # MULTICOL WARNING will need to allow for different values for different vertical columns
+              	  tup[ihoriz, 1, :]; tlower[ihoriz][:,1]; tdown[ihoriz, 2, :]; tlower[ihoriz][:,2]; # MULTICOL WARNING will need to allow for different transport values for different vertical columns
+                  tfrontedge[ihoriz][:,1];                              # MULTICOL edge boundary conditions
+                  tbackwards[ihoriz, ialt, :];
+                  tfrontedge[ihoriz][:,2];                              # MULTICOL edge boundary conditions
+                  tforwards[ihoriz-1, ialt, :]]
         argvec = convert(Array{ftype_chem}, argvec)
     
-	returnrates[:,1,ihoriz] .= ratefn_local(argvec...) # local_transport_rates # MULTICOL WARNING hardcoded to use info from first column for all columns. Mid-fix. Check this is right.
+	returnrates[:,1,ihoriz] .= ratefn_local(argvec...)
     end
 
     # iterate through other altitudes in the lower atmosphere (ihoriz = nhoriz)
     for ialt in 2:(GV.num_layers-1)
-        argvec = [nmat_llsp[:, ialt, ihoriz]; # active_longlived;  # MULTICOL WARNING hardcoded to use info from first column for all columns. Mid-fix
-                      nmat_llsp[:, ialt+1, ihoriz];                    # MULTICOL WARNING hardcoded to use info from first column for all columns. Mid-fix
-                      nmat_llsp[:, ialt-1, ihoriz];                    # MULTICOL WARNING hardcoded to use info from first column for all columns. Mid-fix
-                      nmat_slsp[:, ialt, ihoriz]; # active_shortlived; # MULTICOL WARNING hardcoded to use info from first column for all columns. Mid-fix
-                      nmat_inactive[:,ialt, ihoriz];                   # MULTICOL WARNING hardcoded to use info from first column for all columns. Mid-fix
+        argvec = [nmat_llsp[:, ialt, ihoriz]; # active_longlived;
+                      nmat_llsp[:, ialt+1, ihoriz];
+                      nmat_llsp[:, ialt-1, ihoriz];
+                      nmat_slsp[:, ialt, ihoriz]; # active_shortlived;x
+                      nmat_inactive[:,ialt, ihoriz];
                       Jrates[:,ialt];
                       GV.Tn[ialt]; GV.Ti[ialt]; GV.Te[ialt];
-                      M[ialt]; E[ihoriz][ialt];                        # MULTICOL WARNING hardcoded to use info from first column for all columns. Mid-fix
-                      tup[:, ialt];                                    # MULTICOL WARNING will need to allow for different transport values for different vertical columns
-                      tdown[:, ialt];				       # MULTICOL WARNING will need to allow for different transport values for different vertical columns
-                      tdown[:, ialt+1];				       # MULTICOL WARNING will need to allow for different transport values for different vertical columns
-                      tup[:, ialt-1];				       # MULTICOL WARNING will need to allow for different transport values for different vertical columns
-                      tfrontedge[ihoriz][:,1];                              # MULTICOL WARNING include side boundary conditions
-                      tbackwards[:,ihoriz];
-                      tfrontedge[ihoriz][:,2];                              # MULTICOL WARNING include side boundary conditions
-                      tforwards[:,ihoriz-1]]					
+                      M[ialt]; E[ihoriz][ialt];                        # MULTICOL WARNING will need to allow for different values for different vertical columns
+                      tup[ihoriz, ialt, :];                                    # MULTICOL WARNING will need to allow for different transport values for different vertical columns
+                      tdown[ihoriz, ialt, :];				       # MULTICOL WARNING will need to allow for different transport values for different vertical columns
+                      tdown[ihoriz, ialt+1, :];				       # MULTICOL WARNING will need to allow for different transport values for different vertical columns
+                      tup[ihoriz, ialt-1, :];				       # MULTICOL WARNING will need to allow for different transport values for different vertical columns
+                      tfrontedge[ihoriz][:,1];                              # MULTICOL edge boundary conditions
+                      tbackwards[ihoriz, ialt, :];
+                      tfrontedge[ihoriz][:,2];                              # MULTICOL edge boundary conditions
+                      tforwards[ihoriz-1, ialt, :]]					
             
         argvec = convert(Array{ftype_chem}, argvec)
         
-	returnrates[:,ialt,ihoriz] .= ratefn_local(argvec...)      # MULTICOL WARNING hardcoded to use info from first column for all columns. Mid-fix
+	returnrates[:,ialt,ihoriz] .= ratefn_local(argvec...)
     end
             
     # fill in the last level of altitude
-    argvec = [nmat_llsp[:, end, ihoriz];                           # MULTICOL WARNING hardcoded to use info from first column for all columns. Mid-fix
+    argvec = [nmat_llsp[:, end, ihoriz];
                   fill(1.0, length(GV.active_longlived));
-              	  nmat_llsp[:, end-1, ihoriz];                         # MULTICOL WARNING hardcoded to use info from first column for all columns. Mid-fix
-              	  nmat_slsp[:, end, ihoriz]; # active_shortlived;      # MULTICOL WARNING hardcoded to use info from first column for all columns. Mid-fix
-              	  nmat_inactive[:,end, ihoriz];                        # MULTICOL WARNING hardcoded to use info from first column for all columns. Mid-fix
+              	  nmat_llsp[:, end-1, ihoriz];
+              	  nmat_slsp[:, end, ihoriz]; # active_shortlived;
+              	  nmat_inactive[:,end, ihoriz];
               	  Jrates[:,end];
               	  GV.Tn[end]; GV.Ti[end]; GV.Te[end];
-              	  M[end]; E[ihoriz][end];                              # MULTICOL WARNING hardcoded to use info from first column for all columns. Mid-fix
-              	  tupper[ihoriz][:,1];                                    # MULTICOL WARNING tupper[1][...] to tupper[ihoriz][...]. Mid-fix. Also will need to allow for different transport values for different vertical columns
-              	  tdown[:,end];						  # MULTICOL WARNING will need to allow for different transport values for different vertical columns
-              	  tupper[ihoriz][:,2];                                    # MULTICOL WARNING tupper[1][...] to tupper[ihoriz][...]. Mid-fix. Also will need to allow for different transport values for different vertical columns
-              	  tup[:,end-1];                                         # MULTICOL WARNING will need to allow for different transport values for different vertical columns
-                  tfrontedge[ihoriz][:,1];                              # MULTICOL WARNING include side boundary conditions
-                  tbackwards[:,ihoriz];
-                  tfrontedge[ihoriz][:,2];                              # MULTICOL WARNING include side boundary conditions
-                  tforwards[:,ihoriz-1]]						 
+              	  M[end]; E[ihoriz][end];                              # MULTICOL WARNING will need to allow for different values for different vertical columns
+              	  tupper[ihoriz][:,1];                                    # MULTICOL WARNING will need to allow for different transport values for different vertical columns
+              	  tdown[ihoriz, end, :];						  # MULTICOL WARNING will need to allow for different transport values for different vertical columns
+              	  tupper[ihoriz][:,2];                                    # MULTICOL WARNING  will need to allow for different transport values for different vertical columns
+              	  tup[ihoriz, end-1, :];                                         # MULTICOL WARNING will need to allow for different transport values for different vertical columns
+                  tfrontedge[ihoriz][:,1];                              # MULTICOL edge boundary conditions
+                  tbackwards[ihoriz, end, :];
+                  tfrontedge[ihoriz][:,2];                              # MULTICOL edge boundary conditions
+                  tforwards[ihoriz-1, end, :]]						 
     argvec = convert(Array{ftype_chem}, argvec)
-    returnrates[:,end,ihoriz] .= ratefn_local(argvec...)           # MULTICOL WARNING hardcoded to use info from first column for all columns.
+    returnrates[:,end,ihoriz] .= ratefn_local(argvec...)
 
     # NEW: Overwrite the entries for water in the lower atmosphere with 0s so that it will behave as fixed.
     # Only runs when water is in the active_species list. If neutrals are set to inactive, it will be taken care of already.

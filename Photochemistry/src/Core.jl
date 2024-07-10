@@ -1653,7 +1653,7 @@ function boundaryconditions(fluxcoef_dict, atmdict, M, n_horiz::Int64; nontherma
     return bc_dict
 end
 
-function boundaryconditions_horiz(M; globvars...) # MULTICOL WARNING -- note that M is not reqired by this function, but something is needed before the ; to make this work as is
+function boundaryconditions_horiz(globvars)
     #= 
     Inputs:
         M: total atmospheric density, required for the nonthermal escape boundary condition.
@@ -2151,17 +2151,19 @@ function update_transport_coefficients(species_list, atmdict::Dict{Symbol, Vecto
     check_requirements(keys(GV), required)
     
     # Update the diffusion coefficients and scale heights  # MULTICOL temporary comment -- K_eddy_arr = vector of length 9; H0_dict = dictionary{"ion"=>vector of length 9; "neutral"=>vector of length 9}; Dcoef_dict = dictionary{ vector of length 9 for each species, in the order O2, Opl, O, O3}
-    K_eddy_arr, H0_dict, Dcoef_dict = update_diffusion_and_scaleH(species_list, atmdict, D_coefs, n_horiz; globvars...)
+    K_eddy_arr, H0_dict, Dcoef_dict = update_diffusion_and_scaleH(species_list, atmdict, D_coefs, n_horiz; globvars...) # MULTICOL WARNING to do: extend to multiple columns
 
     # Get flux coefficients
-    fluxcoefs_all = fluxcoefs(species_list, K_eddy_arr, Dcoef_dict, H0_dict; globvars...) #  MULTICOL temporary comment -- dictionary {array 2x9 for each species} i.e. X X; X X; X X;...
+    fluxcoefs_all = fluxcoefs(species_list, K_eddy_arr, Dcoef_dict, H0_dict; globvars...) #  MULTICOL temporary comment -- dictionary {array 2x9 for each species} i.e. X X; X X; X X;... To do: Extend to multiple vertical columns
     
     # Transport coefficients, non-boundary layers   # MULTICOL WARNING enter different values for different columns
-    tup = fill(-999., length(GV.transport_species), GV.num_layers)
-    tdown = fill(-999., length(GV.transport_species), GV.num_layers)
+    tup = fill(-999., n_horiz, GV.num_layers, length(GV.transport_species)) # MULTICOL this is the same shape/dimensions as tdown, tforwards, and tbackwards; temporary comment -- XXXXXXX; XXXXXXX; XXXXXXX;;; x4
+    tdown = fill(-999., n_horiz, GV.num_layers, length(GV.transport_species))
     for (i, s) in enumerate(GV.transport_species)
-        tup[i, :] .= fluxcoefs_all[s][2:end-1, 2] # MULTICOL temporary comment - ends up being 7x4 array, i.e. X X X X X X X; X X X X X X X...
-        tdown[i, :] .= fluxcoefs_all[s][2:end-1, 1] # MULTICOL temporary comment - ends up being 7x4 array, i.e. X X X X X X X; X X X X X X X...
+        for ihoriz in [1:n_horiz;] # MULTICOL WARNING temporary for loop -- implement different vertical columns when fluxcoefs_all is built
+            tup[ihoriz, :, i] .= fluxcoefs_all[s][2:end-1, 2] # MULTICOL temporary comment - ends up being 7x4 array, i.e. X X X X X X X; X X X X X X X...
+            tdown[ihoriz, :, i] .= fluxcoefs_all[s][2:end-1, 1] # MULTICOL temporary comment - ends up being 7x4 array, i.e. X X X X X X X; X X X X X X X...
+        end
     end
     bc_dict = boundaryconditions(fluxcoefs_all, atmdict, M, n_horiz; nonthermal=calc_nonthermal, globvars...) # MULTICOL temporary comment -- three 2x2 arrays for each species (lower,down lower,up; upper,up upper,down) 
 
@@ -2207,18 +2209,20 @@ function update_horiz_transport_coefficients(species_list, atmdict::Dict{Symbol,
     check_requirements(keys(GV), required)
 
     # Get flux coefficients
-    fluxcoefs_horiz_all = Dict{Symbol, Array{Float64}}(s=>zeros(9,2) for s in GV.all_species)   # MULTICOL WARNING Work out better way to define this when have numbers. Make fluxcoefs_horiz_all and fluxcoefs_all have the same dimensions, because there should be values for each vertical column and altitude bin
+    fluxcoefs_horiz_all = Dict{Symbol, Array{Float64}}(s=>zeros(9,2) for s in GV.all_species)   # MULTICOL WARNING Work out better way to define this when have numbers. Make fluxcoefs_horiz_all and fluxcoefs_all have the same dimensions, because there should be values for each vertical column and altitude bin. This needs to be a dictionary with n_horiz arrays for each species
     
     # Transport coefficients, non-boundary layers   # MULTICOL WARNING enter different values for different columns
-    tforwards = fill(-999., length(species_list), GV.num_layers) # MULTICOL WARNING add another dimension for different columns here
-    tbackwards = fill(-999., length(species_list), GV.num_layers) # MULTICOL WARNING add another dimension for different columns here
+    tforwards = fill(-999., n_horiz, GV.num_layers, length(species_list)) # MULTICOL WARNING add another dimension for different columns here. X X X X X X X; X X X X X X X; X X X X X X X; X X X X X X X
+    tbackwards = fill(-999., n_horiz, GV.num_layers, length(species_list)) # MULTICOL WARNING add another dimension for different columns here
     for (i, s) in enumerate(GV.transport_species)
-        tforwards[i, :] .= fluxcoefs_horiz_all[s][2:end-1, 2] # MULTICOL WARNING Assume one array with altitude that dictates horizontal transport for all columns (backwards [1] and forwards [2]), for now.
-        tbackwards[i, :] .= fluxcoefs_horiz_all[s][2:end-1, 1]
+        for ihoriz in [1:n_horiz;] # MULTICOL WARNING temporary for loop -- implement different vertical columns when fluxcoefs_all_horiz is built
+            tforwards[ihoriz, :, i] .= fluxcoefs_horiz_all[s][2:end-1, 2] # MULTICOL WARNING fluxcoefs_horiz_all does not yet provide values for each vertical column. Using all the same values for now.
+            tbackwards[ihoriz, :, i] .= fluxcoefs_horiz_all[s][2:end-1, 1] # MULTICOL WARNING to do: test this soon with  numbers
+        end
     end
 
     # MULTICOL WARNING boundary conditions hardcoded here
-    bc_dict_horiz = boundaryconditions_horiz(M; globvars...)  # MULTICOL temporary comment - should be 7 2x2 arrays of 0s
+    bc_dict_horiz = boundaryconditions_horiz(globvars)  # MULTICOL temporary comment - should be 7 2x2 arrays of 0s
 
     # transport coefficients for boundaries # MULTICOL WARNING should this be boundary layers like for the vertical transport?
     tbackedge = Vector{Array{Float64}}(undef, GV.num_layers) # MULTICOL temporary comment - ends up being 7 2x4 (XX;XX;XX;XX) arrays
