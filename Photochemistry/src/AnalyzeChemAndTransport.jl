@@ -417,7 +417,7 @@ function get_transport_PandL_rate(sp::Symbol, atmdict::Dict{Symbol, Vector{Array
     #=
     Input:
         sp: species for which to return the transport production and loss
-        atmdict: species number density by altitude
+        atmdict: species number density by altitude for each vertical column
         returnfluxes: whether to return fluxes (thermal and nonthermal) instead of production/loss
         nonthermal: whether to consider nonthermal escape
 	n_horiz: Number of vertical columns in simulation
@@ -442,10 +442,10 @@ function get_transport_PandL_rate(sp::Symbol, atmdict::Dict{Symbol, Vector{Array
     # Generate the fluxcoefs dictionary and boundary conditions dictionary
     D_arr = zeros(size(GV.Tn))   # MULTICOL WARNING using same D_arr values for all columns
     Keddy_arr, H0_dict, Dcoef_dict = update_diffusion_and_scaleH(GV.all_species, atmdict, D_arr, n_horiz; globvars...)  # MULTICOL WARNING using same K_eddy, H0_dict, Dcoef_dict values for all columns
-    fluxcoefs_all = fluxcoefs(GV.all_species, Keddy_arr, Dcoef_dict, H0_dict; globvars...) 
+    fluxcoefs_all = fluxcoefs(GV.all_species, Keddy_arr, Dcoef_dict, H0_dict, n_horiz; globvars...)
 
     # For the bulk layers only to make the loops below more comprehendable: 
-    fluxcoefs_bulk_layers = Dict([s=>fluxcoefs_all[s][2:end-1, :] for s in keys(fluxcoefs_all)])
+    fluxcoefs_bulk_layers = Dict([s=>[fluxcoefs_all[s][ihoriz][2:end-1, :] for ihoriz in 1:n_horiz] for s in keys(fluxcoefs_all)])
 
     bc_dict = boundaryconditions(fluxcoefs_all, atmdict, sum([atmdict[sp] for sp in GV.all_species]), n_horiz; nonthermal=nonthermal, globvars...)
 
@@ -457,20 +457,20 @@ function get_transport_PandL_rate(sp::Symbol, atmdict::Dict{Symbol, Vector{Array
 
     # These are the derivatives, which should be what we want (check math)
     for ihoriz in [1:n_horiz;]
-    	transport_PL[ihoriz][1] = ((atmdict[sp][ihoriz][2]*fluxcoefs_bulk_layers[sp][2, 1]  # in from layer above     # MULTICOL WARNING hardcoded to use same values for all vertical columns (via fluxcoefs_bulk_layers)
-                        -atmdict[sp][ihoriz][1]*fluxcoefs_bulk_layers[sp][1, 2]) # out to layer above     # MULTICOL WARNING hardcoded to use first vertical column for all columns (via fluxcoefs_bulk_layers)
+    	transport_PL[ihoriz][1] = ((atmdict[sp][ihoriz][2]*fluxcoefs_bulk_layers[sp][ihoriz][2, 1]  # in from layer above
+                        -atmdict[sp][ihoriz][1]*fluxcoefs_bulk_layers[sp][ihoriz][1, 2]) # out to layer above
                     +(-atmdict[sp][ihoriz][1]*thesebcs[ihoriz][1, 1] # out to boundary layer
                       +thesebcs[ihoriz][1, 2])) # in from the boundary layer
         for ialt in 2:length(transport_PL) - 1
-            transport_PL[ihoriz][ialt] = ((atmdict[sp][ihoriz][ialt+1]*fluxcoefs_bulk_layers[sp][ialt+1, 1]  # coming in from above       # MULTICOL WARNING hardcoded to use first vertical column for all columns (via fluxcoefs_bulk_layers)       
-                               -atmdict[sp][ihoriz][ialt]*fluxcoefs_bulk_layers[sp][ialt, 2])    # leaving out to above layer # MULTICOL WARNING hardcoded to use first vertical column for all columns (via fluxcoefs_bulk_layers)
-                             +(-atmdict[sp][ihoriz][ialt]*fluxcoefs_bulk_layers[sp][ialt, 1]     # leaving to the layer below # MULTICOL WARNING hardcoded to use first vertical column for all columns (via fluxcoefs_bulk_layers)
-                               +atmdict[sp][ihoriz][ialt-1]*fluxcoefs_bulk_layers[sp][ialt-1, 2]))  # coming in from below    # MULTICOL WARNING hardcoded to use first vertical column for all columns (via fluxcoefs_bulk_layers)
+            transport_PL[ihoriz][ialt] = ((atmdict[sp][ihoriz][ialt+1]*fluxcoefs_bulk_layers[sp][ihoriz][ialt+1, 1]  # coming in from above    
+                               -atmdict[sp][ihoriz][ialt]*fluxcoefs_bulk_layers[sp][ihoriz][ialt, 2])    # leaving out to above layer
+                             +(-atmdict[sp][ihoriz][ialt]*fluxcoefs_bulk_layers[sp][ihoriz][ialt, 1]     # leaving to the layer below
+                               +atmdict[sp][ihoriz][ialt-1]*fluxcoefs_bulk_layers[sp][ihoriz][ialt-1, 2]))  # coming in from below
         end
     	transport_PL[ihoriz][end] = ((thesebcs[ihoriz][2, 2] # in from upper boundary layer - (non-thermal loss from flux bc)
                           - atmdict[sp][ihoriz][end]*thesebcs[ihoriz][2, 1]) # (#/cm³) * (#/s) out to space from upper bdy (thermal loss from velocity bc)
-                        + (-atmdict[sp][ihoriz][end]*fluxcoefs_bulk_layers[sp][end, 1] # leaving out to layer below                                 # MULTICOL WARNING hardcoded to use first vertical column for all columns (via fluxcoefs_bulk_layers)
-                           +atmdict[sp][ihoriz][end-1]*fluxcoefs_bulk_layers[sp][end-1, 2])) # coming in to top layer from layer below              # MULTICOL WARNING hardcoded to use first vertical column for all columns (via fluxcoefs_bulk_layers)
+                        + (-atmdict[sp][ihoriz][end]*fluxcoefs_bulk_layers[sp][ihoriz][end, 1] # leaving out to layer below
+                           +atmdict[sp][ihoriz][end-1]*fluxcoefs_bulk_layers[sp][ihoriz][end-1, 2])) # coming in to top layer from layer below
     end
 
     # Use these for a sanity check if you like. 
@@ -479,19 +479,26 @@ function get_transport_PandL_rate(sp::Symbol, atmdict::Dict{Symbol, Vector{Array
     # println("Calculated flux from velocity bc. For H and D this should be thermal escape: $([atmdict[sp][ihoriz][end]*thesebcs[ihoriz][2, 1]*GV.dz for ihoriz in 1:n_horiz])")
     # println("Down to layer below: $(-atmdict[sp][end]*fluxcoefs_all[sp][end, 1]*GV.dz)")                                               # MULTICOL WARNING update comment
     # println("In from layer below: $(atmdict[sp][end-1]*fluxcoefs_all[sp][end-1, 2]*GV.dz)")                                            # MULTICOL WARNING update comment
-
     if returnfluxes
-        tflux = atmdict[sp][1][end]*thesebcs[1][2, 1]*GV.dz   # MULTICOL WARNING hardcoded to use first vertical column for all columns
+        tflux = zeros(0)
         if nonthermal
-            ntflux = thesebcs[1][2, 2]*GV.dz                  # MULTICOL WARNING hardcoded to use first vertical column for all columns
-            if sp in [:H, :D, :H2, :HD]
-                ntflux = ntflux < 0 ? abs(ntflux) : throw("I somehow got a positive nonthermal flux, meaning it's going INTO the atmosphere? for $(sp)")
-            else 
-                ntflux = 0 
+            ntflux = zeros(0)
+        end
+        for ihoriz in [1:n_horiz;]
+            append!(tflux, atmdict[sp][ihoriz][end]*thesebcs[ihoriz][2, 1]*GV.dz)
+            if nonthermal
+                append!(ntflux, thesebcs[ihoriz][2, 2]*GV.dz)
+                if sp in [:H, :D, :H2, :HD]
+                    ntflux[ihoriz] = ntflux[ihoriz] < 0 ? abs(ntflux[ihoriz]) : throw("I somehow got a positive nonthermal flux, meaning it's going INTO the atmosphere? for $(sp)")
+                else 
+                    ntflux[ihoriz] = 0 
+                end
             end
-            return ntflux, tflux
+        end
+        if nonthermal
+            return ntflux, tflux # MULTICOL WARNING these are now vectors of length n_horiz, rather than single numbers, so won't be in the format expected by whatever is calling this function
         else 
-            return tflux 
+            return tflux # MULTICOL WARNING this is now a vector of length n_horiz, rather than a single number, it so won't be in the format expected by whatever is calling this function
         end
     else 
         return transport_PL
@@ -528,7 +535,7 @@ function get_directional_fluxes(sp::Symbol, atmdict::Dict{Symbol, Vector{ftype_n
     # Generate the fluxcoefs dictionary and boundary conditions dictionary
     D_arr = zeros(size(GV.Tn))
     Keddy_arr, H0_dict, Dcoef_dict = update_diffusion_and_scaleH(GV.all_species, atmdict, D_arr, n_horiz; globvars...) 
-    fluxcoefs_all = fluxcoefs(GV.all_species, Keddy_arr, Dcoef_dict, H0_dict; globvars...)
+    fluxcoefs_all = fluxcoefs(GV.all_species, Keddy_arr, Dcoef_dict, H0_dict, n_horiz; globvars...)
 
     # For the bulk layers only to make the loops below more comprehendable: 
     fluxcoefs_bulk_layers = Dict([s=>fluxcoefs_all[s][2:end-1, :] for s in keys(fluxcoefs_all)])

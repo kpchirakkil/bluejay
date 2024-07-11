@@ -1420,7 +1420,7 @@ function binary_dcoeff_inCO2(sp, T)
 end
 
 function boundaryconditions(fluxcoef_dict, atmdict, M, n_horiz::Int64; nonthermal=true, globvars...)
-    #= 
+    #=  # MULTICOL WARNING edit comment
     Inputs:
         fluxcoef_dict: a dictionary containing the K and D flux coefficients for every species throughout
                        the atmosphere. Format species=>Array(length(all_species), length(alt)).
@@ -1466,154 +1466,144 @@ function boundaryconditions(fluxcoef_dict, atmdict, M, n_horiz::Int64; nontherma
     bc_dict = Dict{Symbol, Vector{Array{ftype_ncur}}}([s=>[[0 0; 0 0] for ihoriz in 1:n_horiz] for s in GV.all_species])
 
     for sp in keys(GV.speciesbclist)
-        try 
-            global these_bcs = GV.speciesbclist[sp]
-        catch KeyError
-            println("No entry $(sp) in bcdict")
-            continue
-        end
+        for ihoriz in [1:n_horiz;]
+            try 
+                global these_bcs = GV.speciesbclist[sp] # MULTICOL WARNING to do -- allow for differences in BCs between different vertical columns, i.e. make this speciesbclist[sp][ihoriz]. Eventually all the instances of these_bcs below will need an [horiz] index, but that doesn't exist yet
+            catch KeyError
+                println("No entry $(sp) in bcdict")
+                continue
+            end
  
-        # DENSITY
-        try 
-            # lower boundary...
-            if GV.planet=="Mars"
-                n_lower = [fluxcoef_dict[sp][2, :][1], fluxcoef_dict[sp][1, :][2]*these_bcs["n"][1]]  # MULTICOL WARNING eventually make fluxcoef_dict to allow for different values for different columns
-            elseif GV.planet=="Venus"
-                # get the eddy+molecular mixing velocities at the lower boundary of the atmosphere
-                v_lower_boundary_up = fluxcoef_dict[sp][1, # lower boundary cell, outside atmosphere
-                                                        2] # upward mixing velocity
-                v_lower_boundary_dn = fluxcoef_dict[sp][2, # bottom cell of atmosphere
-                                                        1] # downward mixing velocity
-
-                n_lower = [v_lower_boundary_dn, v_lower_boundary_up*these_bcs["n"][1]]
-            end
-            try
-                # TODO for Venus only, this note from Mike originally: 
-                # throw an error if density boundary condition
-                # is specified simultaneous with any flux or velocity condition
-                @assert all(x->!isnan(x), n_lower)
-		for ihoriz in [1:n_horiz;]
-                    bc_dict[sp][ihoriz][1, :] .+= n_lower # MULTICOL WARNING make sure n_lower can vary with each vertical column
-		end
-            catch y
-                if !isa(y, AssertionError)
-                    throw("Unhandled exception in lower density bc: $(y)")
-                end
-            end
-
-            # upper boundary...
+            # DENSITY
             try 
+                # lower boundary... # MULTICOL WARNING temporary comment -- fluxcoef_dict = fluxcoef_all
                 if GV.planet=="Mars"
-                    n_upper = [fluxcoef_dict[sp][end-1, :][2], fluxcoef_dict[sp][end, :][1]*these_bcs["n"][2]]
+                    n_lower = [fluxcoef_dict[sp][ihoriz][2, :][1], fluxcoef_dict[sp][ihoriz][1, :][2]*these_bcs["n"][1]]  # MULTICOL WARNING eventually make fluxcoef_dict to allow for different values for different columns
                 elseif GV.planet=="Venus"
-                    # get the eddy+molecular mixing velocities at the upper boundary of the atmosphere
-                    v_upper_boundary_up = fluxcoef_dict[sp][end-1, # top cell of atmosphere
-                                                            2]     # upward mixing velocity
-                    v_upper_boundary_dn = fluxcoef_dict[sp][end, # upper boundary cell, outside atmosphere
-                                                            1]   # downward mixing velocity
+                    # get the eddy+molecular mixing velocities at the lower boundary of the atmosphere
+                    v_lower_boundary_up = fluxcoef_dict[sp][ihoriz][1, # lower boundary cell, outside atmosphere
+                                                                    2] # upward mixing velocity
+                    v_lower_boundary_dn = fluxcoef_dict[sp][ihoriz][2, # bottom cell of atmosphere
+                                                                    1] # downward mixing velocity
 
-                    n_upper = [v_upper_boundary_up, v_upper_boundary_dn*these_bcs["n"][2]]
+                    n_lower = [v_lower_boundary_dn, v_lower_boundary_up*these_bcs["n"][1]]
+                end
+                try
+                    # TODO for Venus only, this note from Mike originally: 
+                    # throw an error if density boundary condition
+                    # is specified simultaneous with any flux or velocity condition
+                    @assert all(x->!isnan(x), n_lower)
+                    bc_dict[sp][ihoriz][1, :] .+= n_lower # MULTICOL WARNING make sure n_lower can vary with each vertical column
+                catch y
+                    if !isa(y, AssertionError)
+                        throw("Unhandled exception in lower density bc: $(y)")
+                    end
+                end
+
+                # upper boundary...
+                try 
+                    if GV.planet=="Mars"
+                        n_upper = [fluxcoef_dict[sp][ihoriz][end-1, :][2], fluxcoef_dict[sp][ihoriz][end, :][1]*these_bcs["n"][2]]
+                    elseif GV.planet=="Venus"
+                        # get the eddy+molecular mixing velocities at the upper boundary of the atmosphere
+                        v_upper_boundary_up = fluxcoef_dict[sp][ihoriz][end-1, # top cell of atmosphere
+                                                                        2]     # upward mixing velocity
+                        v_upper_boundary_dn = fluxcoef_dict[sp][ihoriz][end, # upper boundary cell, outside atmosphere
+                                                                        1]   # downward mixing velocity
+
+                        n_upper = [v_upper_boundary_up, v_upper_boundary_dn*these_bcs["n"][2]]
                     
-                end
+                    end
 
-                # TODO for Venus only, this note from Mike originally: 
-                # throw an error if density boundary condition
-                # is specified simultaneous with any flux or velocity condition
-                @assert all(x->!isnan(x), n_upper)
-		for ihoriz in [1:n_horiz;]
+                    # TODO for Venus only, this note from Mike originally: 
+                    # throw an error if density boundary condition
+                    # is specified simultaneous with any flux or velocity condition
+                    @assert all(x->!isnan(x), n_upper)
                     bc_dict[sp][ihoriz][2, :] .+= n_upper           # MULTICOL WARNING make sure n_upper can vary with each vertical column
-		end
+                catch y
+                    if !isa(y, AssertionError)
+                        throw("Unhandled exception in upper density bc: $(y)")
+                    end
+                end
             catch y
-                if !isa(y, AssertionError)
-                    throw("Unhandled exception in upper density bc: $(y)")
+                if !isa(y, KeyError)
+                    throw("Unhandled exception in density bcs for $(sp): $(y)")
                 end
             end
-        catch y
-            if !isa(y, KeyError)
-                throw("Unhandled exception in density bcs for $(sp): $(y)")
-            end
-        end
     
-        # FLUX 
-        try 
-            # lower boundary...
-            if GV.planet=="Mars"
-                f_lower = [0, -these_bcs["f"][1]/GV.dz]  # MULTICOL WARNING expand for multiple vertical columns
-            elseif GV.planet=="Venus"
-                f_lower = [0, these_bcs["f"][1]/GV.dz]   # MULTICOL WARNING expand for multiple vertical columns
-                #             ^ no (-) sign, negative flux at lower boundary represents loss to surface
-            end
-            try        
-                @assert all(x->!isnan(x), f_lower)
-		for ihoriz in [1:n_horiz];
+            # FLUX 
+            try 
+                # lower boundary...
+                if GV.planet=="Mars"
+                    f_lower = [0, -these_bcs["f"][1]/GV.dz]  # MULTICOL WARNING expand for multiple vertical columns, i.e. used these_bcs["f"][ihoriz (when exists as index here)][1]
+                elseif GV.planet=="Venus"
+                    f_lower = [0, these_bcs["f"][1]/GV.dz]   # MULTICOL WARNING expand for multiple vertical columns
+                    #             ^ no (-) sign, negative flux at lower boundary represents loss to surface
+                end
+                try        
+                    @assert all(x->!isnan(x), f_lower)
                     bc_dict[sp][ihoriz][1, :] .+= f_lower           # MULTICOL WARNING make sure f_lower can vary with each vertical column
-		end
-            catch y
-                if !isa(y, AssertionError)
-                    throw("Unhandled exception in lower flux bc: $(y)")
+                catch y
+                    if !isa(y, AssertionError)
+                        throw("Unhandled exception in lower flux bc: $(y)")
+                    end
                 end
-            end
-            try 
-                # upper boundary...
-                f_upper = [0, -these_bcs["f"][2]/GV.dz]
-                #             ^ (-) sign needed so that positive flux at upper boundary represents loss to space
-                #             (see "Sign convention" note above)
-                @assert all(x->!isnan(x), f_upper)
-		for ihoriz in [1:n_horiz;]
+                try 
+                    # upper boundary...
+                    f_upper = [0, -these_bcs["f"][2]/GV.dz]
+                    #             ^ (-) sign needed so that positive flux at upper boundary represents loss to space
+                    #             (see "Sign convention" note above)
+                    @assert all(x->!isnan(x), f_upper)
                     bc_dict[sp][ihoriz][2, :] .+= f_upper                   # MULTICOL WARNING make sure f_upper can vary with each vertical column
-		end
+                catch y
+                    if !isa(y, AssertionError)
+                        throw("Unhandled exception in upper flux bc: $(y)")
+                    end
+                end
             catch y
-                if !isa(y, AssertionError)
-                    throw("Unhandled exception in upper flux bc: $(y)")
+                if !isa(y, KeyError)
+                    throw("Unhandled exception in flux bcs for $(sp)")
                 end
             end
-        catch y
-            if !isa(y, KeyError)
-                throw("Unhandled exception in flux bcs for $(sp)")
+    
+            # VELOCITY
+            try 
+                # lower boundary...
+                if GV.planet=="Mars" 
+                    v_lower = [these_bcs["v"][1]/GV.dz, 0]
+                elseif GV.planet=="Venus"
+                    v_lower = [-these_bcs["v"][1]/GV.dz, 0]
+                #          ^ (-) sign needed so that negative velocity at lower boundary represents loss to surface
+                #          (see "Sign convention" note above)
+                end
+
+                try
+                    @assert all(x->!isnan(x), v_lower)
+                    bc_dict[sp][ihoriz][1, :] .+= v_lower                             # MULTICOL WARNING make sure v_lower can vary with each vertical column
+                catch y
+                    if !isa(y, AssertionError)
+                        throw("Unhandled exception in lower velocity bc: $(y)")
+                    end
+                end
+
+                try 
+                    # upper boundary...
+                    v_upper = [these_bcs["v"][2]/GV.dz, 0]
+                    #          ^ no (-) sign needed,  positive velocity at upper boundary represents loss to space
+                    #          (see "Sign convention" note above)
+                    @assert all(x->!isnan(x), v_upper)
+                    bc_dict[sp][ihoriz][2, :] .+= v_upper                           # MULTICOL WARNING make sure v_upper can vary with each vertical column
+                catch y
+                    if !isa(y, AssertionError)
+                        throw("Unhandled exception in lower velocity bc: $(y)")
+                    end
+                end
+            catch y
+                if !isa(y, KeyError)
+                    throw("Unhandled exception in velocity bcs for $(sp)")
+                end
             end
         end
-    
-        # VELOCITY
-        try 
-            # lower boundary...
-            if GV.planet=="Mars" 
-                v_lower = [these_bcs["v"][1]/GV.dz, 0]
-            elseif GV.planet=="Venus"
-                v_lower = [-these_bcs["v"][1]/GV.dz, 0]
-            #          ^ (-) sign needed so that negative velocity at lower boundary represents loss to surface
-            #          (see "Sign convention" note above)
-            end
-
-            try
-                @assert all(x->!isnan(x), v_lower)
-		for ihoriz in [1:n_horiz;]
-                    bc_dict[sp][ihoriz][1, :] .+= v_lower                             # MULTICOL WARNING make sure v_lower can vary with each vertical column
-		end
-            catch y
-                if !isa(y, AssertionError)
-                    throw("Unhandled exception in lower velocity bc: $(y)")
-                end
-            end
-
-            try 
-                # upper boundary...
-                v_upper = [these_bcs["v"][2]/GV.dz, 0]
-                #          ^ no (-) sign needed,  positive velocity at upper boundary represents loss to space
-                #          (see "Sign convention" note above)
-                @assert all(x->!isnan(x), v_upper)
-		for ihoriz in [1:n_horiz;]
-                    bc_dict[sp][ihoriz][2, :] .+= v_upper                           # MULTICOL WARNING make sure v_upper can vary with each vertical column
-		end
-            catch y
-                if !isa(y, AssertionError)
-                    throw("Unhandled exception in lower velocity bc: $(y)")
-                end
-            end
-        catch y
-            if !isa(y, KeyError)
-                throw("Unhandled exception in velocity bcs for $(sp)")
-            end
-        end 
     end
     
     # SPECIAL CASE: add on the non-thermal escape for H and D. 
@@ -1622,7 +1612,7 @@ function boundaryconditions(fluxcoef_dict, atmdict, M, n_horiz::Int64; nontherma
                     :hot_H2_network, :hot_H2_rc_funcs, :hot_HD_network, :hot_HD_rc_funcs, :Jratedict]
         check_requirements(keys(GV), required)
 
-        for ihoriz in [1:n_horiz;]
+        for ihoriz in [1:n_horiz;] # MULTICOL WARNING -- make sure that these values can vary with vertical column
 	    if :H in keys(atmdict) && :D in keys(atmdict) && :H2 in keys(atmdict) && :HD in keys(atmdict) 
                prod_hotH = escaping_hot_atom_production(:H, GV.hot_H_network, GV.hot_H_rc_funcs, atmdict, M, ihoriz; globvars...)
                prod_hotD = escaping_hot_atom_production(:D, GV.hot_D_network, GV.hot_D_rc_funcs, atmdict, M, ihoriz; globvars...)
@@ -2012,7 +2002,7 @@ function fluxcoefs(sp::Symbol, Kv, Dv, H0v; globvars...)
             sumeddyu .- gravthermalu # up; negative because gravity points down. I think that's why.
 end
 
-function fluxcoefs(species_list::Vector, K, D, H0; globvars...) 
+function fluxcoefs(species_list::Vector, K, D, H0, n_horiz::Int64; globvars...) 
     #=
     New optimized version of fluxcoefs that calls the lower level version of fluxcoefs,
     producing a dictionary that contains both up and down flux coefficients for each layer of
@@ -2045,12 +2035,14 @@ function fluxcoefs(species_list::Vector, K, D, H0; globvars...)
     check_requirements(keys(GV), required)
     
     # the return dictionary: Each species has 2 entries for every layer of the atmosphere.
-    fluxcoef_dict = Dict{Symbol, Array{ftype_ncur}}([s=>fill(0., GV.n_all_layers, 2) for s in species_list])
+    fluxcoef_dict = Dict{Symbol, Vector{Array{ftype_ncur}}}([s=>[fill(0., GV.n_all_layers, 2) for ihoriz in 1:n_horiz] for s in species_list])
 
     for s in species_list
-        layer_below_coefs, layer_above_coefs = fluxcoefs(s, K, D, H0; globvars...)
-        fluxcoef_dict[s][:, 1] .= layer_below_coefs
-        fluxcoef_dict[s][:, 2] .= layer_above_coefs
+        for ihoriz in [1:n_horiz;]
+            layer_below_coefs, layer_above_coefs = fluxcoefs(s, K, D, H0; globvars...) # MULTICOL WARNING to do -- allow for use of different values here 
+            fluxcoef_dict[s][ihoriz][:, 1] .= layer_below_coefs
+            fluxcoef_dict[s][ihoriz][:, 2] .= layer_above_coefs
+        end
     end
 
     return fluxcoef_dict
@@ -2077,6 +2069,18 @@ function Keddy(z::Vector, nt::Vector; globvars...)
     elseif GV.planet=="Venus"
         k = 8e12*(nt .^ -0.5)
     end
+
+#=    k = [zeros(size(z)) for ihoriz in 1:n_horiz] # Initialize vector of arrays for eddy diffusion # MULTICOL WARNING finish this
+    for ihoriz in [1:n_horiz;]
+        if GV.planet=="Mars"
+            upperatm = findall(i->i .> 60e5, z)
+            k[ihoriz][findall(i->i .<= 60e5, z)] .= 10. ^ 6
+            k[ihoriz][upperatm] .= 2e13 ./ sqrt.(nt[upperatm])
+        elseif GV.planet=="Venus"
+            k[ihoriz] = 8e12*(nt .^ -0.5) # MULTICOL WARNING add vertical column index to nt
+        end
+    end
+=#
 
     return k
 end
@@ -2154,15 +2158,15 @@ function update_transport_coefficients(species_list, atmdict::Dict{Symbol, Vecto
     K_eddy_arr, H0_dict, Dcoef_dict = update_diffusion_and_scaleH(species_list, atmdict, D_coefs, n_horiz; globvars...) # MULTICOL WARNING to do: extend to multiple columns
 
     # Get flux coefficients
-    fluxcoefs_all = fluxcoefs(species_list, K_eddy_arr, Dcoef_dict, H0_dict; globvars...) #  MULTICOL temporary comment -- dictionary {array 2x9 for each species} i.e. X X; X X; X X;... To do: Extend to multiple vertical columns
+    fluxcoefs_all = fluxcoefs(species_list, K_eddy_arr, Dcoef_dict, H0_dict, n_horiz; globvars...) #  MULTICOL temporary comment -- dictionary {array 2x9 for each species} i.e. X X; X X; X X;... To do: Extend to multiple vertical columns
     
     # Transport coefficients, non-boundary layers   # MULTICOL WARNING enter different values for different columns
     tup = fill(-999., n_horiz, GV.num_layers, length(GV.transport_species)) # MULTICOL this is the same shape/dimensions as tdown, tforwards, and tbackwards; temporary comment -- XXXXXXX; XXXXXXX; XXXXXXX;;; x4
     tdown = fill(-999., n_horiz, GV.num_layers, length(GV.transport_species))
     for (i, s) in enumerate(GV.transport_species)
         for ihoriz in [1:n_horiz;] # MULTICOL WARNING temporary for loop -- implement different vertical columns when fluxcoefs_all is built
-            tup[ihoriz, :, i] .= fluxcoefs_all[s][2:end-1, 2] # MULTICOL temporary comment - ends up being 7x4 array, i.e. X X X X X X X; X X X X X X X...
-            tdown[ihoriz, :, i] .= fluxcoefs_all[s][2:end-1, 1] # MULTICOL temporary comment - ends up being 7x4 array, i.e. X X X X X X X; X X X X X X X...
+            tup[ihoriz, :, i] .= fluxcoefs_all[s][ihoriz][2:end-1, 2] # MULTICOL temporary comment - ends up being 7x4 array, i.e. X X X X X X X; X X X X X X X...
+            tdown[ihoriz, :, i] .= fluxcoefs_all[s][ihoriz][2:end-1, 1] # MULTICOL temporary comment - ends up being 7x4 array, i.e. X X X X X X X; X X X X X X X...
         end
     end
     bc_dict = boundaryconditions(fluxcoefs_all, atmdict, M, n_horiz; nonthermal=calc_nonthermal, globvars...) # MULTICOL temporary comment -- three 2x2 arrays for each species (lower,down lower,up; upper,up upper,down) 
@@ -2209,7 +2213,7 @@ function update_horiz_transport_coefficients(species_list, atmdict::Dict{Symbol,
     check_requirements(keys(GV), required)
 
     # Get flux coefficients
-    fluxcoefs_horiz_all = Dict{Symbol, Array{Float64}}(s=>zeros(9,2) for s in GV.all_species)   # MULTICOL WARNING Work out better way to define this when have numbers. Make fluxcoefs_horiz_all and fluxcoefs_all have the same dimensions, because there should be values for each vertical column and altitude bin. This needs to be a dictionary with n_horiz arrays for each species
+    fluxcoefs_horiz_all = Dict{Symbol, Array{Float64}}(s=>zeros(9,2) for s in GV.all_species)   # MULTICOL WARNING Work out better way to define this when have numbers. Make fluxcoefs_horiz_all and fluxcoefs_all have the same dimensions, because there should be values for each vertical column and altitude bin. This needs to be a dictionary with n_horiz arrays for each species. This does not need values for the boundary layers, but keeping them in as zeros to maintain consistency with fluxcoefs_all.
     
     # Transport coefficients, non-boundary layers   # MULTICOL WARNING enter different values for different columns
     tforwards = fill(-999., n_horiz, GV.num_layers, length(species_list)) # MULTICOL WARNING add another dimension for different columns here. X X X X X X X; X X X X X X X; X X X X X X X; X X X X X X X
