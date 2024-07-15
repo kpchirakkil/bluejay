@@ -330,7 +330,7 @@ const H2Oi = findfirst(x->x==:H2O, active_longlived)
 const HDOi = findfirst(x->x==:HDO, active_longlived)
 
 # Altitude at which water transitions from fixed to freely solved for
-H2Osatfrac = H2Osat ./ map(z->n_tot(get_ncurrent(initial_atm_file, 1), z; all_species, n_alt_index), alt)  # get SVP as fraction of total atmo #MULTICOL WARNING-- using first vertical column values for all columns
+H2Osatfrac = H2Osat ./ map(z->n_tot(get_ncurrent(initial_atm_file, 1), z, 1; all_species, n_alt_index), alt)  # get SVP as fraction of total atmo #MULTICOL WARNING-- using first vertical column values for all columns # MULTICOL WARNING - ihoriz hardcoded as 1 in n_tot arguments for now -- change this
 const upper_lower_bdy = alt[something(findfirst(isequal(minimum(H2Osatfrac)), H2Osatfrac), 0)] # in cm
 const upper_lower_bdy_i = n_alt_index[upper_lower_bdy]  # the uppermost layer at which water will be fixed, in cm
 # Control whether the removal of rates etc at "Fixed altitudes" runs. If the boundary is 

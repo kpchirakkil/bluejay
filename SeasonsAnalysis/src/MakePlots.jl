@@ -89,7 +89,7 @@ function make_seasonal_cycle_plots_inclusive(season_folders; mainalt=250, savepa
 
         for i in 1:length(state_files)
             nc = get_ncurrent(state_files[i])
-            ntot = n_tot(nc; GV.all_species, GV.non_bdy_layers)
+            ntot = n_tot(nc, 1; GV.all_species, GV.non_bdy_layers) # MULTICOL WARNING - ihoriz hardcoded as 1 in n_tot arguments for now -- change this
             H2O_profile_array[:, i] = nc[:H2O] ./ ntot
             HDO_profile_array[:, i] = nc[:HDO] ./ ntot
         end
@@ -493,7 +493,7 @@ function make_seasonal_cycle_plots_water(season_folders; mainalt=250, savepath=n
 
         for i in 1:length(state_files)
             nc = get_ncurrent(state_files[i])
-            ntot = n_tot(nc; GV.all_species, GV.non_bdy_layers)
+            ntot = n_tot(nc, 1; GV.all_species, GV.non_bdy_layers) # MULTICOL WARNING - ihoriz hardcoded as 1 in n_tot arguments for now -- change this
             H2O_profile_array[:, i] = nc[:H2O] ./ ntot
             HDO_profile_array[:, i] = nc[:HDO] ./ ntot
         end
@@ -1619,10 +1619,10 @@ function make_water_panel(ax, atms, colors, txtlbls; spclbl_x = [0.8, 0.45], lin
 
     plot_bg(ax)
     for w in 1:length(atms)
-        ax.plot(atms[w][:H2O][1:GV.upper_lower_bdy_i]./n_tot(atms[w]; GV.all_species, GV.alt)[1:GV.upper_lower_bdy_i], GV.plot_grid[1:GV.upper_lower_bdy_i], 
-                color=colors[w, :])
-        ax.plot(atms[w][:HDO][1:GV.upper_lower_bdy_i]./n_tot(atms[w]; GV.all_species, GV.alt)[1:GV.upper_lower_bdy_i], GV.plot_grid[1:GV.upper_lower_bdy_i], 
-                color=colors[w, :], linestyle=GV.speciesstyle[:HDO])
+        ax.plot(atms[w][:H2O][1:GV.upper_lower_bdy_i]./n_tot(atms[w], 1; GV.all_species, GV.alt)[1:GV.upper_lower_bdy_i], GV.plot_grid[1:GV.upper_lower_bdy_i], 
+                color=colors[w, :]) # MULTICOL WARNING - ihoriz hardcoded as 1 in n_tot arguments for now -- change this
+        ax.plot(atms[w][:HDO][1:GV.upper_lower_bdy_i]./n_tot(atms[w], 1; GV.all_species, GV.alt)[1:GV.upper_lower_bdy_i], GV.plot_grid[1:GV.upper_lower_bdy_i], 
+                color=colors[w, :], linestyle=GV.speciesstyle[:HDO]) # MULTICOL WARNING - ihoriz hardcoded as 1 in n_tot arguments for now -- change this
     end
     ax.set_xscale("log")
     ax.set_xlabel(L"Water mixing ratio (cm$^{-3}$/cm$^{-3}$)")

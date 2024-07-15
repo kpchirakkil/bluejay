@@ -133,7 +133,7 @@ function evolve_atmosphere(atm_init::Dict{Symbol, Vector{Array{ftype_ncur}}}, lo
     find_nonfinites(nstart, collec_name="nstart")
 
     # Set up parameters
-    M = n_tot(n_current; GV.all_species)
+    M = n_tot(n_current, 1; GV.all_species) # MULTICOL WARNING - ihoriz hardcoded as 1 in n_tot arguments for now -- change this
     E = electron_density(n_current; GV.e_profile_type, GV.non_bdy_layers, GV.ion_species)
     params_Gear = [GV.Dcoef_arr_template, M, E]
     params_J = [globvars, GV.Dcoef_arr_template, M, E] # kwargs can't be passed to the julia ODE solver functions 
@@ -1411,7 +1411,7 @@ function update!(n_current::Dict{Symbol, Vector{Array{ftype_ncur}}}, t, dt; abst
                                    :Te, :Ti, :Tn, :Tp, :Tprof_for_diffusion, :upper_lower_bdy_i, :zmax,])
         
 
-    M = n_tot(n_current; GV.all_species) 
+    M = n_tot(n_current, 1; GV.all_species) # MULTICOL WARNING - ihoriz hardcoded as 1 in n_tot arguments for now -- change this
     E = electron_density(n_current; GV.e_profile_type, GV.non_bdy_layers, GV.ion_species)
 
     # global params for simulation
@@ -1614,7 +1614,7 @@ if update_water_profile
             prevh2o = deepcopy(n_current[:H2O])
             prevhdo = deepcopy(n_current[:HDO])
 
-            n_current[:H2O][1:upper_lower_bdy_i] = H2Oinitfrac[1:upper_lower_bdy_i] .* n_tot(n_current; n_alt_index, all_species)[1:upper_lower_bdy_i]
+            n_current[:H2O][1:upper_lower_bdy_i] = H2Oinitfrac[1:upper_lower_bdy_i] .* n_tot(n_current, 1; n_alt_index, all_species)[1:upper_lower_bdy_i] # MULTICOL WARNING - ihoriz hardcoded as 1 in n_tot arguments for now -- change this
             n_current[:HDO][1:upper_lower_bdy_i] = 2 * DH * n_current[:H2O][1:upper_lower_bdy_i]
         else 
             # Create the new multipliers to change the profiles
@@ -1646,11 +1646,11 @@ if update_water_profile
         if modified_water_alts == "below fixed point"
             # in this case, we are going to re-set the lower atmosphere directly
             # but not change the upper atmosphere from whatever it previously was.
-            n_current[:H2O][1:upper_lower_bdy_i] = H2Oinitfrac[1:upper_lower_bdy_i] .* n_tot(n_current; n_alt_index, all_species)[1:upper_lower_bdy_i]
+            n_current[:H2O][1:upper_lower_bdy_i] = H2Oinitfrac[1:upper_lower_bdy_i] .* n_tot(n_current, 1; n_alt_index, all_species)[1:upper_lower_bdy_i] # MULTICOL WARNING - ihoriz hardcoded as 1 in n_tot arguments for now -- change this
             n_current[:HDO][1:upper_lower_bdy_i] = 2 * DH * n_current[:H2O][1:upper_lower_bdy_i]
         elseif modified_water_alts == "above fixed point"
             # in this case, we modify the upper atmosphere. For some reason. Probably never do this.
-            n_current[:H2O][upper_lower_bdy_i+1:end] = H2Oinitfrac[upper_lower_bdy_i+1:end] .* n_tot(n_current; n_alt_index, all_species)[upper_lower_bdy_i+1:end]
+            n_current[:H2O][upper_lower_bdy_i+1:end] = H2Oinitfrac[upper_lower_bdy_i+1:end] .* n_tot(n_current, 1; n_alt_index, all_species)[upper_lower_bdy_i+1:end] # MULTICOL WARNING - ihoriz hardcoded as 1 in n_tot arguments for now -- change this
             n_current[:HDO][upper_lower_bdy_i+1:end] = 2 * DH * n_current[:H2O][upper_lower_bdy_i+1:end]
         end
 
@@ -2035,11 +2035,11 @@ plot_temp_prof(Tn_arr; savepath=results_dir*sim_folder_name, Tprof_2=Ti_arr, Tpr
 # Absolute tolerance
 if problem_type == "Gear"
     const atol = 1e-12 # absolute tolerance in ppm, used by Gear solver # NOTE: I think this is actually #/cm³ not ppm, because n_i+1 - n_i is compared against it.--Eryn
-    const abs_tol_for_plot = fill(atol, length(n_tot(n_current; all_species)))
+    const abs_tol_for_plot = fill(atol, length(n_tot(n_current, 1; all_species))) # MULTICOL WARNING - ihoriz hardcoded as 1 in n_tot arguments for now -- change this 
 else
     # absolute tolerance relative to total atmosphere density, used by DifferentialEquations.jl solvers
-    const atol = 1e-12 .* [[n_tot(n_current, a; n_alt_index, all_species) for sp in active_longlived, a in non_bdy_layers]...] 
-    const abs_tol_for_plot = 1e-12 .* n_tot(n_current; n_alt_index, all_species) # calculates 1 ppt of the total density at each altitude.
+    const atol = 1e-12 .* [[n_tot(n_current, a, 1; n_alt_index, all_species) for sp in active_longlived, a in non_bdy_layers]...]  # MULTICOL WARNING - ihoriz hardcoded as 1 in n_tot arguments for now -- change this
+    const abs_tol_for_plot = 1e-12 .* n_tot(n_current, 1; n_alt_index, all_species) # calculates 1 ppt of the total density at each altitude. # MULTICOL WARNING - ihoriz hardcoded as 1 in n_tot arguments for now -- change this
 end
     
 # Plot initial atmosphere condition  ===========================================
@@ -2085,14 +2085,15 @@ if ftype_ncur==Double64
     write_to_log(logfile, "$(Dates.format(now(), "(HH:MM:SS)")) Started first chemical jacobian compile")
 
     # Set up the initial state and check for any problems 
-    M = n_tot(n_current; all_species)
+    M = n_tot(n_current, 1; all_species) # MULTICOL WARNING - ihoriz hardcoded as 1 in n_tot arguments for now -- change this
     E = electron_density(n_current; e_profile_type, non_bdy_layers, ion_species)
 
     nstart = flatten_atm(n_current, active_longlived; num_layers)
     find_nonfinites(nstart, collec_name="nstart")
 
-    # Set up parameters    
-    Dcoef_arr_template = zeros(size(Tn_arr))  # For making diffusion coefficient calculation go faster 
+    # Set up parameters
+    Dcoef_arr_template = zeros(size(Tn_arr)) # For making diffusion coefficient calculation go faster
+    #Dcoef_arr_template = [zeros(size(Tn_arr)) for ihoriz in 1:n_horiz]  # For making diffusion coefficient calculation go faster. # MULTICOL WARNING new version
     params = [#inactive, inactive_species, active_species, active_longlived, active_shortlived, Tn_arr, Ti_arr, Te_arr, Tplasma_arr, 
               Dcoef_arr_template, M, E] # E FIX ATTEMPT
     params_exjac = deepcopy(params)  # I think this is so the Dcoef doesn't get filled in with the wrong info?
@@ -2121,6 +2122,7 @@ ti = time()
 println("$(Dates.format(now(), "(HH:MM:SS)")) Beginning convergence")
 
 Dcoef_arr_template = zeros(size(Tn_arr)) # initialize diffusion coefficient array
+#Dcoef_arr_template = [zeros(size(Tn_arr)) for ihoriz in 1:n_horiz] # initialize diffusion coefficient array # MULTICOL WARNING new version
 
 atm_soln = Dict()
 
@@ -2145,7 +2147,7 @@ catch y
     throw("ERROR: Simulation terminated before completion with exception:")
 end
 
-tf = time() 
+tf = time()
 
 write_to_log(logfile, "Finished!\nSimulation active convergence runtime $(format_sec_or_min(tf-ti))", mode="a")
 

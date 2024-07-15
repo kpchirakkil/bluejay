@@ -96,7 +96,7 @@ function plot_atm(atmdict::Dict{Symbol, Vector{Array{ftype_ncur}}}, savepath::St
         else
             allsp = GV.neutral_species
         end
-        ntot = n_tot(atmdict; all_species=allsp) # get the total atmosphere
+        ntot = n_tot(atmdict, 1; all_species=allsp) # get the total atmosphere # MULTICOL WARNING - ihoriz hardcoded as 1 in n_tot arguments for now -- change this
         atmdict_MR = Dict([s=>(atmdict[s]./ntot) for s in allsp])
 
         xlim_1 = [xlim_1[1]/ntot[1], 1]
@@ -893,7 +893,7 @@ function plot_reaction_on_demand(atmdict, reactants, n_horiz::Int64; print_col_t
     rc_funcs = Dict([rxn => mk_function(:((Tn, Ti, Te, M) -> $(rxn[3]))) for rxn in relevant_reactions]);
     
     # Atmospheric density
-    Mtot = n_tot(atmdict; GV.all_species)
+    Mtot = n_tot(atmdict, 1; GV.all_species) # MULTICOL WARNING - ihoriz hardcoded as 1 in n_tot arguments for now -- change this
     
     # Reaction strings used for labeling dataframes
     rxn_strings = [format_chemistry_string(rr[1], rr[2]) for rr in relevant_reactions]
@@ -1006,7 +1006,7 @@ function plot_species_on_demand(atmdict, spclist, filename; savepath=nothing, sh
         if mixing_ratio
             required =  [:all_species]
             check_requirements(keys(GV), required)
-            plot_me = plot_me ./ n_tot(atmdict; GV.all_species)
+            plot_me = plot_me ./ n_tot(atmdict, 1; GV.all_species) # MULTICOL WARNING - ihoriz hardcoded as 1 in n_tot arguments for now -- change this
         end
         ax.plot(plot_me, GV.plot_grid, color=col, linewidth=lw, label=sp, linestyle=ls, zorder=10)
         
@@ -1160,11 +1160,11 @@ function plot_water_profile(atmdict, savepath::String; showonly=false, watersat=
     # mixing ratio axis ----------------------
     # to get in ppmv, divide the mixing ratio by 1e-6. 
     if prev_profs != nothing
-        ax[1].semilogx(prev_profs[1] ./ n_tot(atmdict; globvars...), GV.plot_grid, color=prevcol)
-        ax[1].semilogx(prev_profs[2] ./ n_tot(atmdict; globvars...), GV.plot_grid, color=prevcol)
+        ax[1].semilogx(prev_profs[1] ./ n_tot(atmdict, 1; globvars...), GV.plot_grid, color=prevcol) # MULTICOL WARNING - ihoriz hardcoded as 1 in n_tot arguments for now -- change this
+        ax[1].semilogx(prev_profs[2] ./ n_tot(atmdict, 1; globvars...), GV.plot_grid, color=prevcol) # MULTICOL WARNING - ihoriz hardcoded as 1 in n_tot arguments for now -- change this
     end
-    ax[1].semilogx(atmdict[:H2O] ./ n_tot(atmdict; globvars...), GV.plot_grid, color=GV.speciescolor[:H2O], linewidth=2)
-    ax[1].semilogx(atmdict[:HDO] ./ n_tot(atmdict; globvars...), GV.plot_grid, color=GV.speciescolor[:HDO], linestyle=GV.speciesstyle[:HDO], linewidth=2)
+    ax[1].semilogx(atmdict[:H2O] ./ n_tot(atmdict, 1; globvars...), GV.plot_grid, color=GV.speciescolor[:H2O], linewidth=2) # MULTICOL WARNING - ihoriz hardcoded as 1 in n_tot arguments for now -- change this
+    ax[1].semilogx(atmdict[:HDO] ./ n_tot(atmdict, 1; globvars...), GV.plot_grid, color=GV.speciescolor[:HDO], linestyle=GV.speciesstyle[:HDO], linewidth=2) # MULTICOL WARNING - ihoriz hardcoded as 1 in n_tot arguments for now -- change this
     ax[1].set_xlabel("Mixing Ratio")
     ax[1].set_ylabel("Altitude (km)")
     ax[1].set_xticks(collect(logrange(1e-12, 1e-2, 6)))
@@ -1181,11 +1181,11 @@ function plot_water_profile(atmdict, savepath::String; showonly=false, watersat=
 
     # ppm ----------------------------
     if prev_profs != nothing
-        ax[3].semilogx((prev_profs[1] ./ n_tot(atmdict; globvars...)) ./ 1e-6, GV.plot_grid, color=prevcol)
-        ax[3].semilogx((prev_profs[2] ./ n_tot(atmdict; globvars...)) ./ 1e-6, GV.plot_grid, color=prevcol, linestyle=GV.speciesstyle[:HDO])
+        ax[3].semilogx((prev_profs[1] ./ n_tot(atmdict, 1; globvars...)) ./ 1e-6, GV.plot_grid, color=prevcol) # MULTICOL WARNING - ihoriz hardcoded as 1 in n_tot arguments for now -- change this
+        ax[3].semilogx((prev_profs[2] ./ n_tot(atmdict, 1; globvars...)) ./ 1e-6, GV.plot_grid, color=prevcol, linestyle=GV.speciesstyle[:HDO]) # MULTICOL WARNING - ihoriz hardcoded as 1 in n_tot arguments for now -- change this
     end
-    ax[3].semilogx((atmdict[:H2O] ./ n_tot(atmdict; globvars...)) ./ 1e-6, GV.plot_grid, color=GV.speciescolor[:H2O], linewidth=2)
-    ax[3].semilogx((atmdict[:HDO] ./ n_tot(atmdict; globvars...)) ./ 1e-6, GV.plot_grid, color=GV.speciescolor[:HDO], linestyle=GV.speciesstyle[:HDO], linewidth=2)
+    ax[3].semilogx((atmdict[:H2O] ./ n_tot(atmdict, 1; globvars...)) ./ 1e-6, GV.plot_grid, color=GV.speciescolor[:H2O], linewidth=2) # MULTICOL WARNING - ihoriz hardcoded as 1 in n_tot arguments for now -- change this
+    ax[3].semilogx((atmdict[:HDO] ./ n_tot(atmdict, 1; globvars...)) ./ 1e-6, GV.plot_grid, color=GV.speciescolor[:HDO], linestyle=GV.speciesstyle[:HDO], linewidth=2) # MULTICOL WARNING - ihoriz hardcoded as 1 in n_tot arguments for now -- change this
     ax[3].set_xlabel("ppmv")
     ax[3].set_xticks([1e-5, 1e-4, 1e-3, 1e-2, 1e-1, 1e0, 1e1, 1e2, 1e3])
     ax[3].set_xlim(1e-5, 1e3)
@@ -1281,7 +1281,7 @@ function top_mechanisms(x, sp, atmdict, p_or_r, n_horiz; savepath=nothing, filen
     	rc_funcs = Dict([rxn => mk_function(:((Tn, Ti, Te, M) -> $(rxn[3]))) for rxn in relevant_reactions]);
     
 	# Atmospheric density
-    	Mtot = n_tot(atmdict; GV.all_species) # MULTICOL WARNING uses same values for all vertical columns (or perhaps doesn't work at all)
+    	Mtot = n_tot(atmdict, 1; GV.all_species) # MULTICOL WARNING uses same values for all vertical columns (or perhaps doesn't work at all)# MULTICOL WARNING - ihoriz hardcoded as 1 in n_tot arguments for now -- change this 
     
 	# Reaction strings used for labeling dataframes
     	rxn_strings = vec([format_chemistry_string(r[1], r[2]) for r in relevant_reactions])

@@ -100,7 +100,7 @@ function prum_to_ppm(sp, prum, atmdict; globvars...)
     check_requirements(keys(GV), required)
 
     colabund = colabund_from_prum(sp, prum; globvars...)
-    nt_sum = sum(n_tot(atmdict; GV.all_species) ) * dz # get total inventory of whole atmosphere, flat
+    nt_sum = sum(n_tot(atmdict, 1; GV.all_species) ) * dz # get total inventory of whole atmosphere, flat # MULTICOL WARNING - ihoriz hardcoded as 1 in n_tot arguments for now -- change this
 
     return (colabund/nt_sum) / 1e-6 # return ppm
 end

@@ -25,7 +25,7 @@ function calculate_and_write_column_rates(rxn_filename, atm_state, n_horiz; glob
     # Get the Jrates, needed later
     Jratedict = Dict([j=>atm_state[j] for j in keys(atm_state) if occursin("J", string(j))]);
     
-    Mtot = n_tot(atm_state; GV.all_species);
+    Mtot = n_tot(atm_state, 1; GV.all_species); # MULTICOL WARNING - ihoriz hardcoded as 1 in n_tot arguments for now -- change this
     
     # Open the active reactions file
     the_spreadsheet_file = GV.results_dir*GV.sim_folder_name*"/"*rxn_filename

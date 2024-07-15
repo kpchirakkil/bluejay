@@ -122,7 +122,7 @@ function find_exobase(sp::Symbol, atmdict::Dict{Symbol, Vector{ftype_ncur}}; ret
     check_requirements(keys(GV), required)
 
     H_s = scaleH(GV.non_bdy_layers, sp, GV.Tn[2:end-1]; globvars...)
-    mfp_sp = 1 ./ (GV.collision_xsect[sp] .* n_tot(atmdict; GV.all_species, GV.n_alt_index))
+    mfp_sp = 1 ./ (GV.collision_xsect[sp] .* n_tot(atmdict, 1; GV.all_species, GV.n_alt_index)) # MULTICOL WARNING - ihoriz hardcoded as 1 in n_tot arguments for now -- change this
     exobase_alt = findfirst(mfp_sp .>= H_s)
 
     if typeof(exobase_alt)==Nothing # If no exobase is found, use the top of the atmosphere.
@@ -171,10 +171,10 @@ function meanmass(atmdict::Dict{Symbol, Vector{Array{ftype_ncur}}}, n_horiz::Int
     # Multiply densities of each species by appropriate molecular mass 
     mul!(weighted_mm, n_mat[:,:,1], m) # MULTICOL WARNING hardcoded to use the first vertical column for all columns
 
-    return weighted_mm ./ n_tot(trimmed_atmdict; all_species=counted_species, GV.n_alt_index)
+    return weighted_mm ./ n_tot(trimmed_atmdict, 1; all_species=counted_species, GV.n_alt_index) # MULTICOL WARNING - ihoriz hardcoded as 1 in n_tot arguments for now -- change this 
 end
 
-function n_tot(atmdict::Dict{Symbol, Vector{Array{ftype_ncur}}}, z; ignore=[], globvars...)
+function n_tot(atmdict::Dict{Symbol, Vector{Array{ftype_ncur}}}, z, ihoriz::Int64; ignore=[], globvars...)
     #= 
     Calculates total atmospheric density at altitude z.
 
@@ -182,6 +182,7 @@ function n_tot(atmdict::Dict{Symbol, Vector{Array{ftype_ncur}}}, z; ignore=[], g
         atmdict: dictionary of atmospheric density profiles by altitude
         z: altitude, in cm
         ignore: Set; contains symbols representing species to ignore in the calculation
+        ihoriz: vertical column index
     Output: 
         Density of the atmosphere at altitude z
     =#
@@ -192,16 +193,17 @@ function n_tot(atmdict::Dict{Symbol, Vector{Array{ftype_ncur}}}, z; ignore=[], g
     counted_species = setdiff(GV.all_species, ignore)
 
     thisaltindex = GV.n_alt_index[z]
-    return sum( [atmdict[s][1][thisaltindex] for s in counted_species] ) # MULTICOL WARNING hardcoded to the first vertical column; will need changing if want different values for each column
+    return sum( [atmdict[s][ihoriz][thisaltindex] for s in counted_species] ) # MULTICOL WARNING hardcoded to the first vertical column; will need changing if want different values for each column. Mid-fix
 end
 
-function n_tot(atmdict::Dict{Symbol, Vector{Array{ftype_ncur}}}; ignore=[], globvars...)
+function n_tot(atmdict::Dict{Symbol, Vector{Array{ftype_ncur}}}, ihoriz::Int64; ignore=[], globvars...)
     #= 
     Override to calculate total atmospheric density at all altitudes.
 
     Input: 
         atmdict: dictionary of atmospheric density profiles by altitude
         ignore: Set; contains symbols representing species to ignore in the calculation
+        ihoriz: vertical column index
     Output: 
         Density of the atmosphere at all non-boundary layer altitudes.
 
@@ -212,14 +214,14 @@ function n_tot(atmdict::Dict{Symbol, Vector{Array{ftype_ncur}}}; ignore=[], glob
     check_requirements(keys(GV), required)
 
     counted_species = setdiff(GV.all_species, ignore)
-    ndensities = zeros(length(counted_species), length(atmdict[collect(keys(atmdict))[1]][1])) # MULTICOL WARNING hardcoded to the first vertical column; will need changing if want different values for each column
+    ndensities = zeros(length(counted_species), length(atmdict[collect(keys(atmdict))[1]][ihoriz])) # MULTICOL WARNING hardcoded to the first vertical column; will need changing if want different values for each column. Mid-fix.
 
     for i in 1:length(counted_species)
-        ndensities[i, :] = atmdict[counted_species[i]][1] # MULTICOL WARNING hardcoded to the first vertical column; will need changing if want different values for each column
+        ndensities[i, :] = atmdict[counted_species[i]][ihoriz] # MULTICOL WARNING hardcoded to the first vertical column; will need changing if want different values for each column. Mid-fix
     end
 
     # returns the sum over all species at each altitude as a vector.
-    return vec(sum(ndensities, dims=1)) # MULTICOL WARNING hardcoded to the first vertical column; will need changing if want different values for each column
+    return vec(sum(ndensities, dims=1))
 end
 
 function optical_depth(n_cur_densities; globvars...)
@@ -1063,7 +1065,7 @@ function escape_probability(sp, atmdict; globvars...)::Array       # MULTICOL WA
                   "Venus"=>[0.868, 0.058]
                  )[GV.planet]
 
-    return params[1] .* exp.(-params[2] .* GV.collision_xsect[sp] .* column_density_above(n_tot(atmdict; GV.all_species, GV.dz); globvars...) ) 
+    return params[1] .* exp.(-params[2] .* GV.collision_xsect[sp] .* column_density_above(n_tot(atmdict, 1; GV.all_species, GV.dz); globvars...) )  # MULTICOL WARNING hardcoded ihoriz as 1 in n_tot arguments -- change
 end
 
 function escaping_hot_atom_production(sp, source_rxns, source_rxn_rc_funcs, atmdict, Mtot, ihoriz; returntype="array", globvars...)
@@ -1753,13 +1755,13 @@ function Dcoef_neutrals(z, sp::Symbol, b, atmdict::Dict{Symbol, Vector{ftype_ncu
     check_requirements(keys(GV), required)
 
     if (typeof(z)==Float64) & (typeof(b)==Float64)
-        return b ./ n_tot(atmdict, z; GV.all_species, GV.n_alt_index)
+        return b ./ n_tot(atmdict, z, 1; GV.all_species, GV.n_alt_index) # MULTICOL WARNING - ihoriz hardcoded as 1 for now -- change this
     else 
-        return b ./ n_tot(atmdict; GV.all_species, GV.n_alt_index)
+        return b ./ n_tot(atmdict, 1; GV.all_species, GV.n_alt_index)  # MULTICOL WARNING - ihoriz hardcoded as 1 for now -- change this
     end
 end
 
-function Dcoef!(D_arr, T_arr, sp::Symbol, atmdict::Dict{Symbol, Vector{Array{ftype_ncur}}}; globvars...) 
+function Dcoef!(D_arr, T_arr, sp::Symbol, atmdict::Dict{Symbol, Vector{Array{ftype_ncur}}}, n_horiz::Int64; globvars...) 
     #=
     Calculates the molecular diffusion coefficient for an atmospheric layer.
     For neutrals, returns D = AT^s/n, from Banks and Kockarts Aeronomy, part B, pg 41, eqn 
@@ -1785,7 +1787,7 @@ function Dcoef!(D_arr, T_arr, sp::Symbol, atmdict::Dict{Symbol, Vector{Array{fty
     if GV.use_molec_diff==true
         # Calculate as if it was a neutral - not using function above because this is faster than going into 
         # the function and using an if/else block since we know we'll always have vectors in this case.
-        D_arr[:] .= (binary_dcoeff_inCO2(sp, T_arr)) ./ n_tot(atmdict; GV.all_species, GV.n_alt_index)
+        D_arr[:] .= (binary_dcoeff_inCO2(sp, T_arr)) ./ n_tot(atmdict, 1; GV.all_species, GV.n_alt_index)  # MULTICOL WARNING - ihoriz hardcoded as 1 in n_tot arguments for now -- change this. Mid-fix
         if (GV.use_ambipolar==false) & (charge_type(sp)=="ion")# temporarily disallow molecular diffusion for ions
             D_arr[:] .= 0
         end
@@ -1804,7 +1806,7 @@ function Dcoef!(D_arr, T_arr, sp::Symbol, atmdict::Dict{Symbol, Vector{Array{fty
             # create the sum of nu_in. Note that this depends on density, but we only have density for the real layers,
             # so we have to assume the density at the boundary layers is the same as at the real layers.
             for n in GV.neutral_species
-                species_density = atmdict[n][1] # MULTICOL WARNING hardcoded for just first vertical column
+                species_density = atmdict[n][1] # MULTICOL WARNING hardcoded for just first vertical column.
 
                 # This sets the species density to a boundary condition if it exists. 
                 if haskey(GV.speciesbclist, n)
@@ -2092,7 +2094,7 @@ thermaldiff(sp) = get(Dict(:H=>-0.25, :H2=>-0.25, :D=>-0.25, :HD=>-0.25,
                                 :Hepl=>-0.25), sp, 0)
 
 function update_diffusion_and_scaleH(species_list, atmdict::Dict{Symbol, Vector{Array{ftype_ncur}}}, D_coefs, n_horiz::Int64; globvars...) 
-    #=
+    #= # MULTICOL WARNING to do: return K, H0_dict and Dcoef_dict with additional dimension/flexibility for n_horiz vertical columns. Also, will need to update comments
     Input:
         atmdict: Atmospheric state dictionary without boundary layers
         Tn: Neutral temperature profile
@@ -2104,7 +2106,7 @@ function update_diffusion_and_scaleH(species_list, atmdict::Dict{Symbol, Vector{
                  rate balances after the run.
     Output:
         K: Vector of eddy diffusion coefficient by altitude. Independent of species.
-        Dcoefs: Dictionary of molecular diffusion by altitude. Keys are species: species=>[D by altitude] 
+        Dcoefs: Dictionary of molecular diffusion by altitude. Keys are species: species=>[D by altitude]  # MULTICOL WARNING update comment when done
         H0: Dictionary of mean atmospheric scale height by altitude. Keys are "neutral" and "ion". 
     =#
     GV = values(globvars)
@@ -2114,12 +2116,17 @@ function update_diffusion_and_scaleH(species_list, atmdict::Dict{Symbol, Vector{
 
     ncur_with_bdys = ncur_with_boundary_layers(atmdict, n_horiz; GV.n_alt_index, GV.all_species)
     
-    K = Keddy(GV.alt, n_tot(ncur_with_bdys; GV.all_species, GV.n_alt_index); GV.planet)
-    H0_dict = Dict{String, Vector{ftype_ncur}}("neutral"=>scaleH(ncur_with_bdys, GV.Tn, n_horiz; globvars...),
-                                               "ion"=>scaleH(ncur_with_bdys, GV.Tp, n_horiz; globvars...))
     
-    # Molecular diffusion is only needed for transport species, though.  
-    Dcoef_dict = Dict{Symbol, Vector{ftype_ncur}}([s=>deepcopy(Dcoef!(D_coefs, GV.Tprof_for_diffusion[charge_type(s)], s, ncur_with_bdys; globvars...)) for s in species_list])
+    K = Keddy(GV.alt, n_tot(ncur_with_bdys, 1; GV.all_species, GV.n_alt_index); GV.planet)  # MULTICOL WARNING - ihoriz hardcoded as 1 in n_tot arguments for now -- change this
+    # MULTICOL WARNING  - below is very hardcoded way to provide K profile for each vertical column -- will eventually need to happen within Keddy function
+    #K = [K for ihoriz in 1:n_horiz]
+    H0_dict = Dict{String, Vector{ftype_ncur}}("neutral"=>scaleH(ncur_with_bdys, GV.Tn, n_horiz; globvars...), # original -- delete me
+                                               "ion"=>scaleH(ncur_with_bdys, GV.Tp, n_horiz; globvars...))     # original -- delete me
+    #H0_dict = Dict{String, Vector{Vector{ftype_ncur}}}("neutral"=>[scaleH(ncur_with_bdys, GV.Tn, n_horiz; globvars...) for ihoriz in 1:n_horiz], # MULTICOL new
+    #                                           "ion"=>[scaleH(ncur_with_bdys, GV.Tp, n_horiz; globvars...) for ihoriz in 1:n_horiz]) # MULTICOL new
+
+    # Molecular diffusion is only needed for transport species, though.
+    Dcoef_dict = Dict{Symbol, Vector{ftype_ncur}}([s=>deepcopy(Dcoef!(D_coefs, GV.Tprof_for_diffusion[charge_type(s)], s, ncur_with_bdys, n_horiz; globvars...)) for s in species_list]) # original -- delete me. # HARDCODED
 
     return K, H0_dict, Dcoef_dict
 end
@@ -2314,7 +2321,7 @@ function set_h2oinitfrac_bySVP(atmdict, h_alt; globvars...)
                :H2Osat, :water_mixing_ratio]
     check_requirements(keys(GV), required)
 
-    H2Osatfrac = GV.H2Osat ./ map(z->n_tot(atmdict, z; GV.all_species, GV.n_alt_index), GV.alt)  # get SVP as fraction of total atmo
+    H2Osatfrac = GV.H2Osat ./ map(z->n_tot(atmdict, z, 1; GV.all_species, GV.n_alt_index), GV.alt)  # get SVP as fraction of total atmo # MULTICOL WARNING - ihoriz hardcoded as 1 in n_tot arguments for now -- change this
 
     # set H2O SVP fraction to minimum for all alts above first time min is reached
     H2Oinitfrac = H2Osatfrac[1:something(findfirst(isequal(minimum(H2Osatfrac)), H2Osatfrac), 0)]
@@ -2377,9 +2384,9 @@ function setup_water_profile!(atmdict; constfrac=1, dust_storm_on=false, make_sa
 
         # set the water profiles 
         # ===========================================================================================================
-        atmdict[:H2O] = H2Oinitfrac.*n_tot(atmdict; GV.n_alt_index, GV.all_species)
+        atmdict[:H2O] = H2Oinitfrac.*n_tot(atmdict, 1; GV.n_alt_index, GV.all_species)  # MULTICOL WARNING - ihoriz hardcoded as 1 in n_tot arguments for now -- change this
         atmdict[:HDO] = 2 * GV.DH * atmdict[:H2O] 
-        HDOinitfrac = atmdict[:HDO] ./ n_tot(atmdict; GV.n_alt_index, GV.all_species)  # Needed to make water plots.
+        HDOinitfrac = atmdict[:HDO] ./ n_tot(atmdict, 1; GV.n_alt_index, GV.all_species)  # Needed to make water plots. # MULTICOL WARNING - ihoriz hardcoded as 1 in n_tot arguments for now -- change this
 
         # Add a gaussian parcel of water, to simulate the effect of a dust storm
         # ===========================================================================================================
@@ -2387,12 +2394,12 @@ function setup_water_profile!(atmdict; constfrac=1, dust_storm_on=false, make_sa
             sigma = 12.5
             H2Oppm = 1e-6*map(z->GV.H2O_excess .* exp(-((z-GV.ealt)/sigma)^2), GV.non_bdy_layers/1e5) + H2Oinitfrac 
             HDOppm = 1e-6*map(z->GV.HDO_excess .* exp(-((z-GV.ealt)/sigma)^2), GV.non_bdy_layers/1e5) + HDOinitfrac
-            atmdict[:H2O][1:GV.upper_lower_bdy_i] = (H2Oppm .* n_tot(atmdict; GV.n_alt_index, GV.all_species))[1:GV.upper_lower_bdy_i]
-            atmdict[:HDO][1:GV.upper_lower_bdy_i] = (HDOppm .* n_tot(atmdict; GV.all_species))[1:GV.upper_lower_bdy_i]
+            atmdict[:H2O][1:GV.upper_lower_bdy_i] = (H2Oppm .* n_tot(atmdict, 1; GV.n_alt_index, GV.all_species))[1:GV.upper_lower_bdy_i] # MULTICOL WARNING - ihoriz hardcoded as 1 in n_tot arguments for now -- change this
+            atmdict[:HDO][1:GV.upper_lower_bdy_i] = (HDOppm .* n_tot(atmdict, 1; GV.all_species))[1:GV.upper_lower_bdy_i] # MULTICOL WARNING - ihoriz hardcoded as 1 in n_tot arguments for now -- change this
         end
     elseif GV.planet=="Venus"
         # TODO: Add a more interesting implementation as needed.
-        atmdict[:H2O] = constfrac .* n_tot(atmdict; GV.n_alt_index, GV.all_species)
+        atmdict[:H2O] = constfrac .* n_tot(atmdict, 1; GV.n_alt_index, GV.all_species) # MULTICOL WARNING - ihoriz hardcoded as 1 in n_tot arguments for now -- change this
         atmdict[:HDO] = 2 * GV.DH * atmdict[:H2O] 
     end
 
