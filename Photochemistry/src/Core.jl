@@ -1763,6 +1763,7 @@ end
 
 function Dcoef!(D_arr, T_arr, sp::Symbol, atmdict::Dict{Symbol, Vector{Array{ftype_ncur}}}, n_horiz::Int64; globvars...) 
     #=
+    # MULTICOL WARNING -- this function was acting differently when it was called n_horiz separate times rather than once (with the loop through vertical columns inside the function). In the former, the first value within D_arr for each column and neutral species was changed -- I think due to the updating of atmdict (and therefore n_tot) each time. Haven't quite got to the bottom of why that was happening, but this version (the latter) reproduces what was calculated with just one column in the original.
     Calculates the molecular diffusion coefficient for an atmospheric layer.
     For neutrals, returns D = AT^s/n, from Banks and Kockarts Aeronomy, part B, pg 41, eqn 
     15.30 and table 15.2 footnote.
@@ -1784,47 +1785,48 @@ function Dcoef!(D_arr, T_arr, sp::Symbol, atmdict::Dict{Symbol, Vector{Array{fty
     required = [:all_species, :molmass, :neutral_species, :n_alt_index, :polarizability, :q, :speciesbclist, :use_ambipolar, :use_molec_diff]
     check_requirements(keys(GV), required)
 
-    if GV.use_molec_diff==true
-        # Calculate as if it was a neutral - not using function above because this is faster than going into 
-        # the function and using an if/else block since we know we'll always have vectors in this case.
-        D_arr[:] .= (binary_dcoeff_inCO2(sp, T_arr)) ./ n_tot(atmdict, 1; GV.all_species, GV.n_alt_index)  # MULTICOL WARNING - ihoriz hardcoded as 1 in n_tot arguments for now -- change this. Mid-fix
-        if (GV.use_ambipolar==false) & (charge_type(sp)=="ion")# temporarily disallow molecular diffusion for ions
-            D_arr[:] .= 0
+    for ihoriz in 1:n_horiz
+        if GV.use_molec_diff==true
+            # Calculate as if it was a neutral - not using function above because this is faster than going into 
+            # the function and using an if/else block since we know we'll always have vectors in this case.
+            D_arr[ihoriz] .= (binary_dcoeff_inCO2(sp, T_arr)) ./ n_tot(atmdict, ihoriz; GV.all_species, GV.n_alt_index)  # MULTICOL WARNING - ihoriz hardcoded as 1 in n_tot arguments for now -- change this. Mid-fix
+            if (GV.use_ambipolar==false) & (charge_type(sp)=="ion")# temporarily disallow molecular diffusion for ions
+                D_arr[ihoriz] .= 0
+            end
+        else
+            D_arr[ihoriz] .= 0 
         end
-    else
-        D_arr[:] .= 0 
-    end
 
-    # If an ion, overwrite with the ambipolar diffusion
-    if GV.use_ambipolar==true
-        if charge_type(sp) == "ion"
-            # a place to store the density array and nu_in
-            species_density = zeros(size(T_arr))
-            sum_nu_in = zeros(size(T_arr))
+        # If an ion, overwrite with the ambipolar diffusion
+        if GV.use_ambipolar==true
+            if charge_type(sp) == "ion"
+                # a place to store the density array and nu_in
+                species_density = [zeros(size(T_arr)) for ihoriz in 1:n_horiz]
+                sum_nu_in = [zeros(size(T_arr)) for ihoriz in 1:n_horiz]
 
-            # mi = GV.molmass[sp] .* mH
-            # create the sum of nu_in. Note that this depends on density, but we only have density for the real layers,
-            # so we have to assume the density at the boundary layers is the same as at the real layers.
-            for n in GV.neutral_species
-                species_density = atmdict[n][1] # MULTICOL WARNING hardcoded for just first vertical column.
+                # mi = GV.molmass[sp] .* mH
+                # create the sum of nu_in. Note that this depends on density, but we only have density for the real layers,
+                # so we have to assume the density at the boundary layers is the same as at the real layers.
+                for n in GV.neutral_species
+                    species_density[ihoriz] = atmdict[n][ihoriz] # MULTICOL WARNING hardcoded for just first vertical column.
 
-                # This sets the species density to a boundary condition if it exists. 
-                if haskey(GV.speciesbclist, n)
-                    if haskey(GV.speciesbclist[n], "n") 
-                        if !isnan(GV.speciesbclist[n]["n"][1])
-                            species_density[1] = GV.speciesbclist[n]["n"][1]
-                        end
-                        if !isnan(GV.speciesbclist[n]["n"][2]) # currently this should never apply.
-                            species_density[end] = GV.speciesbclist[n]["n"][2]
+                    # This sets the species density to a boundary condition if it exists. 
+                    if haskey(GV.speciesbclist, n)
+                        if haskey(GV.speciesbclist[n], "n")
+                            if !isnan(GV.speciesbclist[n]["n"][1]) # MULTICOL WARNING speciesbclist doesn't differentiate between columns yet. Eventually make this speciesbclist[n]["n"][ihoriz][1]
+                                species_density[ihoriz][1] = GV.speciesbclist[n]["n"][1] # MULTICOL WARNING speciesbclist doesn't differentiate between columns yet. Eventually make this speciesbclist[n]["n"][ihoriz][1] 
+                            end
+                            if !isnan(GV.speciesbclist[n]["n"][2]) # currently this should never apply. # MULTICOL WARNING speciesbclist doesn't differentiate between columns yet. Eventually make this speciesbclist[n]["n"][ihoriz][2]
+                                species_density[ihoriz][end] = GV.speciesbclist[n]["n"][2] # MULTICOL WARNING speciesbclist doesn't differentiate between columns yet. Eventually make this speciesbclist[n]["n"][ihoriz][2]
+                            end
                         end
                     end
-                end
                 
-                sum_nu_in .+= 2 .* pi .* (((GV.polarizability[n] .* GV.q .^ 2) ./ reduced_mass(GV.molmass[sp], GV.molmass[n])) .^ 0.5) .* species_density
+                    sum_nu_in[ihoriz] .+= 2 .* pi .* (((GV.polarizability[n] .* GV.q .^ 2) ./ reduced_mass(GV.molmass[sp], GV.molmass[n])) .^ 0.5) .* species_density[ihoriz]
 
+                end
+            D_arr[ihoriz] .= (kB .* T_arr) ./ (GV.molmass[sp] .* mH .* sum_nu_in[ihoriz]) # MULTICOL WARNING go back and check that the ion values are the same as they were originally for one column
             end
-            
-            D_arr .= (kB .* T_arr) ./ (GV.molmass[sp] .* mH .* sum_nu_in)
 
         end
     end
@@ -1855,7 +1857,7 @@ diffparams(s) = get(Dict(:H=>[8.4, 0.597], :H2=>[2.23, 0.75],
                          :Dpl=>[5.98, 0.597], :HDpl=>[1.84, 0.75]),
                         s,[1.0, 0.75])
 
-function fluxcoefs(sp::Symbol, Kv, Dv, H0v; globvars...)
+function fluxcoefs(sp::Symbol, Kv, Dv, H0v, ihoriz::Int64; globvars...)
     #= 
     base function to generate flux coefficients of the transport network. 
     
@@ -1872,6 +1874,7 @@ function fluxcoefs(sp::Symbol, Kv, Dv, H0v; globvars...)
         Tv_p: plasma temperature
         Hsv: scale height by species
         H0v: mean atmospheric scale height
+        ihoriz: vertical column index
     Outputs:
         Arrays of coefficients (units 1/s) at each atmospheric layer for downward and upward flux.
         Note that even though it's defined as being between a layer and the one above or below, the value is 
@@ -1906,7 +1909,7 @@ function fluxcoefs(sp::Symbol, Kv, Dv, H0v; globvars...)
     H0u = zeros(GV.n_all_layers)
 
     # Calculate the coefficients between this layer and the lower layer. 
-    Dl[2:end] = @. (Dv[sp][1:end-1] + Dv[sp][2:end]) /  2.0
+    Dl[2:end] = @. (Dv[sp][ihoriz][1:end-1] + Dv[sp][ihoriz][2:end]) /  2.0
     Kl[2:end] = @. (Kv[1:end-1] + Kv[2:end]) / 2.0
     Tl_n[2:end] = @. (GV.Tn[1:end-1] + GV.Tn[2:end]) / 2.0
     Tl_p[2:end] = @. (GV.Tp[1:end-1] + GV.Tp[2:end]) / 2.0
@@ -1917,7 +1920,7 @@ function fluxcoefs(sp::Symbol, Kv, Dv, H0v; globvars...)
 
     if GV.planet=="Mars"
         # Handle the lower boundary layer:
-        Dl[1] = @. (1 + Dv[sp][1]) /  2.0
+        Dl[1] = @. (1 + Dv[sp][ihoriz][1]) /  2.0
         Kl[1] = @. (1 + Kv[1]) / 2.0
         Tl_n[1] = @. (1 + GV.Tn[1]) / 2.0
         Tl_p[1] = @. (1 + GV.Tp[1]) / 2.0
@@ -1939,7 +1942,7 @@ function fluxcoefs(sp::Symbol, Kv, Dv, H0v; globvars...)
     end
 
     # Upward transport from each altitude to the cell above
-    Du[1:end-1] = @. (Dv[sp][1:end-1] + Dv[sp][2:end]) /  2.0
+    Du[1:end-1] = @. (Dv[sp][ihoriz][1:end-1] + Dv[sp][ihoriz][2:end]) /  2.0
     Ku[1:end-1] = @. (Kv[1:end-1] + Kv[2:end]) / 2.0
     Tu_n[1:end-1] = @. (GV.Tn[1:end-1] + GV.Tn[2:end]) / 2.0
     Tu_p[1:end-1] = @. (GV.Tp[1:end-1] + GV.Tp[2:end]) / 2.0
@@ -1950,7 +1953,7 @@ function fluxcoefs(sp::Symbol, Kv, Dv, H0v; globvars...)
 
     if GV.planet=="Mars"
         # Handle upper boundary layer:
-        Du[end] = @. (Dv[sp][end] + 1) /  2.0
+        Du[end] = @. (Dv[sp][ihoriz][end] + 1) /  2.0
         Ku[end] = @. (Kv[end] + 1) / 2.0
         Tu_n[end] = @. (GV.Tn[end] + 1) / 2.0
         Tu_p[end] = @. (GV.Tp[end] + 1) / 2.0
@@ -2041,7 +2044,7 @@ function fluxcoefs(species_list::Vector, K, D, H0, n_horiz::Int64; globvars...)
 
     for s in species_list
         for ihoriz in [1:n_horiz;]
-            layer_below_coefs, layer_above_coefs = fluxcoefs(s, K, D, H0; globvars...) # MULTICOL WARNING to do -- allow for use of different values here 
+            layer_below_coefs, layer_above_coefs = fluxcoefs(s, K, D, H0, ihoriz; globvars...) # MULTICOL WARNING to do -- allow for use of different values here 
             fluxcoef_dict[s][ihoriz][:, 1] .= layer_below_coefs
             fluxcoef_dict[s][ihoriz][:, 2] .= layer_above_coefs
         end
@@ -2125,8 +2128,10 @@ function update_diffusion_and_scaleH(species_list, atmdict::Dict{Symbol, Vector{
     #H0_dict = Dict{String, Vector{Vector{ftype_ncur}}}("neutral"=>[scaleH(ncur_with_bdys, GV.Tn, n_horiz; globvars...) for ihoriz in 1:n_horiz], # MULTICOL new
     #                                           "ion"=>[scaleH(ncur_with_bdys, GV.Tp, n_horiz; globvars...) for ihoriz in 1:n_horiz]) # MULTICOL new
 
+ #   D_coefs = [zeros(9) for ihoriz in 1:n_horiz] 
     # Molecular diffusion is only needed for transport species, though.
-    Dcoef_dict = Dict{Symbol, Vector{ftype_ncur}}([s=>deepcopy(Dcoef!(D_coefs, GV.Tprof_for_diffusion[charge_type(s)], s, ncur_with_bdys, n_horiz; globvars...)) for s in species_list]) # original -- delete me. # HARDCODED
+    Dcoef_dict = Dict{Symbol, Vector{Vector{ftype_ncur}}}([s=>deepcopy(Dcoef!(D_coefs, GV.Tprof_for_diffusion[charge_type(s)], s, ncur_with_bdys, n_horiz; globvars...)) for s in species_list]) # HARDCODED
+ #   print("Dcoef_dict: ",Dcoef_dict,'\n')
 
     return K, H0_dict, Dcoef_dict
 end

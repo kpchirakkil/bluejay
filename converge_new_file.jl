@@ -2092,7 +2092,7 @@ if ftype_ncur==Double64
     find_nonfinites(nstart, collec_name="nstart")
 
     # Set up parameters
-    Dcoef_arr_template = zeros(size(Tn_arr)) # For making diffusion coefficient calculation go faster
+    Dcoef_arr_template = [zeros(size(Tn_arr)) for ihoriz in 1:n_horiz] # For making diffusion coefficient calculation go faster
     #Dcoef_arr_template = [zeros(size(Tn_arr)) for ihoriz in 1:n_horiz]  # For making diffusion coefficient calculation go faster. # MULTICOL WARNING new version
     params = [#inactive, inactive_species, active_species, active_longlived, active_shortlived, Tn_arr, Ti_arr, Te_arr, Tplasma_arr, 
               Dcoef_arr_template, M, E] # E FIX ATTEMPT
@@ -2121,7 +2121,7 @@ println("Time to beginning convergence is $(format_sec_or_min(time()-t1))\n\n")
 ti = time()
 println("$(Dates.format(now(), "(HH:MM:SS)")) Beginning convergence")
 
-Dcoef_arr_template = zeros(size(Tn_arr)) # initialize diffusion coefficient array
+Dcoef_arr_template = [zeros(size(Tn_arr)) for ihoriz in 1:n_horiz] # initialize diffusion coefficient array
 #Dcoef_arr_template = [zeros(size(Tn_arr)) for ihoriz in 1:n_horiz] # initialize diffusion coefficient array # MULTICOL WARNING new version
 
 atm_soln = Dict()
