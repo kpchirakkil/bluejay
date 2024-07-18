@@ -1910,7 +1910,7 @@ function fluxcoefs(sp::Symbol, Kv, Dv, H0v, ihoriz::Int64; globvars...)
 
     # Calculate the coefficients between this layer and the lower layer. 
     Dl[2:end] = @. (Dv[sp][ihoriz][1:end-1] + Dv[sp][ihoriz][2:end]) /  2.0
-    Kl[2:end] = @. (Kv[1:end-1] + Kv[2:end]) / 2.0
+    Kl[2:end] = @. (Kv[ihoriz][1:end-1] + Kv[ihoriz][2:end]) / 2.0
     Tl_n[2:end] = @. (GV.Tn[1:end-1] + GV.Tn[2:end]) / 2.0
     Tl_p[2:end] = @. (GV.Tp[1:end-1] + GV.Tp[2:end]) / 2.0
     dTdzl_n[2:end] = @. (GV.Tn[2:end] - GV.Tn[1:end-1]) / GV.dz
@@ -1921,7 +1921,7 @@ function fluxcoefs(sp::Symbol, Kv, Dv, H0v, ihoriz::Int64; globvars...)
     if GV.planet=="Mars"
         # Handle the lower boundary layer:
         Dl[1] = @. (1 + Dv[sp][ihoriz][1]) /  2.0
-        Kl[1] = @. (1 + Kv[1]) / 2.0
+        Kl[1] = @. (1 + Kv[ihoriz][1]) / 2.0
         Tl_n[1] = @. (1 + GV.Tn[1]) / 2.0
         Tl_p[1] = @. (1 + GV.Tp[1]) / 2.0
         dTdzl_n[1] = @. (GV.Tn[1] - 1) / GV.dz
@@ -1943,7 +1943,7 @@ function fluxcoefs(sp::Symbol, Kv, Dv, H0v, ihoriz::Int64; globvars...)
 
     # Upward transport from each altitude to the cell above
     Du[1:end-1] = @. (Dv[sp][ihoriz][1:end-1] + Dv[sp][ihoriz][2:end]) /  2.0
-    Ku[1:end-1] = @. (Kv[1:end-1] + Kv[2:end]) / 2.0
+    Ku[1:end-1] = @. (Kv[ihoriz][1:end-1] + Kv[ihoriz][2:end]) / 2.0
     Tu_n[1:end-1] = @. (GV.Tn[1:end-1] + GV.Tn[2:end]) / 2.0
     Tu_p[1:end-1] = @. (GV.Tp[1:end-1] + GV.Tp[2:end]) / 2.0
     dTdzu_n[1:end-1] = @. (GV.Tn[2:end] - GV.Tn[1:end-1]) / GV.dz
@@ -1954,7 +1954,7 @@ function fluxcoefs(sp::Symbol, Kv, Dv, H0v, ihoriz::Int64; globvars...)
     if GV.planet=="Mars"
         # Handle upper boundary layer:
         Du[end] = @. (Dv[sp][ihoriz][end] + 1) /  2.0
-        Ku[end] = @. (Kv[end] + 1) / 2.0
+        Ku[end] = @. (Kv[ihoriz][end] + 1) / 2.0
         Tu_n[end] = @. (GV.Tn[end] + 1) / 2.0
         Tu_p[end] = @. (GV.Tp[end] + 1) / 2.0
         dTdzu_n[end] = @. (1 - GV.Tn[end]) / GV.dz
@@ -2108,8 +2108,8 @@ function update_diffusion_and_scaleH(species_list, atmdict::Dict{Symbol, Vector{
                  transport species during the main simulation run, and for all species when trying to plot 
                  rate balances after the run.
     Output:
-        K: Vector of eddy diffusion coefficient by altitude. Independent of species.
-        Dcoefs: Dictionary of molecular diffusion by altitude. Keys are species: species=>[D by altitude]  # MULTICOL WARNING update comment when done
+        K: Vector of vectors of eddy diffusion coefficient by altitude; one vector for each vertical column. Independent of species.
+        Dcoefs: Dictionary of molecular diffusion by altitude. Keys are species: species=>[[D by altitude] for each vertical column]
         H0: Dictionary of mean atmospheric scale height by altitude. Keys are "neutral" and "ion". 
     =#
     GV = values(globvars)
@@ -2119,8 +2119,7 @@ function update_diffusion_and_scaleH(species_list, atmdict::Dict{Symbol, Vector{
 
     ncur_with_bdys = ncur_with_boundary_layers(atmdict, n_horiz; GV.n_alt_index, GV.all_species)
     
-    
-    K = Keddy(GV.alt, n_tot(ncur_with_bdys, 1; GV.all_species, GV.n_alt_index); GV.planet)  # MULTICOL WARNING - ihoriz hardcoded as 1 in n_tot arguments for now -- change this
+    K = [Keddy(GV.alt, n_tot(ncur_with_bdys, ihoriz; GV.all_species, GV.n_alt_index); GV.planet) for ihoriz in 1:n_horiz]
     # MULTICOL WARNING  - below is very hardcoded way to provide K profile for each vertical column -- will eventually need to happen within Keddy function
     #K = [K for ihoriz in 1:n_horiz]
     H0_dict = Dict{String, Vector{ftype_ncur}}("neutral"=>scaleH(ncur_with_bdys, GV.Tn, n_horiz; globvars...), # original -- delete me
@@ -2128,10 +2127,8 @@ function update_diffusion_and_scaleH(species_list, atmdict::Dict{Symbol, Vector{
     #H0_dict = Dict{String, Vector{Vector{ftype_ncur}}}("neutral"=>[scaleH(ncur_with_bdys, GV.Tn, n_horiz; globvars...) for ihoriz in 1:n_horiz], # MULTICOL new
     #                                           "ion"=>[scaleH(ncur_with_bdys, GV.Tp, n_horiz; globvars...) for ihoriz in 1:n_horiz]) # MULTICOL new
 
- #   D_coefs = [zeros(9) for ihoriz in 1:n_horiz] 
     # Molecular diffusion is only needed for transport species, though.
     Dcoef_dict = Dict{Symbol, Vector{Vector{ftype_ncur}}}([s=>deepcopy(Dcoef!(D_coefs, GV.Tprof_for_diffusion[charge_type(s)], s, ncur_with_bdys, n_horiz; globvars...)) for s in species_list]) # HARDCODED
- #   print("Dcoef_dict: ",Dcoef_dict,'\n')
 
     return K, H0_dict, Dcoef_dict
 end

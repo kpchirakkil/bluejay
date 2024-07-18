@@ -302,7 +302,7 @@ end
 #                   Transport and escape functions                              #
 #===============================================================================#
 
-function diffusion_timescale(s::Symbol, T_arr::Array, atmdict; globvars...)
+function diffusion_timescale(s::Symbol, T_arr::Array, atmdict; globvars...) # MULTICOL WARNING need to edit this for multiple column flexibility in case it is called, as currently Dcoef! won't work as it is
     #=
     Inputs:
         s: species symbol
@@ -324,15 +324,16 @@ function diffusion_timescale(s::Symbol, T_arr::Array, atmdict; globvars...)
     ncur_with_bdys =  ncur_with_boundary_layers(atmdict, n_horiz; GV.all_species, GV.n_alt_index)
     
     # Molecular diffusion timescale: H_s^2 / D, scale height over diffusion constant
-    D = Dcoef!(Dcoef_template, T_arr, s, ncur_with_bdys; globvars...)
+    D = Dcoef!(Dcoef_template, T_arr, s, ncur_with_bdys; globvars...) # MULTICOL WARNING need to edit this so that the arguments for Dcoef! are correct. Needs additional argument n_horiz
     molec_or_ambi_timescale = (Hs .^ 2) ./ D
    
     # Eddy timescale... this was in here only as scale H... 
-    K = Keddy(alt, n_tot(ncur_with_bdys, 1; GV.all_species, GV.molmass); GV.planet)  # MULTICOL WARNING - ihoriz hardcoded as 1 in n_tot arguments for now -- change this
-    eddy_timescale = (Hs .^ 2) ./ K
+    K = [Keddy(alt, n_tot(ncur_with_bdys, ihoriz; GV.all_species, GV.molmass); GV.planet) for ihoriz in 1:n_horiz]
+    #eddy_timescale = (Hs .^ 2) ./ K # original
+    eddy_timescale = ([Hs for ihoriz in 1:n_horiz] .^ 2) ./ K # MULTICOL WARNING change when Hs is multidimensional
 
     # Combined timescale?!??
-    combined_timescale = (Hs .^ 2) ./ (K .+ D)
+    combined_timescale = ([Hs for ihoriz in 1:n_horiz] .^ 2) ./ (K .+ D) # MULTICOL WARNING change when Hs is multidimensional
 
     return molec_or_ambi_timescale, eddy_timescale, combined_timescale
 end
