@@ -136,12 +136,14 @@ function find_exobase(sp::Symbol, atmdict::Dict{Symbol, Vector{ftype_ncur}}; ret
     return returnme[returntype]
 end
 
-function meanmass(atmdict::Dict{Symbol, Vector{Array{ftype_ncur}}}, n_horiz::Int64; ignore=[], globvars...)
+function meanmass(atmdict::Dict{Symbol, Vector{Array{ftype_ncur}}}, n_horiz::Int64, ihoriz::Int64; ignore=[], globvars...)
     #= 
     Override for vector form. Calculates mean molecular mass at all atmospheric layers.
 
     Inputs:
         atmdict: Array; species number density by altitude
+        n_horiz: Integer; number of vertical columns in the model
+        ihoriz: Integer; vertical column index
         ignore: Set; contains symbols representing species to ignore in the calculation
 
     Outputs:
@@ -171,7 +173,7 @@ function meanmass(atmdict::Dict{Symbol, Vector{Array{ftype_ncur}}}, n_horiz::Int
     # Multiply densities of each species by appropriate molecular mass 
     mul!(weighted_mm, n_mat[:,:,1], m) # MULTICOL WARNING hardcoded to use the first vertical column for all columns
 
-    return weighted_mm ./ n_tot(trimmed_atmdict, 1; all_species=counted_species, GV.n_alt_index) # MULTICOL WARNING - ihoriz hardcoded as 1 in n_tot arguments for now -- change this 
+    return weighted_mm ./ n_tot(trimmed_atmdict, ihoriz; all_species=counted_species, GV.n_alt_index)
 end
 
 function n_tot(atmdict::Dict{Symbol, Vector{Array{ftype_ncur}}}, z, ihoriz::Int64; ignore=[], globvars...)
@@ -289,7 +291,7 @@ function reduced_mass(mA, mB)
     return ((1/(mA*mH)) + (1/(mB*mH)))^(-1)
 end
 
-function scaleH(z, sp::Symbol, T; globvars...)
+function scaleH(z, sp::Symbol, T; globvars...) # MULTICOL WARNING might need to include flexibility for different vertical columns at some point
     #=
     Input:
         z: Altitudes in cm
@@ -306,11 +308,13 @@ function scaleH(z, sp::Symbol, T; globvars...)
     return @. kB*T/(GV.molmass[sp]*mH*GV.M_P*bigG)*(((z+GV.R_P))^2)
 end
 
-function scaleH(atmdict::Dict{Symbol, Vector{Array{ftype_ncur}}}, T::Vector, n_horiz::Int64; ignore=[], globvars...)
+function scaleH(atmdict::Dict{Symbol, Vector{Array{ftype_ncur}}}, T::Vector, n_horiz::Int64, ihoriz::Int64; ignore=[], globvars...)
     #= 
     Input:
         atmdict: Present atmospheric state dictionary
         T: temperature array for the neutral atmosphere
+        n_horiz: number of vertical columns in the model
+        ihoriz: vertical column index
         ignore: Set; contains symbols representing species to ignore in the calculation
     Output:
         Mean atmospheric scale height at all altitudes (in cm)
@@ -322,7 +326,7 @@ function scaleH(atmdict::Dict{Symbol, Vector{Array{ftype_ncur}}}, T::Vector, n_h
 
     counted_species = setdiff(GV.all_species, ignore)
 
-    mm_vec = meanmass(atmdict, n_horiz; ignore=ignore, globvars...)
+    mm_vec = meanmass(atmdict, n_horiz, ihoriz; ignore=ignore, globvars...)
     return @. kB*T/(mm_vec*mH*GV.M_P*bigG)*(((GV.alt+GV.R_P))^2)
 end
 
@@ -1916,7 +1920,7 @@ function fluxcoefs(sp::Symbol, Kv, Dv, H0v, ihoriz::Int64; globvars...)
     dTdzl_n[2:end] = @. (GV.Tn[2:end] - GV.Tn[1:end-1]) / GV.dz
     dTdzl_p[2:end] = @. (GV.Tp[2:end] - GV.Tp[1:end-1]) / GV.dz
     Hsl[2:end] = @. (GV.Hs_dict[sp][1:end-1] + GV.Hs_dict[sp][2:end]) / 2.0
-    H0l[2:end] = @. (H0v[charge_type(sp)][1:end-1] + H0v[charge_type(sp)][2:end]) / 2.0
+    H0l[2:end] = @. (H0v[charge_type(sp)][ihoriz][1:end-1] + H0v[charge_type(sp)][ihoriz][2:end]) / 2.0
 
     if GV.planet=="Mars"
         # Handle the lower boundary layer:
@@ -1927,7 +1931,7 @@ function fluxcoefs(sp::Symbol, Kv, Dv, H0v, ihoriz::Int64; globvars...)
         dTdzl_n[1] = @. (GV.Tn[1] - 1) / GV.dz
         dTdzl_p[1] = @. (GV.Tp[1] - 1) / GV.dz
         Hsl[1] = @. (1 + GV.Hs_dict[sp][1]) / 2.0
-        H0l[1] = @. (1 + H0v[charge_type(sp)][1]) / 2.0
+        H0l[1] = @. (1 + H0v[charge_type(sp)][ihoriz][1]) / 2.0
     elseif GV.planet=="Venus"
         # Downward transport away from the lower boundary layer, which is outside the model
         # These should never be used but we need to fill the array
@@ -1949,7 +1953,7 @@ function fluxcoefs(sp::Symbol, Kv, Dv, H0v, ihoriz::Int64; globvars...)
     dTdzu_n[1:end-1] = @. (GV.Tn[2:end] - GV.Tn[1:end-1]) / GV.dz
     dTdzu_p[1:end-1] = @. (GV.Tp[2:end] - GV.Tp[1:end-1]) / GV.dz
     Hsu[1:end-1] = @. (GV.Hs_dict[sp][1:end-1] + GV.Hs_dict[sp][2:end]) / 2.0
-    H0u[1:end-1] = @. (H0v[charge_type(sp)][1:end-1] + H0v[charge_type(sp)][2:end]) / 2.0
+    H0u[1:end-1] = @. (H0v[charge_type(sp)][ihoriz][1:end-1] + H0v[charge_type(sp)][ihoriz][2:end]) / 2.0
 
     if GV.planet=="Mars"
         # Handle upper boundary layer:
@@ -1960,7 +1964,7 @@ function fluxcoefs(sp::Symbol, Kv, Dv, H0v, ihoriz::Int64; globvars...)
         dTdzu_n[end] = @. (1 - GV.Tn[end]) / GV.dz
         dTdzu_p[end] = @. (1 - GV.Tp[end]) / GV.dz
         Hsu[end] = @. (GV.Hs_dict[sp][end] + 1) / 2.0
-        H0u[end] = @. (H0v[charge_type(sp)][end] + 1) / 2.0
+        H0u[end] = @. (H0v[charge_type(sp)][ihoriz][end] + 1) / 2.0
     elseif GV.planet=="Venus"
         # Upwards flux from the upper boundary layer, which is outside the model
         # These should never be used but we need to fill the array
@@ -2066,7 +2070,7 @@ function Keddy(z::Vector, nt::Vector; globvars...)
     required = [:planet]
     check_requirements(keys(GV), required)
 
-    k = zeros(size(z)) # Initialize array for eddy diffusion
+    k = zeros(size(z)) # Initialize array for eddy diffusion  # MULTICOL WARNING different vertical columns can have different values because of dependence on n_tot. If want to use different functions for each column, this will need to be adapted
     if GV.planet=="Mars"
         upperatm = findall(i->i .> 60e5, z)
         k[findall(i->i .<= 60e5, z)] .= 10. ^ 6
@@ -2074,18 +2078,6 @@ function Keddy(z::Vector, nt::Vector; globvars...)
     elseif GV.planet=="Venus"
         k = 8e12*(nt .^ -0.5)
     end
-
-#=    k = [zeros(size(z)) for ihoriz in 1:n_horiz] # Initialize vector of arrays for eddy diffusion # MULTICOL WARNING finish this
-    for ihoriz in [1:n_horiz;]
-        if GV.planet=="Mars"
-            upperatm = findall(i->i .> 60e5, z)
-            k[ihoriz][findall(i->i .<= 60e5, z)] .= 10. ^ 6
-            k[ihoriz][upperatm] .= 2e13 ./ sqrt.(nt[upperatm])
-        elseif GV.planet=="Venus"
-            k[ihoriz] = 8e12*(nt .^ -0.5) # MULTICOL WARNING add vertical column index to nt
-        end
-    end
-=#
 
     return k
 end
@@ -2110,7 +2102,7 @@ function update_diffusion_and_scaleH(species_list, atmdict::Dict{Symbol, Vector{
     Output:
         K: Vector of vectors of eddy diffusion coefficient by altitude; one vector for each vertical column. Independent of species.
         Dcoefs: Dictionary of molecular diffusion by altitude. Keys are species: species=>[[D by altitude] for each vertical column]
-        H0: Dictionary of mean atmospheric scale height by altitude. Keys are "neutral" and "ion". 
+        H0: Dictionary of mean atmospheric scale height by altitude. Keys are "neutral" and "ion". For each key, [[scaleH by altitude] for each vertical column]
     =#
     GV = values(globvars)
     required = [:all_species, :alt, :speciesbclist, :M_P, :molmass, :neutral_species, :n_alt_index, :polarizability, :planet, :R_P, :q,
@@ -2120,13 +2112,9 @@ function update_diffusion_and_scaleH(species_list, atmdict::Dict{Symbol, Vector{
     ncur_with_bdys = ncur_with_boundary_layers(atmdict, n_horiz; GV.n_alt_index, GV.all_species)
     
     K = [Keddy(GV.alt, n_tot(ncur_with_bdys, ihoriz; GV.all_species, GV.n_alt_index); GV.planet) for ihoriz in 1:n_horiz]
-    # MULTICOL WARNING  - below is very hardcoded way to provide K profile for each vertical column -- will eventually need to happen within Keddy function
-    #K = [K for ihoriz in 1:n_horiz]
-    H0_dict = Dict{String, Vector{ftype_ncur}}("neutral"=>scaleH(ncur_with_bdys, GV.Tn, n_horiz; globvars...), # original -- delete me
-                                               "ion"=>scaleH(ncur_with_bdys, GV.Tp, n_horiz; globvars...))     # original -- delete me
-    #H0_dict = Dict{String, Vector{Vector{ftype_ncur}}}("neutral"=>[scaleH(ncur_with_bdys, GV.Tn, n_horiz; globvars...) for ihoriz in 1:n_horiz], # MULTICOL new
-    #                                           "ion"=>[scaleH(ncur_with_bdys, GV.Tp, n_horiz; globvars...) for ihoriz in 1:n_horiz]) # MULTICOL new
 
+    H0_dict = Dict{String, Vector{Vector{ftype_ncur}}}("neutral"=>[scaleH(ncur_with_bdys, GV.Tn, n_horiz, ihoriz; globvars...) for ihoriz in 1:n_horiz], 
+                                               "ion"=>[scaleH(ncur_with_bdys, GV.Tp, n_horiz, ihoriz; globvars...) for ihoriz in 1:n_horiz])
     # Molecular diffusion is only needed for transport species, though.
     Dcoef_dict = Dict{Symbol, Vector{Vector{ftype_ncur}}}([s=>deepcopy(Dcoef!(D_coefs, GV.Tprof_for_diffusion[charge_type(s)], s, ncur_with_bdys, n_horiz; globvars...)) for s in species_list]) # HARDCODED
 

@@ -320,7 +320,7 @@ function diffusion_timescale(s::Symbol, T_arr::Array, atmdict; globvars...) # MU
     Dcoef_template = zeros(size(T_arr)) 
 
     # Other stuff
-    Hs = scaleH(GV.alt, s, T_arr, n_horiz; GV.molmass)
+    Hs = scaleH(GV.alt, s, T_arr; GV.molmass) # MULTICOL WARNING might need to add infrastructure for different vertical columns
     ncur_with_bdys =  ncur_with_boundary_layers(atmdict, n_horiz; GV.all_species, GV.n_alt_index)
     
     # Molecular diffusion timescale: H_s^2 / D, scale height over diffusion constant
