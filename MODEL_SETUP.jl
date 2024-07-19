@@ -351,46 +351,46 @@ const Hs_dict = Dict{Symbol, Vector{Float64}}([sp=>scaleH(alt, sp, Tprof_for_Hs[
 # "see boundaryconditions()" -- nonthermal escape depends on the dynamic density of the
 # atmosphere, so it can't be imposed as a constant here and is calculated on the fly.
 if planet=="Mars"
-    const speciesbclist=Dict(:CO2=>Dict("n"=>[2.1e17, NaN], "f"=>[NaN, 0.]),
-                        :Ar=>Dict("n"=>[2.0e-2*2.1e17, NaN], "f"=>[NaN, 0.]),
-                        :N2=>Dict("n"=>[1.9e-2*2.1e17, NaN], "f"=>[NaN, 0.]),
+    const speciesbclist=Dict(:CO2=>Dict("n"=>[[2.1e17, NaN] for ihoriz in 1:n_horiz], "f"=>[[NaN, 0.] for ihoriz in 1:n_horiz]),  # MULTICOL WARNING check multiple sets of BCs work in new multi-column setup for Mars
+                        :Ar=>Dict("n"=>[[2.0e-2*2.1e17, NaN] for ihoriz in 1:n_horiz], "f"=>[[NaN, 0.] for ihoriz in 1:n_horiz]),
+                        :N2=>Dict("n"=>[[1.9e-2*2.1e17, NaN] for ihoriz in 1:n_horiz], "f"=>[[NaN, 0.] for ihoriz in 1:n_horiz]),
                         #:C=>Dict("f"=>[NaN, 4e5]), # NEW: Based on Lo 2021
-                        :H2O=>Dict("n"=>[H2Osat[1], NaN], "f"=>[NaN, 0.]), # bc doesnt matter if H2O fixed
-                        :HDO=>Dict("n"=>[HDOsat[1], NaN], "f"=>[NaN, 0.]),
-                        :O=> Dict("f"=>[0., 1.2e8]),
-                        :H2=>Dict("f"=>[0., NaN], "v"=>[NaN, effusion_velocity(Tn_arr[end], 2.0; M_P, R_P, zmax)], "ntf"=>[NaN, "see boundaryconditions()"]),  # velocities are in cm/s
-                        :HD=>Dict("f"=>[0., NaN], "v"=>[NaN, effusion_velocity(Tn_arr[end], 3.0; M_P, R_P, zmax)], "ntf"=>[NaN, "see boundaryconditions()"]),
-                        :H=> Dict("f"=>[0., NaN], "v"=>[NaN, effusion_velocity(Tn_arr[end], 1.0; M_P, R_P, zmax)], "ntf"=>[NaN, "see boundaryconditions()"]),
-                        :D=> Dict("f"=>[0., NaN], "v"=>[NaN, effusion_velocity(Tn_arr[end], 2.0; M_P, R_P, zmax)], "ntf"=>[NaN, "see boundaryconditions()"]),
+                        :H2O=>Dict("n"=>[[H2Osat[1], NaN] for ihoriz in 1:n_horiz], "f"=>[[NaN, 0.] for ihoriz in 1:n_horiz]), # bc doesnt matter if H2O fixed # MULTICOL WARNING to do: allow use of different values for different columns
+                        :HDO=>Dict("n"=>[[HDOsat[1], NaN] for ihoriz in 1:n_horiz], "f"=>[[NaN, 0.] for ihoriz in 1:n_horiz]), # MULTICOL WARNING to do: allow use of different values for different columns
+                        :O=> Dict("f"=>[[0., 1.2e8] for ihoriz in 1:n_horiz]),
+                        :H2=>Dict("f"=>[[0., NaN] for ihoriz in 1:n_horiz], "v"=>[[NaN, effusion_velocity(Tn_arr[end], 2.0; M_P, R_P, zmax)] for ihoriz in 1:n_horiz], "ntf"=>[[NaN, "see boundaryconditions()"] for ihoriz in 1:n_horiz]),  # velocities are in cm/s # MULTICOL WARNING to do: allow use of different values for different columns
+                        :HD=>Dict("f"=>[[0., NaN] for ihoriz in 1:n_horiz], "v"=>[[NaN, effusion_velocity(Tn_arr[end], 3.0; M_P, R_P, zmax)] for ihoriz in 1:n_horiz], "ntf"=>[[NaN, "see boundaryconditions()"] for ihoriz in 1:n_horiz]),  # MULTICOL WARNING to do: allow use of different values for different columns
+                        :H=> Dict("f"=>[[0., NaN] for ihoriz in 1:n_horiz], "v"=>[[NaN, effusion_velocity(Tn_arr[end], 1.0; M_P, R_P, zmax)] for ihoriz in 1:n_horiz], "ntf"=>[[NaN, "see boundaryconditions()"] for ihoriz in 1:n_horiz]), # MULTICOL WARNING to do: allow use of different values for different columns
+                        :D=> Dict("f"=>[[0., NaN] for ihoriz in 1:n_horiz], "v"=>[[NaN, effusion_velocity(Tn_arr[end], 2.0; M_P, R_P, zmax)] for ihoriz in 1:n_horiz], "ntf"=>[[NaN, "see boundaryconditions()"] for ihoriz in 1:n_horiz]), # MULTICOL WARNING to do: allow use of different values for different columns
                        );
 elseif planet=="Venus"
     const ntot_at_lowerbdy = 9.5e15 # at 90 km
     const KoverH_lowerbdy = Keddy([zmin], [ntot_at_lowerbdy]; planet)[1]/scaleH_lowerboundary(zmin, Tn_arr[1]; molmass, M_P, R_P, zmin)
-    const manual_speciesbclist=Dict(# major species neutrals at lower boundary (estimated from Fox&Sung 2001, Hedin+1985, agrees pretty well with VIRA)
-                                    :CO2=>Dict("n"=>[0.965*ntot_at_lowerbdy, NaN], "f"=>[NaN, 0.]),
-                                    :Ar=>Dict("n"=>[5e11, NaN], "f"=>[NaN, 0.]),
-                                    :CO=>Dict("n"=>[4.5e-6*ntot_at_lowerbdy, NaN], "f"=>[NaN, 0.]),
-                                    :O2=>Dict("n"=>[3e-3*ntot_at_lowerbdy, NaN], "f"=>[NaN, 0.]),
-                                    :N2=>Dict("n"=>[0.032*ntot_at_lowerbdy, NaN]),
+    const manual_speciesbclist=Dict(# major species neutrals at lower boundary (estimated from Fox&Sung 2001, Hedin+1985, agrees pretty well with VIRA)  # MULTICOL WARNING this won't work in new multi-column setup
+                                    :CO2=>Dict("n"=>[[0.965*ntot_at_lowerbdy, NaN] for ihoriz in 1:n_horiz], "f"=>[[NaN, 0.] for ihoriz in 1:n_horiz]),
+                                    :Ar=>Dict("n"=>[[5e11, NaN] for ihoriz in 1:n_horiz], "f"=>[[NaN, 0.] for ihoriz in 1:n_horiz]),
+                                    :CO=>Dict("n"=>[[4.5e-6*ntot_at_lowerbdy, NaN] for ihoriz in 1:n_horiz], "f"=>[[NaN, 0.] for ihoriz in 1:n_horiz]),
+                                    :O2=>Dict("n"=>[[3e-3*ntot_at_lowerbdy, NaN] for ihoriz in 1:n_horiz], "f"=>[[NaN, 0.] for ihoriz in 1:n_horiz]),
+                                    :N2=>Dict("n"=>[[0.032*ntot_at_lowerbdy, NaN] for ihoriz in 1:n_horiz]),
 
                                     # water mixing ratio is fixed at lower boundary
-                                    :H2O=>Dict("n"=>[water_mixing_ratio*ntot_at_lowerbdy, NaN], "f"=>[NaN, 0.]),
+                                    :H2O=>Dict("n"=>[[water_mixing_ratio*ntot_at_lowerbdy, NaN] for ihoriz in 1:n_horiz], "f"=>[[NaN, 0.] for ihoriz in 1:n_horiz]), # MULTICOL WARNING to do: allow use of different values for different columns
                                     # we assume HDO has the bulk atmosphere ratio with H2O at the lower boundary, ~consistent with Bertaux+2007 observations
-                                    :HDO=>Dict("n"=>[2*DH*water_mixing_ratio*ntot_at_lowerbdy, NaN], "f"=>[NaN, 0.]),
+                                    :HDO=>Dict("n"=>[[2*DH*water_mixing_ratio*ntot_at_lowerbdy, NaN] for ihoriz in 1:n_horiz], "f"=>[[NaN, 0.] for ihoriz in 1:n_horiz]), # MULTICOL WARNING to do: allow use of different values for different columns
 
                                     # atomic H and D escape solely by photochemical loss to space, can also be mixed downward
-                                    :H=> Dict("v"=>[-KoverH_lowerbdy, effusion_velocity(Tn_arr[end], 1.0; zmax, M_P, R_P)],
+                                    :H=> Dict("v"=>[[-KoverH_lowerbdy, effusion_velocity(Tn_arr[end], 1.0; zmax, M_P, R_P)] for ihoriz in 1:n_horiz], # MULTICOL WARNING should use different =KoverH_lowerbdy values for each vertical column
                                                     #                 ^^^ other options here:
                                                     #                 effusion_velocity(Tn_arr[end], 1.0; zmax) # thermal escape, negligible
                                                     #                 100 # representing D transport to nightside, NOT escape
                                                     #                 NaN # No thermal escape to space, appropriate for global average model
-                                              "ntf"=>[NaN, "see boundaryconditions()"]),
-                                    :D=> Dict("v"=>[-KoverH_lowerbdy, effusion_velocity(Tn_arr[end], 2.0; zmax, M_P, R_P)], # 
+                                              "ntf"=>[[NaN, "see boundaryconditions()"] for ihoriz in 1:n_horiz]),
+                                    :D=> Dict("v"=>[[-KoverH_lowerbdy, effusion_velocity(Tn_arr[end], 2.0; zmax, M_P, R_P)] for ihoriz in 1:n_horiz],  # MULTICOL WARNING should use different =KoverH_lowerbdy values for each vertical column
                                                     #                 ^^^ other options here:
                                                     #                  effusion_velocity(Tn_arr[end], 2.0; zmax) # thermal escape, negligible
                                                     #                 100 # representing D transport to nightside, NOT escape
                                                     #                 NaN # No thermal escape to space, appropriate for global average model
-                                              "ntf"=>[NaN, "see boundaryconditions()"]),
+                                              "ntf"=>[[NaN, "see boundaryconditions()"] for ihoriz in 1:n_horiz]),
 
                                     # # H2 mixing ratio at lower boundary adopted from Yung&DeMore1982 as in Fox&Sung2001
                                     # :H2=>Dict("n"=>[1e-7*ntot_at_lowerbdy, NaN],
@@ -415,9 +415,9 @@ elseif planet=="Venus"
     auto_speciesbclist = Dict()
     for sp in all_species
         if sp in keys(manual_speciesbclist)
-            auto_speciesbclist[sp] = manual_speciesbclist[sp]
+            auto_speciesbclist[sp] = manual_speciesbclist[sp] # MULTICOL WARNING this won't work in new multi-column setup
         else
-            auto_speciesbclist[sp] = Dict("v"=>[-KoverH_lowerbdy, 0.0])
+            auto_speciesbclist[sp] = Dict("v"=>[[-KoverH_lowerbdy, 0.0] for ihoriz in 1:n_horiz])
         end
     end
 
