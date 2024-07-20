@@ -1691,7 +1691,7 @@ function boundaryconditions_horiz(globvars)
     required = [:all_species, :speciesbclist_horiz, :dx, :planet]
     check_requirements(keys(GV), required)
     
-    bc_dict_horiz = Dict{Symbol, Vector{Array{ftype_ncur}}}([s=>[[0.0 0.0; 0.0 0.0] for ihoriz in 1:GV.num_layers] for s in GV.all_species])
+    bc_dict_horiz = Dict{Symbol, Vector{Array{ftype_ncur}}}([s=>[[0.0 0.0; 0.0 0.0] for ialt in 1:GV.num_layers] for s in GV.all_species])
 
     for sp in keys(GV.speciesbclist_horiz)
         try 
@@ -2022,7 +2022,7 @@ function fluxcoefs(species_list::Vector, K, D, H0, n_horiz::Int64; globvars...)
     Here, D and Hs depend on the current atmospheric densities, and need to be pre-calculated
     within the upper level function which calls this one.
     The parameters below which vary by species are dictionaries, and those that are arrays
-    don't depend on the species. All profiles are by altitude. All lengths are the same 
+    don't depend on the species. All profiles are by altitude. All lengths are the same   # MULTICOL WARNING edit comment
     as for the alt variable (full altitude grid including boundary layers).
     
     Inputs:
@@ -2057,6 +2057,54 @@ function fluxcoefs(species_list::Vector, K, D, H0, n_horiz::Int64; globvars...)
 
     return fluxcoef_dict
 end
+
+#= # MULTICOL WARNING finish this function
+function fluxcoefs_horiz(species_list::Vector, horiz_wind_v::Vector{Vector{Float64}}, n_horiz::Int64; globvars...) 
+    #= # MULTICOL WARNING edit comment
+    New optimized version of fluxcoefs that calls the lower level version of fluxcoefs,
+    producing a dictionary that contains both up and down flux coefficients for each layer of
+    the atmosphere including boundary layers. Created to optimize calls to this function
+    during the solution of the production and loss equation.
+
+    Here, D and Hs depend on the current atmospheric densities, and need to be pre-calculated
+    within the upper level function which calls this one.
+    The parameters below which vary by species are dictionaries, and those that are arrays
+    don't depend on the species. All profiles are by altitude. All lengths are the same 
+    as for the alt variable (full altitude grid including boundary layers).
+    
+    Inputs:
+        species_list: Species for which to generate transport coefficients. This allows the code to only do it for
+                transport species during the main simulation run, and for all species when trying to plot 
+                rate balances after the run.
+        T_neutral: 1D neutral temperature profile
+        T_plasma: the same, but for the plasma temperature
+        K: Array; 1D eddy diffusion profile by altitude for current atmospheric state
+        D: Dictionary (key=species); 1D molecular diffusion profiles for current atmospheric state
+        H0: Dictionary (key="neutral" or "ion"); 1D mean atmospheric scale height profiles for each type
+        Hs: Dictionary (key=species); 1D species scale height profiles
+    Outputs:
+        fluxcoef_dict: dictionary of flux coefficients of the form [flux down, flux up] by altitude 
+
+    =#
+
+    GV = values(globvars)
+    required = [:Tn, :Tp, :n_all_layers, :dz] # MULTICOL WARNING edit -- probably don't need Tn, Tp
+    check_requirements(keys(GV), required)
+    
+    # the return dictionary: Each species has 2 entries for every layer of the atmosphere.
+    fluxcoef_horiz_dict = Dict{Symbol, Vector{Array{ftype_ncur}}}([s=>[fill(0., GV.n_all_layers, 2) for ihoriz in 1:n_horiz] for s in species_list])
+
+    for s in species_list
+        for ihoriz in [1:n_horiz;]
+            column_behind_coefs, column_infront_coefs = fluxcoefs(s, K, D, H0, ihoriz; globvars...) # MULTICOL WARNING - START HERE
+            fluxcoef_horiz_dict[s][ihoriz][:, 1] .= column_behind_coefs
+            fluxcoef_horiz_dict[s][ihoriz][:, 2] .= column_infront_coefs
+        end
+    end
+
+    return fluxcoef_dict_horiz
+end
+=#
 
 function Keddy(z::Vector, nt::Vector; globvars...)
     #=

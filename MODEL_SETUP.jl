@@ -288,6 +288,10 @@ const Tplasma_arr = Ti_arr .+ Te_arr;
 const Tprof_for_diffusion = Dict("neutral"=>Tn_arr, "ion"=>Tplasma_arr)
 const Tprof_for_Hs = Dict("neutral"=>Tn_arr, "ion"=>Ti_arr)
 
+#                              Horizontal winds construction                      
+# =======================================================================================================
+const horiz_wind_v = [zeros(9) for ihoriz in 1:n_horiz]   # horizontal wind profiles; one altitude profile for each vertical column; units cm/s # MULTICOL WARNING hardcoded values
+
 
 #                                      Water profile settings
 # =======================================================================================================
