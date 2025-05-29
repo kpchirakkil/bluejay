@@ -15,177 +15,259 @@
 function chemical_lifetime(s::Symbol, atmdict; globvars...)
     #=
     Calculates chemical lifetime of a molecule s in the atmosphere atmdict. 
-    
     Good for comparing with the results of diffusion_timescale.
     =#
     GV = values(globvars)
     required = [:all_species, :Jratelist, :n_alt_index, :ion_species, :num_layers, :reaction_network, :Tn, :Ti, :Te]
     check_requirements(keys(GV), required)
 
-    loss_all_rxns, ratecoefs = get_volume_rates(s, atmdict, n_horiz; species_role="reactant", which="all", remove_sp_density=true, 
-                                               GV.all_species, GV.ion_species, GV.num_layers, GV.reaction_network, 
-                                               Tn=GV.Tn[2:end-1], Ti=GV.Ti[2:end-1], Te=GV.Te[2:end-1])
+    # We'll accumulate chemical lifetimes in a matrix, one column per horizontal slice
+    chem_lt = zeros(Float64, n_horiz, GV.num_layers)  # (n_horiz, num_layers)
 
-    total_loss_by_alt = zeros(size(GV.Tn[2:end-1]))
+    for ihoriz in 1:n_horiz
+        # For the interior (bulk) layers, we slice Tn, Ti, Te
+        # Tn_col, Ti_col, Te_col each has length = num_layers (since we skip boundary)
+        Tn_col = GV.Tn[ihoriz, :]
+        Ti_col = GV.Ti[ihoriz, :]
+        Te_col = GV.Te[ihoriz, :]
 
-    for k in keys(loss_all_rxns)
-        total_loss_by_alt += loss_all_rxns[k]
+        loss_all_rxns, ratecoefs = get_volume_rates(
+            s, atmdict, n_horiz;
+            species_role="reactant", 
+            which="all",
+            remove_sp_density=true,
+            # pass the sliced arrays so code sees only the interior layers:
+            Tn=Tn_col[2:end-1], Ti=Ti_col[2:end-1], Te=Te_col[2:end-1],
+            globvars...
+        )
+    
+        total_loss_by_alt = zeros(size(Tn_col))  # length = num_layers
+    
+        for k in keys(loss_all_rxns)
+            total_loss_by_alt .+= loss_all_rxns[k][ihoriz]
+        end
+    
+        chem_lt[ihoriz, :] = 1.0 ./ total_loss_by_alt
     end
 
-    return chem_lt = 1 ./ total_loss_by_alt
+    return chem_lt
 end
 
-function get_column_rates(sp::Symbol, atmdict::Dict{Symbol, Vector{ftype_ncur}}; which="all", sp2=nothing, role="product", startalt_i=1, returntype="df", globvars...)
+
+function get_column_rates(sp::Symbol, atmdict::Dict{Symbol, Vector{ftype_ncur}}, 
+                          ihoriz::Int64; which="all", sp2=nothing, role="product", 
+                          startalt_i=1, returntype="df", globvars...)
     #=
     Input:
         sp: species for which to search for reactions
         atmdict: the present atmospheric state to calculate on
+        ihoriz: horizontal column index to extract correct column data
         Tn, Ti, Te: Arrays of the temperature profiles including boundary layers
-        bcdict: Boundary conditions dictionary specified in parameters file
         which: whether to do photochemistry, or just bimolecular reactions. "all", "Jrates" or "krates"
         sp2: optional second species to include, i.e. usually sp's ion.
         role: "product" or "reactant" only.
-        startalt_i: Index of the altitude at which to start. This lets you only calculate column rate down to a certain altitude, which is
-                    useful, for example, for water, which is fixed at 80 km so we don't care what produces/consumes it,
-                    or if you want to know the column rate only above a certain altitude.
+        startalt_i: Index of the altitude at which to start. 
         returntype: whether to return a dataframe ("df") or a dictionary "dict"
     Output:
-        sorted: Total column rates for all reactions of species sp. Sorted, in order of largest rate to smallest. NOT a dictionary.
-                sorted[1] is the top production mechanism, e.g.
+        sorted: Total column rates for all reactions of species sp. 
+                Sorted, in order of largest rate to smallest.
     =#
     GV = values(globvars)
     required = [:Tn, :Ti, :Te, :all_species, :ion_species, :reaction_network, :num_layers, :dz]
     check_requirements(keys(GV), required)
-    
-    rxd, coefs = get_volume_rates(sp, atmdict, n_horiz; species_role=role, which=which, globvars...)
-                                   
-    # Make the column rates dictionary for production
-    columnrate = Dict()
+
+    # Extract FULL column temperatures explicitly
+    Tn_col = GV.Tn[ihoriz, :]
+    Ti_col = GV.Ti[ihoriz, :]
+    Te_col = GV.Te[ihoriz, :]
+
+    # Internal slicing for bulk altitudes
+    # Tn_col = Tn_col_full[2:end-1]
+    # Ti_col = Ti_col_full[2:end-1]
+    # Te_col = Te_col_full[2:end-1]
+
+    # Debug: confirm shapes
+    # @assert length(Tn_col) == GV.num_layers + 2 "Tn_col length should match num_layers+2"
+    # @assert length(Ti_col) == GV.num_layers + 2 "Ti_col length should match num_layers+2"
+    # @assert length(Te_col) == GV.num_layers + 2 "Te_col length should match num_layers+2"
+
+    # Now we compute reaction rates for just this column
+    rxd, coefs = get_volume_rates(sp, atmdict, n_horiz;
+                                  species_role=role,
+                                  which=which,
+                                  globvars...,
+                                  # pass the column slices for Tn, Ti, Te
+                                  Tn=Tn_col[2:end-1], Ti=Ti_col[2:end-1], Te=Te_col[2:end-1])
+
+    # Sum up the column rates for each reaction
+    columnrate = Dict{String, Float64}()
+
     for k in keys(rxd)
+        # skip altitudes below startalt_i if requested
         columnrate[k] = sum(rxd[k][startalt_i:end] .* GV.dz)
     end
-    
-    # Optionally one can specify a second species to include in the sorted result, i.e. a species' ion.
-    if sp2 != nothing
-        rxd2, coefs2 = get_volume_rates(sp2, atmdict, n_horiz; species_role=role, which=which, globvars...)
 
-        columnrate2 = Dict()
+    # If second species is requested
+    if sp2 != nothing
+        rxd2, _ = get_volume_rates(sp2, atmdict, n_horiz;
+                                   species_role=role,
+                                   which=which,
+                                   globvars...,
+                                   Tn=Tn_col[2:end-1], Ti=Ti_col[2:end-1], Te=Te_col[2:end-1])
+        columnrate2 = Dict{String, Float64}()
 
         for k in keys(rxd2)
             columnrate2[k] = sum(rxd2[k][startalt_i:end] .* GV.dz)
         end
-
         colrate_dict = merge(columnrate, columnrate2)
     else
         colrate_dict = columnrate
     end
-    
+
+    # sort them from largest to smallest
     sorted = sort(collect(colrate_dict), by=x->x[2], rev=true)
 
     if returntype=="df"
-        return DataFrame([[names(DataFrame(sorted))]; collect.(eachrow(DataFrame(sorted)))], [:Reaction; :ColumnRate])
-    else 
-        return sorted 
+        return DataFrame([[names(DataFrame(sorted))]; collect.(eachrow(DataFrame(sorted)))],
+                         [:Reaction; :ColumnRate])
+    else
+        return sorted
     end
 end
 
-function get_volume_rates(sp::Symbol, atmdict::Dict{Symbol, Vector{Array{ftype_ncur}}}, n_horiz::Int64; species_role="both", which="all", remove_sp_density=false, globvars...)
+
+function get_volume_rates(sp::Symbol, atmdict::Dict{Symbol, Vector{Array{ftype_ncur}}}, 
+                          n_horiz::Int64; species_role="both", which="all", 
+                          remove_sp_density=false, globvars...)
+
     #=
     Input:
         sp: Species name
         atmdict: Present atmospheric state dictionary
-	n_horiz: Number of vertical columns in the simulation
-        Tn, Ti, Te: temperature arrays
-        species_role: whether to look for the species as a "reactant", "product", or "both".  If it has a value, so must species.
-        which: "all", "Jrates", "krates". Whether to fill the dictionary with all reactions, only photochemistry/photoionization 
-               (Jrates) or only chemistry (krates).
-       remove_sp_density: if set to true, the density of sp will be removed from the calculation k[sp][B][C].... Useful for chemical lifetimes.
-    Output: 
-        rxn_dat: Evaluated rates, i.e. k[A][B], units #/cm^3/s for bimolecular rxns
-        rate_coefs: Evaluated rate coefficients for each reaction 
+        n_horiz: Number of vertical columns in the simulation
+        Tn, Ti, Te: 2D temperature arrays each of shape (num_layers+2, n_horiz)
+        species_role: whether to look for sp as a "reactant", "product", or "both"
+        which: "all", "Jrates", "krates"
+        remove_sp_density: if set to true, remove sp from the reactants
+    Output:
+        rxn_dat: dictionary reaction => Vector{Array{ftype_ncur}} 
+                 where each entry is the alt-dependent rate for each column
+        rate_coefs: dictionary of reaction => rate coefficient
     =#
-
     GV = values(globvars)
     required = [:all_species, :ion_species, :num_layers, :reaction_network, :Tn, :Ti, :Te]
     check_requirements(keys(GV), required)
 
-    # Make sure temperatures are correct format
-    @assert length(GV.Tn)==GV.num_layers 
-    @assert length(GV.Ti)==GV.num_layers
-    @assert length(GV.Te)==GV.num_layers
+    # Debug output
+    # println("\n[DEBUG - first get_volume_rates called]")
+    # println("GV.num_layers = ", GV.num_layers)
+    # println("size(GV.Tn) = ", size(GV.Tn))
+    # println("n_horiz = ", n_horiz)
 
-    # Fill in the rate x density dictionary ------------------------------------------------------------------------------
-    rxn_dat =  Dict{String, Vector{Array{ftype_ncur}}}()
-    rate_coefs =  Dict{String, Vector{Array{ftype_ncur}}}()
+    rxn_dat = Dict{String, Vector{Array{ftype_ncur}}}()
+    rate_coefs = Dict{String, Vector{Array{ftype_ncur}}}()
 
+    # filter the reaction network to only those relevant
     filtered_rxn_list = filter_network(sp, which, species_role; GV.reaction_network)
 
-    for rxn in filtered_rxn_list
-        # get the reactants and products in string form for use in plot labels
-        rxn_str = format_chemistry_string(rxn[1], rxn[2])
+    # Now we loop over each horizontal column
+    for ihoriz in 1:n_horiz
+        # Extract FULL temperature arrays for this column (length=num_layers+2)
+        Tn_col = GV.Tn[ihoriz, :]
+        Ti_col = GV.Ti[ihoriz, :]
+        Te_col = GV.Te[ihoriz, :]
 
-        # Fill in rate coefficient * species density for all reactions
-        if typeof(rxn[3]) == Symbol # for photodissociation
-           if remove_sp_density==false
-               rxn_dat[rxn_str] = [atmdict[rxn[1][1]][ihoriz] .* vec(atmdict[rxn[3]][ihoriz]) for ihoriz in 1:n_horiz] # MULTICOL WARNING vec is just a quick way to deal with different parts of atmdict being [,,,] vs [   ]) -- deal with properly at some point
-           else
-               rxn_dat[rxn_str] = 1 .* atmdict[rxn[3]]  # this will functionally be the same as the rate coefficient for photodissociation.
-           end
-           rate_coefs[rxn_str] = vec(atmdict[rxn[3]])
-        else                        # bi- and ter-molecular chemistry
-            remove_me = remove_sp_density==true ? sp : nothing
-	    density_prod = [reactant_density_product(atmdict, rxn[1], ihoriz; removed_sp=remove_me, globvars...) for ihoriz in 1:n_horiz]
+        # Internally slice for bulk altitudes (length=num_layers)
+        # Tn_col = Tn_col_full[2:end-1]
+        # Ti_col = Ti_col_full[2:end-1]
+        # Te_col = Te_col_full[2:end-1]
 
-            thisrate = typeof(rxn[3]) != Expr ? :($rxn[3] + 0) : rxn[3]
-	    rate_coef = [eval_rate_coef(atmdict, thisrate, ihoriz; globvars...) for ihoriz in 1:n_horiz]
-	    
-            rxn_dat[rxn_str] = [density_prod[ihoriz] .* rate_coef[ihoriz] for ihoriz in 1:n_horiz] # This is k * [R1] * [R2] where [] is density of a reactant.
+        # println("[DEBUG] Inside loop for ihoriz = ", ihoriz)
+        # println("length(Tn_col) = ", length(Tn_col))
+        # println("length(Ti_col) = ", length(Ti_col))
+        # println("length(Te_col) = ", length(Te_col))
+        # @assert length(Tn_col) == GV.num_layers + 2 "Tn_col length mismatch"
 
-            if typeof(rate_coef) == Vector{Float64} && typeof(rate_coef[1]) == Float64  # MULTICOL WARNING check whether latter half is unnecessary
-               rate_coef = [rate_coef[ihoriz] * ones(GV.num_layers) for ihoriz in 1:n_horiz]
+        # For each reaction in the filtered list:
+        for rxn in filtered_rxn_list
+            rxn_str = format_chemistry_string(rxn[1], rxn[2])
+
+            if typeof(rxn[3]) == Symbol
+                # photodissociation
+                if remove_sp_density == false
+                    # multiply [Molecule] * Jrate
+                    # store alt profiles for each column
+                    rxn_dat[rxn_str] = [atmdict[rxn[1][1]][ihoriz] .* vec(atmdict[rxn[3]][ihoriz]) for ihoriz in 1:n_horiz]
+                else
+                    rxn_dat[rxn_str] = 1 .* atmdict[rxn[3]]
+                end
+                rate_coefs[rxn_str] = vec(atmdict[rxn[3]])
+            else
+                # bi- or termolecular
+                remove_me = (remove_sp_density == true) ? sp : nothing
+                density_prod = [reactant_density_product(atmdict, rxn[1], ihoriz; removed_sp=remove_me, globvars...)
+                                for ihoriz in 1:n_horiz]
+
+                thisrate = (typeof(rxn[3]) != Expr) ? :($rxn[3] + 0) : rxn[3]
+                rate_coef = [eval_rate_coef(atmdict, thisrate, ihoriz; globvars...)
+                             for ihoriz in 1:n_horiz]
+
+                rxn_dat[rxn_str] = [density_prod[ihoriz] .* rate_coef[ihoriz] for ihoriz in 1:n_horiz]
+
+                if typeof(rate_coef) == Vector{Float64} && typeof(rate_coef[1]) == Float64
+                    rate_coef = [rate_coef[ihoriz] .* ones(GV.num_layers) for ihoriz in 1:n_horiz]
+                end
+                rate_coefs[rxn_str] = rate_coef
             end
-            rate_coefs[rxn_str] = rate_coef
-	end
+        end
     end
 
     return rxn_dat, rate_coefs
 end
 
-function get_volume_rates(sp::Symbol, source_rxn::Vector{Any}, source_rxn_rc_func, atmdict::Dict{Symbol, Vector{Array{ftype_ncur}}}, Mtot, ihoriz::Int64; globvars...)
+
+function get_volume_rates(sp::Symbol, source_rxn::Vector{Any}, source_rxn_rc_func, 
+                          atmdict::Dict{Symbol, Vector{Array{ftype_ncur}}}, 
+                          Mtot, ihoriz::Int64; globvars...)
     #=
     Override to call for a single reaction. Useful for doing non-thermal flux boundary conditions.
     Input:
-        sp: Species name
+        sp: species name
         source_rxn: chemical reaction for which to get the volume rate 
         atmdict: Present atmospheric state dictionary
-        Mtot: total atmospheric density
-	ihoriz: Vertical column index
-      Output: 
-        vol_rates: Evaluated rates, e.g. k[A][B] [#/cm^3/s] for bimolecular rxns, for the whole atmosphere.
+        Mtot: total atmospheric density at each altitude
+        ihoriz: vertical column index
+    Output: 
+        vol_rates: alt-dependent rates (#/cm^3/s) for the reaction
     =#
-
     GV = values(globvars)
     required = [:all_species, :ion_species, :Jratedict, :num_layers, :Tn, :Ti, :Te]
     check_requirements(keys(GV), required)
 
-    # Make sure temperatures are correct format
-    @assert length(GV.Tn)==GV.num_layers 
-    @assert length(GV.Ti)==GV.num_layers
-    @assert length(GV.Te)==GV.num_layers
+    # println("\n[DEBUG - second (override) get_volume_rates called]")
+    # println("[DEBUG] Species = ", sp, ", ihoriz = ", ihoriz)
+    # @show size(GV.Tn), GV.num_layers, ihoriz
 
-    # Fill in the rate x density dictionary ------------------------------------------------------------------------------
-    if typeof(source_rxn[3]) == Symbol # for photodissociation
-        # Look for density of dissociating molecule in atmdict, but rate in Jratedict. This is like this because
-        # of the wonky way the code is written to allow for photochemical equilibrium as an option, which 
-        # requires the Jrates be stored in an external dictionary because they can't go through the Julia solvers. 
-        # Honestly I could probably rewrite everything so that photochem eq is possible with the Gear solver and ditch
-        # the Julia solvers entirely but I like having the option and would rather get my PhD and get a pay raise
-        # println(keys(GV.Jratedict))
+    # Now Tn_col, Ti_col, Te_col each is length num_layers+2
+    Tn_col = GV.Tn[ihoriz, :]
+    Ti_col = GV.Ti[ihoriz, :]
+    Te_col = GV.Te[ihoriz, :]
+
+    # println("length(Tn_col) at column $(ihoriz) = ", length(Tn_col))
+    # @assert length(Tn_col) == GV.num_layers + 2 "Tn_col length mismatch"
+
+    # Fill in the rate * density
+    if typeof(source_rxn[3]) == Symbol
+        # photodissociation
+        # multiply [molecule] * Jrate
         vol_rates = atmdict[source_rxn[1][1]][ihoriz] .* GV.Jratedict[source_rxn[3]][ihoriz]
-    else                        # bi- and ter-molecular chemistry
-        rate_coef = source_rxn_rc_func(GV.Tn, GV.Ti, GV.Te, Mtot) # MULTICOL WARNING hardcoded to use first vertical column for all columns. 
-        vol_rates = reactant_density_product(atmdict, source_rxn[1], ihoriz; globvars...) .* rate_coef # This is k * [R1] * [R2] where [] is density of a reactant. 
+    else
+        # bi- or termolecular reaction
+        # evaluate the rate coef for just the interior alt range
+        rate_coef = source_rxn_rc_func(Tn_col[2:end-1], Ti_col[2:end-1], Te_col[2:end-1], Mtot)
+        vol_rates = reactant_density_product(atmdict, source_rxn[1], ihoriz; globvars...) .* rate_coef
     end
+
     return vol_rates
 end
 
@@ -257,32 +339,25 @@ end
 function volume_rate_wrapper(sp, source_rxns, source_rxn_rc_funcs, atmdict, Mtot, ihoriz::Int64; returntype="array", globvars...)
     #=
     Gets altitude-dependent volume production or loss of species sp due to reactions in source_rxns.
-    Does NOT care if it is production or loss. This is mainly just a convenient wrapper to get_volume_production
-    to return the information in a variety of different useful formats.
-    
-    Input
-        sp: species
-        source_rxns: reaction network--should ALREADY be filtered to be either production or loss reactions for sp.
-        source_rxn_rc_funcs: Evalutable functions for each reaction. 
-        atmdict: present atmospheric state dictionary
-        Mtot: Atmospheric density at all altitudes
-	ihoriz: Vertical column index
-    Output: 
-        array of production or loss by altitude (rows) and reaction  (columns)
+    Does NOT care if it is production or loss. 
     =#
-    
+
     GV = values(globvars)
     required = [:all_species, :alt, :collision_xsect, :ion_species, :Jratedict, :molmass, :non_bdy_layers, :num_layers,  
-                                   :n_alt_index, :Tn, :Ti, :Te, :dz, :zmax]
+                :n_alt_index, :Tn, :Ti, :Te, :dz, :zmax]
     check_requirements(keys(GV), required)
 
-    rates = Array{ftype_ncur}(undef, GV.num_layers, length(source_rxns))
-    
-    i=1
-    for source_rxn in source_rxns
-        rates[:, i] = get_volume_rates(sp, source_rxn, source_rxn_rc_funcs[source_rxn], atmdict, Mtot, ihoriz; globvars..., 
-                                                  Tn=GV.Tn[2:end-1], Ti=GV.Ti[2:end-1], Te=GV.Te[2:end-1])
-        i += 1
+    rates = Array{ftype_ncur}(undef, length(source_rxns), GV.num_layers)
+
+    # Extract the temperature for this horizontal column explicitly
+    Tn_col = GV.Tn[ihoriz, :]
+    Ti_col = GV.Ti[ihoriz, :]
+    Te_col = GV.Te[ihoriz, :]
+
+    # Loop through reactions
+    for (i, source_rxn) in enumerate(source_rxns)
+        rate_coef = source_rxn_rc_funcs[source_rxn](Tn_col[2:end-1], Ti_col[2:end-1], Te_col[2:end-1], Mtot)
+        rates[:, i] = reactant_density_product(atmdict, source_rxn[1], ihoriz; globvars...) .* rate_coef
     end
 
     # Returns an array where rows represent altitudes and columns are reactions.

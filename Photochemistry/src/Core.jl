@@ -100,40 +100,64 @@ function electron_density(atmdict; globvars...)
     return E
 end
 
-function find_exobase(sp::Symbol, atmdict::Dict{Symbol, Vector{ftype_ncur}}; returntype="index", verbose=false, globvars...)
+function find_exobase(sp::Symbol, atmdict::Dict{Symbol, Vector{Array{ftype_ncur}}};
+                      returntype="index", verbose=false, globvars...)
     #=
     Finds the exobase altitude, where mean free path is equal to a scale height.
     ONLY VALID FOR H AND D (because collision_xsect only includes xsects for those, and they're H and D on O)
 
     Inputs:
-        s: species 
+        sp: species 
         atmdict: Atmospheric state dictionary
         returntype: whether to return the "altitude" in km or the "index" in the n_alt_index dictionary. 
     Output:
-        Altitude of exobase in cm
+        Array of exobase altitudes or indices for each horizontal column.
     =#
 
-    if (sp != :H) || (sp != :D)
-        throw("find_exobase is not defined for species other than H and D at this time.")
+    if !(sp in [:H, :D])
+        throw("find_exobase is only defined for species H and D at this time.")
     end
 
     GV = values(globvars)
-    required =  [:all_species, :alt, :collision_xsect, :M_P, :molmass, :non_bdy_layers, :n_alt_index, :R_P, :Tn, :zmax]
+    required = [:all_species, :alt, :collision_xsect, :M_P, :molmass, :non_bdy_layers, 
+                :n_alt_index, :R_P, :Tn, :zmax, :n_horiz]
     check_requirements(keys(GV), required)
 
-    H_s = scaleH(GV.non_bdy_layers, sp, GV.Tn[2:end-1]; globvars...)
-    mfp_sp = 1 ./ (GV.collision_xsect[sp] .* n_tot(atmdict, 1; GV.all_species, GV.n_alt_index)) # MULTICOL WARNING - ihoriz hardcoded as 1 in n_tot arguments for now -- change this
-    exobase_alt = findfirst(mfp_sp .>= H_s)
+    exobase_altitudes = fill(NaN, GV.n_horiz)
+    exobase_indices = fill(0, GV.n_horiz)
 
-    if typeof(exobase_alt)==Nothing # If no exobase is found, use the top of the atmosphere.
-        if verbose
-            println("Warning: No exobase found for species $(sp); assuming top of atmosphere, but this is not guaranteed to be true.")
+    # Loop over each horizontal column to find individual exobase altitudes
+    for ihoriz in 1:GV.n_horiz
+        Tn_col = GV.Tn[ihoriz, :]
+
+        # Calculate scale height using temperature for this column
+        H_s = scaleH(GV.non_bdy_layers, sp, Tn_col[ihoriz, 2:end-1]; globvars...)
+
+        # Mean free path calculation for each vertical column separately
+        mfp_sp = 1 ./ (GV.collision_xsect[sp] .* n_tot(atmdict, ihoriz; GV.all_species, GV.n_alt_index))
+
+        exobase_alt = findfirst(mfp_sp .>= H_s)
+
+        if exobase_alt === nothing # If no exobase is found, use the top of the atmosphere.
+            if verbose
+                println("Warning: No exobase found for species $(sp) at column $(ihoriz); assuming top of atmosphere, but this is not guaranteed to be true.")
+            end
+            exobase_altitudes[ihoriz] = GV.zmax
+            exobase_indices[ihoriz] = GV.n_alt_index[GV.zmax]
+        else
+            exobase_altitudes[ihoriz] = GV.alt[exobase_alt]
+            exobase_indices[ihoriz] = exobase_alt
         end
-        returnme = Dict("altitude"=>GV.zmax, "index"=>GV.n_alt_index[GV.zmax])
-    else
-        returnme = Dict("altitude"=>GV.alt[exobase_alt], "index"=>exobase_alt)
     end
-    return returnme[returntype]
+
+    # Choose the return type: altitude or index
+    if returntype=="altitude"
+        return exobase_altitudes
+    elseif returntype=="index"
+        return exobase_indices
+    else
+        throw("Invalid returntype specified. Choose 'altitude' or 'index'")
+    end
 end
 
 function meanmass(atmdict::Dict{Symbol, Vector{Array{ftype_ncur}}}, n_horiz::Int64, ihoriz::Int64; ignore=[], globvars...)
@@ -226,50 +250,49 @@ function n_tot(atmdict::Dict{Symbol, Vector{Array{ftype_ncur}}}, ihoriz::Int64; 
     return vec(sum(ndensities, dims=1))
 end
 
-function optical_depth(n_cur_densities; globvars...)
+function optical_depth(n_cur_densities; n_horiz::Int64, globvars...)
     #=
-    Given the current state (atmdict), this populates solarabs, a 1D array of 1D arrays 
-    (which is annoying, but required for using BLAS.axpy! for some inscrutable reason) 
-    with the optical depth of the atmosphere. The shape of solar abs is 124 elements, each 
-    its own array of 2000 elements. 
+    Given the current state (atmdict), this populates solarabs, a 2D array structured as [n_horiz, num_layers],
+    with each element containing an array of 2000 elements (one per wavelength).
+
+    The optical depth is calculated independently for each horizontal column.
     =#
-    
+
     GV = values(globvars)
     required = [:num_layers, :Jratelist, :absorber, :crosssection, :dz]
     check_requirements(keys(GV), required)
-    
+
     nlambda = 2000
-    
-    # Initialize the solar absorption array with 0s for all wavelengths.
-    solarabs = Array{Array{Float64}}(undef, GV.num_layers)
-    for i in range(1, length=GV.num_layers)
-        solarabs[i] = zeros(Float64, nlambda)
-    end
-    
+
+    # Initialize the solar absorption array for all wavelengths and horizontal columns.
+    solarabs = [[zeros(Float64, nlambda) for ialt in 1:GV.num_layers] for ihoriz in 1:n_horiz]
+
     for jspecies in GV.Jratelist
         species = GV.absorber[jspecies]
 
-        jcolumn = convert(Float64, 0.)
+        for ihoriz in 1:n_horiz
+            jcolumn = convert(Float64, 0.)
 
-        for ialt in [GV.num_layers:-1:1;]
-            #get the (overhead) vertical column of the absorbing constituent
-            jcolumn += convert(Float64, n_cur_densities[species][1][ialt])*GV.dz  # MULTICOL WARNING hardcoded to use values from the first vertical column for all columns -- warning not self consistent! Need to expand solarabs to (I think) a 1D array of 1D arrays of 1D arrays. Also, double check that this is the right indexing
+            for ialt in GV.num_layers:-1:1
+                # Vertical column of the absorbing constituent for this horizontal column
+                jcolumn += convert(Float64, n_cur_densities[species][ihoriz][ialt]) * GV.dz
 
-           
-            # add the total extinction to solarabs:
-            # multiplies air column density (N, #/cm^2) at all wavelengths by crosssection (σ)
-            # to get optical depth (τ). This is an override of axpy! to use the
-            # full arguments. For the equation Y' = alpha*X + Y:
-            # ARG 1: n (length of arrays in ARGS 3, 5)
-            # ARG 2: alpha, a scalar.
-            # ARG 3: X, an array of length n.
-            # ARG 4: the increment of the index values of X, maybe?
-            # ARG 5: Y, an array of length n
-            # ARG 6: increment of index values of Y, maybe?
-            
-            BLAS.axpy!(nlambda, jcolumn, GV.crosssection[jspecies][ialt+1], 1, solarabs[ialt], 1)
+                # Add total extinction to solarabs for this horizontal column and altitude
+                # multiplies air column density (N, #/cm^2) at all wavelengths by crosssection (σ)
+                # to get optical depth (τ). This is an override of axpy! to use the
+                # full arguments. For the equation Y' = alpha*X + Y:
+                # ARG 1: n (length of arrays in ARGS 3, 5)
+                # ARG 2: alpha, a scalar.
+                # ARG 3: X, an array of length n.
+                # ARG 4: the increment of the index values of X, maybe?
+                # ARG 5: Y, an array of length n
+                # ARG 6: increment of index values of Y, maybe?
+
+                BLAS.axpy!(nlambda, jcolumn, GV.crosssection[jspecies][ialt+1], 1, solarabs[ihoriz][ialt], 1)
+            end
         end
     end
+
     return solarabs
 end
 
@@ -974,27 +997,32 @@ function subtract_difflength(a::Array, b::Array)
     return sum(a[1:shared_size] .- b[1:shared_size]) + extra_a - extra_b
 end
 
+# IDENTICAL solar fluxes
 function update_Jrates!(n_cur_densities::Dict{Symbol, Vector{Array{ftype_ncur}}}, n_horiz::Int64; nlambda=2000, globvars...)
     #=
-    this function updates the photolysis rates stored in n_cur_densities to
-    reflect the altitude distribution of absorbing species.
+    Updates photolysis rates (Jrates) in n_cur_densities for each altitude and horizontal column
+    considering altitude distribution of absorbing species.
 
     Input:
         n_cur_densities: The present atmospheric state. This will be updated to include Jrates by this function.
+    n_cur_densities structure: 
+        Dict{Symbol, Vector{Array{ftype_ncur}}} (species -> [horizontal columns][altitudes])
     =#
 
     GV = values(globvars)
     required = [:absorber, :dz, :crosssection, :Jratelist, :num_layers, :solarflux]
     check_requirements(keys(GV), required)
 
-    solarabs = optical_depth(n_cur_densities; globvars...)
-    # solarabs now records the total optical depth of the atmosphere at
-    # each wavelength and altitude
+    # Calculate optical depth (now 2-D)
+    solarabs = optical_depth(n_cur_densities; n_horiz=n_horiz, globvars...)
+    # solarabs now records the total optical depth of the atmosphere at each wavelength and altitude
 
-    # actinic flux at each wavelength is solar flux diminished by total
-    # optical depth
-    for ialt in [1:GV.num_layers;]
-        solarabs[ialt] = GV.solarflux[:,2] .* exp.(-solarabs[ialt])
+    # actinic flux at each wavelength is solar flux diminished by total optical depth
+    # Actinic flux at each wavelength and each horizontal column
+    for ihoriz in 1:n_horiz
+        for ialt in 1:GV.num_layers
+            solarabs[ihoriz][ialt] .= GV.solarflux[:, 2] .* exp.(-solarabs[ihoriz][ialt])
+        end
     end
 
     # You can uncomment these to plot the extinction at each atmospheric level, but you have to feed it a specific Jrate
@@ -1007,15 +1035,64 @@ function update_Jrates!(n_cur_densities::Dict{Symbol, Vector{Array{ftype_ncur}}}
     # altitude times the actinic flux.
     # BLAS.dot includes an integration (sum) across wavelengths, i.e:
     # (a·b) = aa + ab + ab + bb etc that kind of thing
+
+    # Initialize and calculate Jrates independently for each horizontal column
     for j in GV.Jratelist
-        n_cur_densities[j] = ([zeros(Float64,(1,GV.num_layers)) for ihoriz in 1:n_horiz])
-	for ihoriz in [1:n_horiz;]
-            for ialt in [1:GV.num_layers;]
-            	n_cur_densities[j][ihoriz][ialt] = ftype_ncur(BLAS.dot(nlambda, solarabs[ialt], 1, GV.crosssection[j][ialt+1], 1)) # MULTICOL WARNING hardcoded to use info from first column for all columns.
-	    end
+        n_cur_densities[j] = [zeros(Float64, GV.num_layers) for ihoriz in 1:n_horiz]
+
+        for ihoriz in 1:n_horiz
+            for ialt in 1:GV.num_layers
+                n_cur_densities[j][ihoriz][ialt] = ftype_ncur(
+                    BLAS.dot(nlambda, solarabs[ihoriz][ialt], 1, GV.crosssection[j][ialt+1], 1)
+                )
+            end
         end
     end
 end
+
+# DIFFERENT solar fluxes
+# function update_Jrates!(n_cur_densities::Dict{Symbol, Vector{Array{ftype_ncur}}}, n_horiz::Int64; nlambda=2000, globvars...)
+#     #=
+#     Updates photolysis rates (Jrates) in n_cur_densities for each altitude and horizontal column
+#     considering altitude distribution of absorbing species.
+
+#     Input:
+#         n_cur_densities: The present atmospheric state. This will be updated to include Jrates by this function.
+#         n_cur_densities structure: 
+#         Dict{Symbol, Vector{Array{ftype_ncur}}} (species -> [horizontal columns][altitudes])
+#     =#
+
+#     GV = values(globvars)
+#     required = [:absorber, :dz, :crosssection, :Jratelist, :num_layers, :solarflux]
+#     check_requirements(keys(GV), required)
+
+#     # Column-specific solar flux multipliers
+#     solarflux_multipliers = [1.0, 0.5, 2.0]
+
+#     # Optical depth calculation (no multipliers here!)
+#     solarabs = optical_depth(n_cur_densities; n_horiz=n_horiz, globvars...)
+
+#     # Adjust actinic flux per column
+#     for ihoriz in 1:n_horiz
+#         for ialt in 1:GV.num_layers
+#             # multiply solar flux BEFORE applying optical depth
+#             solarabs[ihoriz][ialt] .= (GV.solarflux[:, 2] .* solarflux_multipliers[ihoriz]) .* exp.(-solarabs[ihoriz][ialt])
+#         end
+#     end
+
+#     # Calculate Jrates independently for each horizontal column
+#     for j in GV.Jratelist
+#         n_cur_densities[j] = [zeros(Float64, GV.num_layers) for ihoriz in 1:n_horiz]
+
+#         for ihoriz in 1:n_horiz
+#             for ialt in 1:GV.num_layers
+#                 n_cur_densities[j][ihoriz][ialt] = ftype_ncur(
+#                     BLAS.dot(nlambda, solarabs[ihoriz][ialt], 1, GV.crosssection[j][ialt+1], 1)
+#                 )
+#             end
+#         end
+#     end
+# end
 
 #===============================================================================#
 #                             Escape functions                                  #
@@ -1766,7 +1843,7 @@ function Dcoef_neutrals(z, sp::Symbol, b, atmdict::Dict{Symbol, Vector{ftype_ncu
     end
 end
 
-function Dcoef!(D_arr, T_arr, sp::Symbol, atmdict::Dict{Symbol, Vector{Array{ftype_ncur}}}, n_horiz::Int64; globvars...) 
+function Dcoef!(D_arr, T_arr_2D, sp::Symbol, atmdict::Dict{Symbol, Vector{Array{ftype_ncur}}}, n_horiz::Int64; globvars...) 
     #=
     # MULTICOL WARNING -- this function was acting differently when it was called n_horiz separate times rather than once (with the loop through vertical columns inside the function). In the former, the first value within D_arr for each column and neutral species was changed -- I think due to the updating of atmdict (and therefore n_tot) each time. Haven't quite got to the bottom of why that was happening, but this version (the latter) reproduces what was calculated with just one column in the original.
     Calculates the molecular diffusion coefficient for an atmospheric layer.
@@ -1778,63 +1855,96 @@ function Dcoef!(D_arr, T_arr, sp::Symbol, atmdict::Dict{Symbol, Vector{Array{fty
 
     Inputs:
         D_arr: the container for the diffusion coefficients for ONE species.
-        T_arr: temperature (K). Neutral temp for neutrals, plasma temp for ions.
+               D_arr[ihoriz] is a 1D array with altitude for column ihoriz.
+        T_arr_2D: 2D temperature (K), shape (num_layers+2, n_horiz).
+                  Neutral temp if sp is neutral; plasma temp if sp is ion.
         sp: whichever species we are calculating for
-        atmdict: state of the atmosphere; should include boundary layers, i.e. be the result of calling atmdict_with_boundary_layers.
-        bcdict: Boundary conditions dictionary specified in parameters file
+        atmdict: state of the atmosphere; should include boundary layers, i.e.
+                 be the result of calling atmdict_with_boundary_layers.
+        n_horiz: number of vertical columns
     Outputs:
-        D_arr: An array of the diffusion coefficients by altitude for species
+        D_arr: The same container, now filled with the diffusion coefficients by altitude
+               for this species, for each column.
+
     =#
 
     GV = values(globvars)
-    required = [:all_species, :molmass, :neutral_species, :n_alt_index, :polarizability, :q, :speciesbclist, :use_ambipolar, :use_molec_diff]
+    required = [
+        :all_species, :molmass, :neutral_species, :n_alt_index, :polarizability,
+        :q, :speciesbclist, :use_ambipolar, :use_molec_diff
+    ]
     check_requirements(keys(GV), required)
 
+    # num_layers_plus2 = length(atmdict[GV.all_species[1]][1])
+
+    # # Explicit assertions for dimensions
+    # @assert size(T_arr_2D) == (num_layers_plus2, n_horiz) "T_arr_2D should be (num_layers+2, n_horiz), got $(size(T_arr_2D))"
+    # @assert length(D_arr) == n_horiz "D_arr should have length n_horiz ($(n_horiz)), got $(length(D_arr))"
+    # for i in 1:n_horiz
+    #     @assert length(D_arr[i]) == num_layers_plus2 "D_arr[$i] length mismatch, expected $(num_layers_plus2), got $(length(D_arr[i]))"
+    # end
+
+    # Loop over each vertical column
     for ihoriz in 1:n_horiz
-        if GV.use_molec_diff==true
+
+        # Extract this column's temperature profile
+        local T_col = T_arr_2D[ihoriz, :]
+
+        # If using molecular diffusion, compute D
+        if GV.use_molec_diff == true
             # Calculate as if it was a neutral - not using function above because this is faster than going into 
             # the function and using an if/else block since we know we'll always have vectors in this case.
-            D_arr[ihoriz] .= (binary_dcoeff_inCO2(sp, T_arr)) ./ n_tot(atmdict, ihoriz; GV.all_species, GV.n_alt_index)  # MULTICOL WARNING - ihoriz hardcoded as 1 in n_tot arguments for now -- change this. Mid-fix
-            if (GV.use_ambipolar==false) & (charge_type(sp)=="ion")# temporarily disallow molecular diffusion for ions
+            D_arr[ihoriz] .= (binary_dcoeff_inCO2(sp, T_col)) ./ n_tot(atmdict, ihoriz; GV.all_species, GV.n_alt_index)
+            # If the species is an ion but we have "use_ambipolar=false", then zero out
+            # the molecular diffusion part for ions:
+            if (GV.use_ambipolar==false) && (charge_type(sp)=="ion")# temporarily disallow molecular diffusion for ions
                 D_arr[ihoriz] .= 0
             end
         else
             D_arr[ihoriz] .= 0 
         end
 
-        # If an ion, overwrite with the ambipolar diffusion
+        # If ambipolar diffusion is turned on, and this is an ion, overwrite with ambipolar D
         if GV.use_ambipolar==true
             if charge_type(sp) == "ion"
-                # a place to store the density array and nu_in
-                species_density = [zeros(size(T_arr)) for ihoriz in 1:n_horiz]
-                sum_nu_in = [zeros(size(T_arr)) for ihoriz in 1:n_horiz]
+                # Prepare arrays to store the sum over collisions
+                # (We build them for each column to match T_col's shape.)
+                species_density = zeros(size(T_col))
+                sum_nu_in      = zeros(size(T_col))
 
                 # mi = GV.molmass[sp] .* mH
                 # create the sum of nu_in. Note that this depends on density, but we only have density for the real layers,
                 # so we have to assume the density at the boundary layers is the same as at the real layers.
                 for n in GV.neutral_species
-                    species_density[ihoriz] = atmdict[n][ihoriz] # MULTICOL WARNING hardcoded for just first vertical column.
+                    # Add the neutral’s density profile for this column
+                    species_density .= atmdict[n][ihoriz]
 
-                    # This sets the species density to a boundary condition if it exists. 
+                    # Optionally override with boundary condition if specified
                     if haskey(GV.speciesbclist, n)
                         if haskey(GV.speciesbclist[n], "n")
+                            # lower boundary
                             if !isnan(GV.speciesbclist[n]["n"][ihoriz][1])
-                                species_density[ihoriz][1] = GV.speciesbclist[n]["n"][ihoriz][1]
+                                species_density[1] = GV.speciesbclist[n]["n"][ihoriz][1]
                             end
-                            if !isnan(GV.speciesbclist[n]["n"][ihoriz][2]) # currently this should never apply.
-                                species_density[ihoriz][end] = GV.speciesbclist[n]["n"][ihoriz][2]
+                            # upper boundary 
+                            if !isnan(GV.speciesbclist[n]["n"][ihoriz][2])
+                                species_density[end] = GV.speciesbclist[n]["n"][ihoriz][2]
                             end
                         end
                     end
-                
-                    sum_nu_in[ihoriz] .+= 2 .* pi .* (((GV.polarizability[n] .* GV.q .^ 2) ./ reduced_mass(GV.molmass[sp], GV.molmass[n])) .^ 0.5) .* species_density[ihoriz]
 
+                    sum_nu_in .+= 2π .* sqrt.(
+                        (GV.polarizability[n] .* (GV.q^2)) ./
+                        reduced_mass(GV.molmass[sp], GV.molmass[n])
+                    ) .* species_density
                 end
-            D_arr[ihoriz] .= (kB .* T_arr) ./ (GV.molmass[sp] .* mH .* sum_nu_in[ihoriz]) # MULTICOL WARNING go back and check that the ion values are the same as they were originally for one column
-            end
 
+                # Finally set D_ambipolar = kB * T / (m_sp * sum_nu_in)
+                D_arr[ihoriz] .= (kB .* T_col) ./ (GV.molmass[sp] .* mH .* sum_nu_in)
+            end
         end
-    end
+
+    end # for ihoriz
     return D_arr
 end
 
@@ -1875,8 +1985,8 @@ function fluxcoefs(sp::Symbol, Kv, Dv, H0v, ihoriz::Int64; globvars...)
         for all the following, length = num_layers 
         Kv: eddy diffusion coefficient
         Dv: molecular diffusion coefficient
-        Tv_n: neutral temperature
-        Tv_p: plasma temperature
+        Tv_n: neutral temperature (2D, size num_layers × n_horiz)
+        Tv_p: plasma temperature (2D, size num_layers × n_horiz)
         Hsv: scale height by species
         H0v: mean atmospheric scale height
         ihoriz: vertical column index
@@ -1913,26 +2023,36 @@ function fluxcoefs(sp::Symbol, Kv, Dv, H0v, ihoriz::Int64; globvars...)
     Hsu = zeros(GV.n_all_layers)
     H0u = zeros(GV.n_all_layers)
 
-    # Calculate the coefficients between this layer and the lower layer. 
-    Dl[2:end] = @. (Dv[sp][ihoriz][1:end-1] + Dv[sp][ihoriz][2:end]) /  2.0
-    Kl[2:end] = @. (Kv[ihoriz][1:end-1] + Kv[ihoriz][2:end]) / 2.0
-    Tl_n[2:end] = @. (GV.Tn[1:end-1] + GV.Tn[2:end]) / 2.0
-    Tl_p[2:end] = @. (GV.Tp[1:end-1] + GV.Tp[2:end]) / 2.0
-    dTdzl_n[2:end] = @. (GV.Tn[2:end] - GV.Tn[1:end-1]) / GV.dz
-    dTdzl_p[2:end] = @. (GV.Tp[2:end] - GV.Tp[1:end-1]) / GV.dz
-    Hsl[2:end] = @. (GV.Hs_dict[sp][1:end-1] + GV.Hs_dict[sp][2:end]) / 2.0
-    H0l[2:end] = @. (H0v[charge_type(sp)][ihoriz][1:end-1] + H0v[charge_type(sp)][ihoriz][2:end]) / 2.0
+    # Local column references
+    Tn_col = GV.Tn[ihoriz, :]   # 1D array for neutrals
+    Tp_col = GV.Tp[ihoriz, :]   # 1D array for plasma
+    Hs_col = GV.Hs_dict[sp][ihoriz]
+
+    # Retrieve arrays specific to this vertical column
+    thisD  = Dv[sp][ihoriz]
+    thisK  = Kv[ihoriz]
+    thisH0 = H0v[charge_type(sp)][ihoriz]
+
+    # Calculate the coefficients between this layer and the lower layer.
+    Dl[2:end]     = @. (thisD[1:end-1] + thisD[2:end]) /  2.0
+    Kl[2:end]     = @. (thisK[1:end-1] + thisK[2:end]) / 2.0
+    Tl_n[2:end]   = @. (Tn_col[1:end-1] + Tn_col[2:end]) / 2.0
+    Tl_p[2:end]   = @. (Tp_col[1:end-1] + Tp_col[2:end]) / 2.0
+    dTdzl_n[2:end]= @. (Tn_col[2:end] - Tn_col[1:end-1]) / GV.dz
+    dTdzl_p[2:end]= @. (Tp_col[2:end] - Tp_col[1:end-1]) / GV.dz
+    Hsl[2:end]    = @. (Hs_col[1:end-1] + Hs_col[2:end]) / 2.0
+    H0l[2:end]    = @. (thisH0[1:end-1] + thisH0[2:end]) / 2.0
 
     if GV.planet=="Mars"
         # Handle the lower boundary layer:
-        Dl[1] = @. (1 + Dv[sp][ihoriz][1]) /  2.0
-        Kl[1] = @. (1 + Kv[ihoriz][1]) / 2.0
-        Tl_n[1] = @. (1 + GV.Tn[1]) / 2.0
-        Tl_p[1] = @. (1 + GV.Tp[1]) / 2.0
-        dTdzl_n[1] = @. (GV.Tn[1] - 1) / GV.dz
-        dTdzl_p[1] = @. (GV.Tp[1] - 1) / GV.dz
-        Hsl[1] = @. (1 + GV.Hs_dict[sp][1]) / 2.0
-        H0l[1] = @. (1 + H0v[charge_type(sp)][ihoriz][1]) / 2.0
+        Dl[1]      = @. (1 + thisD[1]) /  2.0
+        Kl[1]      = @. (1 + thisK[1]) / 2.0
+        Tl_n[1]    = @. (1 + Tn_col[1]) / 2.0
+        Tl_p[1]    = @. (1 + Tp_col[1]) / 2.0
+        dTdzl_n[1] = @. (Tn_col[1] - 1) / GV.dz
+        dTdzl_p[1] = @. (Tp_col[1] - 1) / GV.dz
+        Hsl[1]     = @. (1 + Hs_col[1]) / 2.0
+        H0l[1]     = @. (1 + thisH0[1]) / 2.0
     elseif GV.planet=="Venus"
         # Downward transport away from the lower boundary layer, which is outside the model
         # These should never be used but we need to fill the array
@@ -1947,25 +2067,25 @@ function fluxcoefs(sp::Symbol, Kv, Dv, H0v, ihoriz::Int64; globvars...)
     end
 
     # Upward transport from each altitude to the cell above
-    Du[1:end-1] = @. (Dv[sp][ihoriz][1:end-1] + Dv[sp][ihoriz][2:end]) /  2.0
-    Ku[1:end-1] = @. (Kv[ihoriz][1:end-1] + Kv[ihoriz][2:end]) / 2.0
-    Tu_n[1:end-1] = @. (GV.Tn[1:end-1] + GV.Tn[2:end]) / 2.0
-    Tu_p[1:end-1] = @. (GV.Tp[1:end-1] + GV.Tp[2:end]) / 2.0
-    dTdzu_n[1:end-1] = @. (GV.Tn[2:end] - GV.Tn[1:end-1]) / GV.dz
-    dTdzu_p[1:end-1] = @. (GV.Tp[2:end] - GV.Tp[1:end-1]) / GV.dz
-    Hsu[1:end-1] = @. (GV.Hs_dict[sp][1:end-1] + GV.Hs_dict[sp][2:end]) / 2.0
-    H0u[1:end-1] = @. (H0v[charge_type(sp)][ihoriz][1:end-1] + H0v[charge_type(sp)][ihoriz][2:end]) / 2.0
+    Du[1:end-1]     = @. (thisD[1:end-1] + thisD[2:end]) /  2.0
+    Ku[1:end-1]     = @. (thisK[1:end-1] + thisK[2:end]) / 2.0
+    Tu_n[1:end-1]   = @. (Tn_col[1:end-1] + Tn_col[2:end]) / 2.0
+    Tu_p[1:end-1]   = @. (Tp_col[1:end-1] + Tp_col[2:end]) / 2.0
+    dTdzu_n[1:end-1]= @. (Tn_col[2:end] - Tn_col[1:end-1]) / GV.dz
+    dTdzu_p[1:end-1]= @. (Tp_col[2:end] - Tp_col[1:end-1]) / GV.dz
+    Hsu[1:end-1]    = @. (Hs_col[1:end-1] + Hs_col[2:end]) / 2.0
+    H0u[1:end-1]    = @. (thisH0[1:end-1] + thisH0[2:end]) / 2.0
 
     if GV.planet=="Mars"
         # Handle upper boundary layer:
-        Du[end] = @. (Dv[sp][ihoriz][end] + 1) /  2.0
-        Ku[end] = @. (Kv[ihoriz][end] + 1) / 2.0
-        Tu_n[end] = @. (GV.Tn[end] + 1) / 2.0
-        Tu_p[end] = @. (GV.Tp[end] + 1) / 2.0
-        dTdzu_n[end] = @. (1 - GV.Tn[end]) / GV.dz
-        dTdzu_p[end] = @. (1 - GV.Tp[end]) / GV.dz
-        Hsu[end] = @. (GV.Hs_dict[sp][end] + 1) / 2.0
-        H0u[end] = @. (H0v[charge_type(sp)][ihoriz][end] + 1) / 2.0
+        Du[end]      = @. (thisD[end] + 1) /  2.0
+        Ku[end]      = @. (thisK[end] + 1) / 2.0
+        Tu_n[end]    = @. (Tn_col[end] + 1) / 2.0
+        Tu_p[end]    = @. (Tp_col[end] + 1) / 2.0
+        dTdzu_n[end] = @. (1 - Tn_col[end]) / GV.dz
+        dTdzu_p[end] = @. (1 - Tp_col[end]) / GV.dz
+        Hsu[end]     = @. (Hs_col[end] + 1) / 2.0
+        H0u[end]     = @. (thisH0[end] + 1) / 2.0
     elseif GV.planet=="Venus"
         # Upwards flux from the upper boundary layer, which is outside the model
         # These should never be used but we need to fill the array
@@ -2106,26 +2226,50 @@ function fluxcoefs_horiz(species_list::Vector, horiz_wind_v::Vector{Vector{Float
 end
 =#
 
-function Keddy(z::Vector, nt::Vector; globvars...)
+function Keddy(z::Vector, nt; ihoriz=nothing, globvars...)
     #=
     Input:
         z: Altitude in cm
-        nt: Total atmospheric density
-    Ouptut:
-        k: eddy diffusion coefficients at all altitudes.
+        nt: Total atmospheric density.
+            - For single-column case: Vector (#/cm³)
+            - For multi-column, this should be a Matrix (#altitudes, n_horiz), and `ihoriz` must be specified.
+    Output:
+        k: eddy diffusion coefficients at all altitudes (cm²/s).
+
+    MULTICOL WARNING: 
+    If running multi-column, make sure to specify the column index (ihoriz).
+    This version accommodates both single-column and multi-column simulations.
     =#
 
     GV = values(globvars)
     required = [:planet]
     check_requirements(keys(GV), required)
 
-    k = zeros(size(z)) # Initialize array for eddy diffusion  # MULTICOL WARNING different vertical columns can have different values because of dependence on n_tot. If want to use different functions for each column, this will need to be adapted
-    if GV.planet=="Mars"
-        upperatm = findall(i->i .> 60e5, z)
-        k[findall(i->i .<= 60e5, z)] .= 10. ^ 6
-        k[upperatm] .= 2e13 ./ sqrt.(nt[upperatm])
-    elseif GV.planet=="Venus"
-        k = 8e12*(nt .^ -0.5)
+    k = zeros(size(z))
+
+    if GV.planet == "Mars"
+        upperatm = findall(z .> 60e5)
+
+        # Assign constant Keddy below 60 km altitude (lower atmosphere)
+        k[z .<= 60e5] .= 1e7
+
+        # Upper atmosphere (>60 km), altitude-dependent Keddy
+        if ndims(nt) == 1  # Single-column case
+            k[upperatm] .= 1e13 ./ nt[upperatm]
+        elseif ndims(nt) == 2  # Multi-column case
+            @assert !isnothing(ihoriz) "ihoriz must be specified for multi-column simulations."
+            k[upperatm] .= 1e13 ./ nt[ihoriz, upperatm]
+        else
+            throw("Invalid dimensions for nt. Expecting Vector or Matrix.")
+        end
+
+    elseif GV.planet == "Venus"
+        # Venus: just an altitude-dependent eddy diffusion
+        if ndims(nt) == 1  # Single-column case
+            k .= 1e13 ./ sqrt.(nt)
+        else  # Multi-column case
+            k .= 1e13 ./ sqrt.(nt[ihoriz, :])
+        end
     end
 
     return k
@@ -2137,92 +2281,195 @@ thermaldiff(sp) = get(Dict(:H=>-0.25, :H2=>-0.25, :D=>-0.25, :HD=>-0.25,
                                 :Hpl=>-0.25, :H2pl=>-0.25, :Dpl=>-0.25, :HDpl=>-0.25,
                                 :Hepl=>-0.25), sp, 0)
 
-function update_diffusion_and_scaleH(species_list, atmdict::Dict{Symbol, Vector{Array{ftype_ncur}}}, D_coefs, n_horiz::Int64; globvars...) 
-    #= # MULTICOL WARNING to do: return K, H0_dict and Dcoef_dict with additional dimension/flexibility for n_horiz vertical columns. Also, will need to update comments
-    Input:
-        atmdict: Atmospheric state dictionary without boundary layers
-        Tn: Neutral temperature profile
-        Tp: Plasma temperature profile
-        D_coefs: placeholder array for diffusion coefficients to speed up performance.
-        bcdict: boundary condition dictionary
-        species_list: Species for which to generate molecular diffusion coefficients. This allows the code to only do it for
-                 transport species during the main simulation run, and for all species when trying to plot 
-                 rate balances after the run.
-    Output:
-        K: Vector of vectors of eddy diffusion coefficient by altitude; one vector for each vertical column. Independent of species.
-        Dcoefs: Dictionary of molecular diffusion by altitude. Keys are species: species=>[[D by altitude] for each vertical column]
-        H0: Dictionary of mean atmospheric scale height by altitude. Keys are "neutral" and "ion". For each key, [[scaleH by altitude] for each vertical column]
+function update_diffusion_and_scaleH(
+    species_list,
+    atmdict::Dict{Symbol, Vector{Array{ftype_ncur}}}, 
+    n_horiz::Int64;
+    globvars...
+) 
+    #=
+    Calculates:
+        1) The eddy diffusion coefficient K for each column;
+        2) The mean scale height H₀ for each column (both neutral and ion);
+        3) The molecular (or ambipolar) diffusion coefficients, stored in Dcoef_dict.
+
+    Inputs:
+        - atmdict: Atmospheric state dictionary with boundary layers already included
+        - n_horiz: Number of vertical columns
+        - species_list: The species for which to generate molecular or ambipolar D.
+
+    Outputs:
+        - K: Vector of length n_horiz, each entry is a 1D array of K vs altitude
+        - H0_dict: Dict("neutral"=>[H0_neutral_col1, H0_neutral_col2, ...],
+                        "ion"=>[H0_ion_col1, H0_ion_col2, ...])
+        - Dcoef_dict: Dict(s1 => [[D alt array col1], [D alt array col2], ...],
+                            s2 => [...], ...)
     =#
     GV = values(globvars)
-    required = [:all_species, :alt, :speciesbclist, :M_P, :molmass, :neutral_species, :n_alt_index, :polarizability, :planet, :R_P, :q,
-               :Tn, :Tp, :Tprof_for_diffusion, :use_ambipolar, :use_molec_diff]
+    required = [
+        :all_species, :alt, :speciesbclist, :M_P, :molmass, :neutral_species,
+        :n_alt_index, :polarizability, :planet, :R_P, :q, :Tn, :Tp,
+        :Tprof_for_diffusion, :use_ambipolar, :use_molec_diff
+    ]
     check_requirements(keys(GV), required)
 
-    ncur_with_bdys = ncur_with_boundary_layers(atmdict, n_horiz; GV.n_alt_index, GV.all_species)
-    
-    K = [Keddy(GV.alt, n_tot(ncur_with_bdys, ihoriz; GV.all_species, GV.n_alt_index); GV.planet) for ihoriz in 1:n_horiz]
+    # Assumes atmdict already includes boundary layers
+    ncur_with_bdys = ncur_with_boundary_layers(
+        atmdict, n_horiz; GV.n_alt_index, GV.all_species
+    )
+    num_alts_with_bdy = length(ncur_with_bdys[GV.all_species[1]][1])
 
-    H0_dict = Dict{String, Vector{Vector{ftype_ncur}}}("neutral"=>[scaleH(ncur_with_bdys, GV.Tn, n_horiz, ihoriz; globvars...) for ihoriz in 1:n_horiz], 
-                                               "ion"=>[scaleH(ncur_with_bdys, GV.Tp, n_horiz, ihoriz; globvars...) for ihoriz in 1:n_horiz])
-    # Molecular diffusion is only needed for transport species, though.
-    Dcoef_dict = Dict{Symbol, Vector{Vector{ftype_ncur}}}([s=>deepcopy(Dcoef!(D_coefs, GV.Tprof_for_diffusion[charge_type(s)], s, ncur_with_bdys, n_horiz; globvars...)) for s in species_list]) # HARDCODED
+    # 1) Eddy diffusion, explicitly calculated for each column
+    K = [
+        Keddy(GV.alt, n_tot(ncur_with_bdys, ihoriz; GV.all_species, GV.n_alt_index);
+              ihoriz=ihoriz, planet=GV.planet)
+        for ihoriz in 1:n_horiz
+    ]
+
+    # 2) Mean atmospheric scale heights (neutral and ion), column-wise explicitly
+    H0_dict = Dict{String, Vector{Vector{ftype_ncur}}}()
+    H0_dict["neutral"] = [
+        scaleH(ncur_with_bdys, GV.Tn[ihoriz, :], n_horiz, ihoriz; globvars...)
+        for ihoriz in 1:n_horiz
+    ]
+    H0_dict["ion"] = [
+        scaleH(ncur_with_bdys, GV.Tp[ihoriz, :], n_horiz, ihoriz; globvars...)
+        for ihoriz in 1:n_horiz
+    ]
+
+    # 3) Molecular/Ambipolar diffusion, explicitly calculated per species per column
+    Dcoef_dict = Dict{Symbol, Vector{Vector{ftype_ncur}}}()
+
+    for s in species_list
+        # Freshly initialized array per species and column (no reuse)
+        D_coefs_for_s = [
+            zeros(ftype_ncur, num_alts_with_bdy) for _ in 1:n_horiz
+        ]
+
+        # Calculate diffusion coefficient for this species
+        Dcoef!(D_coefs_for_s,
+               GV.Tprof_for_diffusion[charge_type(s)],  # (num_alts_with_bdy, n_horiz)
+               s,
+               ncur_with_bdys,
+               n_horiz;
+               globvars...
+        )
+
+        # Store the calculated coefficients
+        Dcoef_dict[s] = deepcopy(D_coefs_for_s)
+    end
 
     return K, H0_dict, Dcoef_dict
 end
 
-function update_transport_coefficients(species_list, atmdict::Dict{Symbol, Vector{Array{ftype_ncur}}}, D_coefs, M, n_horiz::Int64; 
-                                       calc_nonthermal=true, globvars...) 
+function update_transport_coefficients(
+    species_list,
+    atmdict::Dict{Symbol, Vector{Array{Float64}}}, 
+    D_coefs::Vector{Matrix{Float64}},  # Unused
+    M::Matrix{Float64},  # now explicitly 2D: num_layers × n_horiz
+    n_horiz::Int; 
+    calc_nonthermal=true,
+    globvars...
+)
+    # Call the real function that doesn't expect D_coefs
+    return update_transport_coefficients(
+        species_list, 
+        atmdict, 
+        M, 
+        n_horiz; 
+        calc_nonthermal=calc_nonthermal,
+        globvars...
+    )
+end
+
+function update_transport_coefficients(
+    species_list,
+    atmdict::Dict{Symbol, Vector{Array{ftype_ncur}}}, 
+    M::Matrix{ftype_ncur},  # now explicitly 2D: num_layers × n_horiz
+    n_horiz::Int64;
+    calc_nonthermal=true,
+    globvars...
+)
     #=
     Input:
-        species_list: Species which will have transport coefficients updated
-        atmdict: Atmospheric state dictionary for bulk layers
-        tspecies: species which need transport coefficients calculated. May vary depending on sim parameters.
-        Tn, Tp: Neutrals and plasma temperatures
-        D_coefs: placeholder for molecular diffusion coefficients
-        bcdict: Dictionary of boundary conditions, needed for pretty much everything.
-        species_list: Species for which to generate molecular diffusion coefficients. This allows the code to only do it for
-                 transport species during the main simulation run, and for all species when trying to plot 
-                 rate balances after the run.
-
-    Return: 
-        Transport coefficients for all atmospheric layers, units 1/s
-
-        tlower: transport coefficients at the lower boundary layer. shape: # TODO
-        tup: upward coefficients at inner bulk layers. shape: #TODO 
-        tdown: downward coefficients at inner bulk layers. shape: #TODO 
-        tupper: at the upper boundary layer. shape: #TODO 
+      - species_list: Species that need transport coefficients updated
+      - atmdict: Current atmospheric state dictionary (WITH boundary layers) 
+      - M: total atmospheric density by altitude and horizontal column (num_layers × n_horiz)
+      - n_horiz: Number of columns
+      - calc_nonthermal: whether to compute nonthermal BCs (like H, D escape)
+    Output:
+      - tlower, tup, tdown, tupper: boundary & in‐domain transport coefficients
     =#
-
     GV = values(globvars)
-    required = [:all_species, :alt, :speciesbclist, :dz, :hot_H_network, :hot_H_rc_funcs, :hot_D_network, :hot_D_rc_funcs, 
-               :hot_H2_network, :hot_H2_rc_funcs, :hot_HD_network, :hot_HD_rc_funcs, :Hs_dict, 
-               :ion_species, :M_P, :molmass, :neutral_species, :non_bdy_layers, :num_layers, :n_all_layers, :n_alt_index, 
-               :polarizability, :q, :R_P, :Tn, :Ti, :Te, :Tp, :Tprof_for_diffusion, :transport_species, :use_ambipolar, :use_molec_diff, :zmax]
+    required = [
+        :all_species, :alt, :speciesbclist, :dz, :hot_H_network, :hot_H_rc_funcs, 
+        :hot_D_network, :hot_D_rc_funcs, :hot_H2_network, :hot_H2_rc_funcs,
+        :hot_HD_network, :hot_HD_rc_funcs, :Hs_dict, :ion_species, :M_P, :molmass,
+        :neutral_species, :non_bdy_layers, :num_layers, :n_all_layers, :n_alt_index,
+        :polarizability, :q, :R_P, :Tn, :Ti, :Te, :Tp, :Tprof_for_diffusion,
+        :transport_species, :use_ambipolar, :use_molec_diff, :zmax
+    ]
     check_requirements(keys(GV), required)
-    
-    # Update the diffusion coefficients and scale heights  # MULTICOL temporary comment -- K_eddy_arr = vector of length 9; H0_dict = dictionary{"ion"=>vector of length 9; "neutral"=>vector of length 9}; Dcoef_dict = dictionary{ vector of length 9 for each species, in the order O2, Opl, O, O3}
-    K_eddy_arr, H0_dict, Dcoef_dict = update_diffusion_and_scaleH(species_list, atmdict, D_coefs, n_horiz; globvars...) # MULTICOL WARNING to do: extend to multiple columns
 
-    # Get flux coefficients
-    fluxcoefs_all = fluxcoefs(species_list, K_eddy_arr, Dcoef_dict, H0_dict, n_horiz; globvars...) #  MULTICOL temporary comment -- dictionary {array 2x9 for each species} i.e. X X; X X; X X;... To do: Extend to multiple vertical columns
-    
-    # Transport coefficients, non-boundary layers   # MULTICOL WARNING enter different values for different columns
-    tup = fill(-999., n_horiz, GV.num_layers, length(GV.transport_species)) # MULTICOL this is the same shape/dimensions as tdown, tforwards, and tbackwards; temporary comment -- XXXXXXX; XXXXXXX; XXXXXXX;;; x4
+    # 1) Build the K, H0, and Dcoef_dict
+    K_eddy_arr, H0_dict, Dcoef_dict = update_diffusion_and_scaleH(
+        species_list, atmdict, n_horiz; globvars...
+    )
+    # K_eddy_arr is a Vector of length n_horiz; each is 1D array of K vs altitude
+    # H0_dict = Dict("neutral" => [...], "ion"=>[...]) each an array of length n_horiz
+    # Dcoef_dict[s] = [[D vs alt col1], [D vs alt col2], ...]
+
+    # 2) Build the flux coefficients dictionary
+    fluxcoefs_all = fluxcoefs(
+        species_list,
+        K_eddy_arr,
+        Dcoef_dict,
+        H0_dict,
+        n_horiz; 
+        globvars...
+    )
+    # fluxcoefs_all[s][ihoriz] is a 2D array (num_alt x 2) => e.g. [down, up] at each altitude
+
+    # Prepare arrays to store upward/downward transport in the bulk layers
+    # shape = (n_horiz, num_layers, number_of_transport_species)
+    tup   = fill(-999., n_horiz, GV.num_layers, length(GV.transport_species))
     tdown = fill(-999., n_horiz, GV.num_layers, length(GV.transport_species))
-    for (i, s) in enumerate(GV.transport_species)
-        for ihoriz in [1:n_horiz;] # MULTICOL WARNING temporary for loop -- implement different vertical columns when fluxcoefs_all is built
-            tup[ihoriz, :, i] .= fluxcoefs_all[s][ihoriz][2:end-1, 2] # MULTICOL temporary comment - ends up being 7x4 array, i.e. X X X X X X X; X X X X X X X...
-            tdown[ihoriz, :, i] .= fluxcoefs_all[s][ihoriz][2:end-1, 1] # MULTICOL temporary comment - ends up being 7x4 array, i.e. X X X X X X X; X X X X X X X...
+
+    # Fill those from fluxcoefs
+    for (isp, s) in enumerate(GV.transport_species)
+        for ihoriz in 1:n_horiz
+            # The inner bulk layers are alt indices 2:end-1 in fluxcoefs
+            # with columns: col=1 => downward, col=2 => upward
+            # We skip boundary layers => fluxcoefs_all[s][ihoriz][2:end-1, 1 or 2]
+            tup[ihoriz, :, isp]   .= fluxcoefs_all[s][ihoriz][2:end-1, 2]
+            tdown[ihoriz, :, isp] .= fluxcoefs_all[s][ihoriz][2:end-1, 1]
         end
     end
-    bc_dict = boundaryconditions(fluxcoefs_all, atmdict, M, n_horiz; nonthermal=calc_nonthermal, globvars...) # MULTICOL temporary comment -- three 2x2 arrays for each species (lower,down lower,up; upper,up upper,down) 
 
-    # transport coefficients for boundary layers
+    # 3) Boundary conditions
+    bc_dict = boundaryconditions(
+        fluxcoefs_all,
+        atmdict,
+        M,
+        n_horiz;
+        nonthermal=calc_nonthermal,
+        globvars...
+    )
+    # bc_dict[s][ihoriz][1, :] => lower boundary [density-dependent, density-indep]
+    # bc_dict[s][ihoriz][2, :] => upper boundary
+
+    # Convert bc_dict to tlower and tupper shape
     tlower = Vector{Array{Float64}}(undef, n_horiz)
     tupper = Vector{Array{Float64}}(undef, n_horiz)
-    for ihoriz in [1:n_horiz;]
-    	tlower[ihoriz] = permutedims(reduce(hcat, [bc_dict[sp][ihoriz][1,:] for sp in GV.transport_species])) # MULTICOL temporary comment - ends up being three 2x4 arrays
-    	tupper[ihoriz] = permutedims(reduce(hcat, [bc_dict[sp][ihoriz][2,:] for sp in GV.transport_species])) # MULTICOL temporary comment - ends up being three 2x4 arrays
+    for ihoriz in 1:n_horiz
+        # Each is shape (2, number_of_transport_species)
+        # so we gather bc_dict[sp][ihoriz][1,:] for each sp in transport_species
+        tlower[ihoriz] = permutedims(reduce(hcat, [
+            bc_dict[sp][ihoriz][1, :] for sp in GV.transport_species
+        ]))
+        tupper[ihoriz] = permutedims(reduce(hcat, [
+            bc_dict[sp][ihoriz][2, :] for sp in GV.transport_species
+        ]))
     end
 
     return tlower, tup, tdown, tupper

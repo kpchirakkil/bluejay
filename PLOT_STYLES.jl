@@ -17,10 +17,10 @@
 # ***************************************************************************************************** #
 
 # Sans-serif font to use 
-sansserif_choice = "Louis George Caf?"
+sansserif_choice = "Arial"
 
 # Monospace font to use
-monospace_choice = "FreeMono"
+monospace_choice = "Menlo"
 
 const speciescolor = Dict( # PRIMARY NEUTRALS + IONS
                     :CO2 =>"#000000", :CO2pl=>"#000000",

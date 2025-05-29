@@ -271,18 +271,74 @@ if special_seasonal_case!=nothing
     const controltemps = [Tsurf[planet], Tmeso[planet], Texo_inclusive_opts[special_seasonal_case]]
 end
 
-# Now create the actual temperature profiles
-if planet=="Mars"
-    const T_array_dict = T_Mars(controltemps[1], controltemps[2], controltemps[3]; alt)
-    const Tn_meanSVP = T_Mars(meantemps...; alt)["neutrals"]; # Needed for boundary conditions.
+# MULTICOL ADDED: allocate 2D arrays for Tn, Ti, Te
+
+# Initialize the mean temperature profile for SVP, remains 1-D
+local Tn_meanSVP_temp
+if planet == "Mars"
+    Tn_meanSVP_temp = T_Mars(meantemps...; alt)["neutrals"]
 elseif planet=="Venus"
-    const T_array_dict = T_Venus(controltemps[1], controltemps[2], controltemps[3], "Venus-Inputs/FoxandSung2001_temps_mike.txt"; alt);
-    const Tn_meanSVP = T_Venus(meantemps..., "Venus-Inputs/FoxandSung2001_temps_mike.txt"; alt)["neutrals"]; # Needed for boundary conditions.
+    Tn_meanSVP_temp = T_Venus(meantemps..., "Venus-Inputs/FoxandSung2001_temps_mike.txt"; alt)["neutrals"]
+end
+const Tn_meanSVP = Tn_meanSVP_temp  # This stays as 1-D
+
+# Initialize the 2-D temperature arrays [n_horiz, num_layers+2]
+Tn_temp = zeros(n_horiz, num_layers+2)
+Ti_temp = zeros(n_horiz, num_layers+2)
+Te_temp = zeros(n_horiz, num_layers+2)
+
+# Loop over horizontal columns to create temperature profiles for each column
+
+# IDENTICAL temperatures
+for ihoriz in 1:n_horiz
+    # For each column, call T_Mars or T_Venus as if we had a single-column scenario:
+    local T_array_dict
+    if planet == "Mars"
+        T_array_dict = T_Mars(controltemps[1], controltemps[2], controltemps[3]; alt=alt)
+    elseif planet == "Venus"
+        T_array_dict = T_Venus(controltemps[1], controltemps[2], controltemps[3], 
+                               "Venus-Inputs/FoxandSung2001_temps_mike.txt"; alt=alt)
+    end
+
+    # Assign temperature profiles to the respective horizontal column (ihoriz, :)
+    Tn_temp[ihoriz, :] = T_array_dict["neutrals"]
+    Ti_temp[ihoriz, :] = T_array_dict["ions"]
+    Te_temp[ihoriz, :] = T_array_dict["electrons"]
 end
 
-const Tn_arr = T_array_dict["neutrals"]
-const Ti_arr = T_array_dict["ions"]
-const Te_arr = T_array_dict["electrons"]
+# DIFFERENT temperatures
+# for ihoriz in 1:n_horiz
+#     local T_array_dict
+#     if planet == "Mars"
+#         T_array_dict = T_Mars(controltemps[1], controltemps[2], controltemps[3]; alt=alt)
+#     elseif planet == "Venus"
+#         T_array_dict = T_Venus(controltemps[1], controltemps[2], controltemps[3], 
+#                                "Venus-Inputs/FoxandSung2001_temps_mike.txt"; alt=alt)
+#     end
+
+#     # Assign ion and electron temperature profiles (same for all columns)
+#     Ti_temp[ihoriz, :] = T_array_dict["ions"]
+#     Te_temp[ihoriz, :] = T_array_dict["electrons"]
+
+#     # Assign neutral temperature profiles with column-specific increments
+#     if ihoriz == 1
+#         # First column unchanged
+#         Tn_temp[ihoriz, :] = T_array_dict["neutrals"]
+#     elseif ihoriz == 2
+#         # Second column increased by 20 K
+#         Tn_temp[ihoriz, :] = T_array_dict["neutrals"] .+ 20.0
+#     elseif ihoriz == 3
+#         # Third column increased by 40 K
+#         Tn_temp[ihoriz, :] = T_array_dict["neutrals"] .+ 40.0
+#     end
+# end
+
+# Final assignment to global constants (2-D arrays)
+const Tn_arr = Tn_temp
+const Ti_arr = Ti_temp
+const Te_arr = Te_temp
+
+# @show size(Tn_arr), size(Ti_arr), size(Te_arr)
 
 const Tplasma_arr = Ti_arr .+ Te_arr;
 const Tprof_for_diffusion = Dict("neutral"=>Tn_arr, "ion"=>Tplasma_arr)
@@ -346,8 +402,8 @@ end
 
 #                              Species-specific scale heights
 # =======================================================================================================
-const Hs_dict = Dict{Symbol, Vector{Float64}}([sp=>scaleH(alt, sp, Tprof_for_Hs[charge_type(sp)]; molmass, M_P, R_P) for sp in all_species])
-
+const Hs_dict = Dict{Symbol, Vector{Vector{Float64}}}([sp => [scaleH(alt, sp, Tprof_for_Hs[charge_type(sp)][ihoriz, :]; molmass, M_P, R_P) for ihoriz in 1:n_horiz] for sp in all_species])
+# @show typeof(Hs_dict[:O][1]), size(Hs_dict[:O][1])
 
 #                                     Boundary conditions (lower and upper)
 # =======================================================================================================
@@ -362,19 +418,21 @@ if planet=="Mars"
                         :H2O=>Dict("n"=>[[H2Osat[1], NaN] for ihoriz in 1:n_horiz], "f"=>[[NaN, 0.] for ihoriz in 1:n_horiz]), # bc doesnt matter if H2O fixed # MULTICOL WARNING to do: allow use of different values for different columns
                         :HDO=>Dict("n"=>[[HDOsat[1], NaN] for ihoriz in 1:n_horiz], "f"=>[[NaN, 0.] for ihoriz in 1:n_horiz]), # MULTICOL WARNING to do: allow use of different values for different columns
                         :O=> Dict("f"=>[[0., 1.2e8] for ihoriz in 1:n_horiz]),
-                        :H2=>Dict("f"=>[[0., NaN] for ihoriz in 1:n_horiz], "v"=>[[NaN, effusion_velocity(Tn_arr[end], 2.0; M_P, R_P, zmax)] for ihoriz in 1:n_horiz], "ntf"=>[[NaN, "see boundaryconditions()"] for ihoriz in 1:n_horiz]),  # velocities are in cm/s # MULTICOL WARNING to do: allow use of different values for different columns
-                        :HD=>Dict("f"=>[[0., NaN] for ihoriz in 1:n_horiz], "v"=>[[NaN, effusion_velocity(Tn_arr[end], 3.0; M_P, R_P, zmax)] for ihoriz in 1:n_horiz], "ntf"=>[[NaN, "see boundaryconditions()"] for ihoriz in 1:n_horiz]),  # MULTICOL WARNING to do: allow use of different values for different columns
-                        :H=> Dict("f"=>[[0., NaN] for ihoriz in 1:n_horiz], "v"=>[[NaN, effusion_velocity(Tn_arr[end], 1.0; M_P, R_P, zmax)] for ihoriz in 1:n_horiz], "ntf"=>[[NaN, "see boundaryconditions()"] for ihoriz in 1:n_horiz]), # MULTICOL WARNING to do: allow use of different values for different columns
-                        :D=> Dict("f"=>[[0., NaN] for ihoriz in 1:n_horiz], "v"=>[[NaN, effusion_velocity(Tn_arr[end], 2.0; M_P, R_P, zmax)] for ihoriz in 1:n_horiz], "ntf"=>[[NaN, "see boundaryconditions()"] for ihoriz in 1:n_horiz]), # MULTICOL WARNING to do: allow use of different values for different columns
+                        :H2=>Dict("f"=>[[0., NaN] for ihoriz in 1:n_horiz], "v"=>[[NaN, effusion_velocity(Tn_arr[ihoriz, end], 2.0; M_P, R_P, zmax)] for ihoriz in 1:n_horiz], "ntf"=>[[NaN, "see boundaryconditions()"] for ihoriz in 1:n_horiz]),  # velocities are in cm/s # MULTICOL WARNING to do: allow use of different values for different columns
+                        :HD=>Dict("f"=>[[0., NaN] for ihoriz in 1:n_horiz], "v"=>[[NaN, effusion_velocity(Tn_arr[ihoriz, end], 3.0; M_P, R_P, zmax)] for ihoriz in 1:n_horiz], "ntf"=>[[NaN, "see boundaryconditions()"] for ihoriz in 1:n_horiz]),  # MULTICOL WARNING to do: allow use of different values for different columns
+                        :H=> Dict("f"=>[[0., NaN] for ihoriz in 1:n_horiz], "v"=>[[NaN, effusion_velocity(Tn_arr[ihoriz, end], 1.0; M_P, R_P, zmax)] for ihoriz in 1:n_horiz], "ntf"=>[[NaN, "see boundaryconditions()"] for ihoriz in 1:n_horiz]), # MULTICOL WARNING to do: allow use of different values for different columns
+                        :D=> Dict("f"=>[[0., NaN] for ihoriz in 1:n_horiz], "v"=>[[NaN, effusion_velocity(Tn_arr[ihoriz, end], 2.0; M_P, R_P, zmax)] for ihoriz in 1:n_horiz], "ntf"=>[[NaN, "see boundaryconditions()"] for ihoriz in 1:n_horiz]), # MULTICOL WARNING to do: allow use of different values for different columns
                        );
 elseif planet=="Venus"
     const ntot_at_lowerbdy = 9.5e15 # at 90 km
-    const KoverH_lowerbdy = Keddy([zmin], [ntot_at_lowerbdy]; planet)[1]/scaleH_lowerboundary(zmin, Tn_arr[1]; molmass, M_P, R_P, zmin)
+    # const KoverH_lowerbdy = Keddy([zmin], [ntot_at_lowerbdy]; planet)[1]/scaleH_lowerboundary(zmin, Tn_arr[1]; molmass, M_P, R_P, zmin)
+    const KoverH_lowerbdy = Keddy([zmin], [ntot_at_lowerbdy]; planet=planet)[1] / scaleH_lowerboundary(zmin, Tn_arr[1]; molmass, M_P, R_P, zmin)
     const manual_speciesbclist=Dict(# major species neutrals at lower boundary (estimated from Fox&Sung 2001, Hedin+1985, agrees pretty well with VIRA)  # MULTICOL WARNING this won't work in new multi-column setup
                                     :CO2=>Dict("n"=>[[0.965*ntot_at_lowerbdy, NaN] for ihoriz in 1:n_horiz], "f"=>[[NaN, 0.] for ihoriz in 1:n_horiz]),
                                     :Ar=>Dict("n"=>[[5e11, NaN] for ihoriz in 1:n_horiz], "f"=>[[NaN, 0.] for ihoriz in 1:n_horiz]),
                                     :CO=>Dict("n"=>[[4.5e-6*ntot_at_lowerbdy, NaN] for ihoriz in 1:n_horiz], "f"=>[[NaN, 0.] for ihoriz in 1:n_horiz]),
                                     :O2=>Dict("n"=>[[3e-3*ntot_at_lowerbdy, NaN] for ihoriz in 1:n_horiz], "f"=>[[NaN, 0.] for ihoriz in 1:n_horiz]),
+                                    # :O2 => Dict("n" => [[3e-3 * ntot_at_lowerbdy, NaN], [2.9e-3 * ntot_at_lowerbdy, NaN], [3.1e-3 * ntot_at_lowerbdy, NaN]], "f" => [[NaN, 0.] for ihoriz in 1:n_horiz]),
                                     :N2=>Dict("n"=>[[0.032*ntot_at_lowerbdy, NaN] for ihoriz in 1:n_horiz]),
 
                                     # water mixing ratio is fixed at lower boundary
@@ -383,25 +441,25 @@ elseif planet=="Venus"
                                     :HDO=>Dict("n"=>[[2*DH*water_mixing_ratio*ntot_at_lowerbdy, NaN] for ihoriz in 1:n_horiz], "f"=>[[NaN, 0.] for ihoriz in 1:n_horiz]), # MULTICOL WARNING to do: allow use of different values for different columns
 
                                     # atomic H and D escape solely by photochemical loss to space, can also be mixed downward
-                                    :H=> Dict("v"=>[[-KoverH_lowerbdy, effusion_velocity(Tn_arr[end], 1.0; zmax, M_P, R_P)] for ihoriz in 1:n_horiz], # MULTICOL WARNING should use different =KoverH_lowerbdy values for each vertical column
+                                    :H=> Dict("v"=>[[-KoverH_lowerbdy, effusion_velocity(Tn_arr[ihoriz, end], 1.0; zmax, M_P, R_P)] for ihoriz in 1:n_horiz], # MULTICOL WARNING should use different =KoverH_lowerbdy values for each vertical column
                                                     #                 ^^^ other options here:
-                                                    #                 effusion_velocity(Tn_arr[end], 1.0; zmax) # thermal escape, negligible
+                                                    #                 effusion_velocity(Tn_arr[ihoriz, end], 1.0; zmax) # thermal escape, negligible
                                                     #                 100 # representing D transport to nightside, NOT escape
                                                     #                 NaN # No thermal escape to space, appropriate for global average model
                                               "ntf"=>[[NaN, "see boundaryconditions()"] for ihoriz in 1:n_horiz]),
-                                    :D=> Dict("v"=>[[-KoverH_lowerbdy, effusion_velocity(Tn_arr[end], 2.0; zmax, M_P, R_P)] for ihoriz in 1:n_horiz],  # MULTICOL WARNING should use different =KoverH_lowerbdy values for each vertical column
+                                    :D=> Dict("v"=>[[-KoverH_lowerbdy, effusion_velocity(Tn_arr[ihoriz, end], 2.0; zmax, M_P, R_P)] for ihoriz in 1:n_horiz],  # MULTICOL WARNING should use different =KoverH_lowerbdy values for each vertical column
                                                     #                 ^^^ other options here:
-                                                    #                  effusion_velocity(Tn_arr[end], 2.0; zmax) # thermal escape, negligible
+                                                    #                  effusion_velocity(Tn_arr[ihoriz, end], 2.0; zmax) # thermal escape, negligible
                                                     #                 100 # representing D transport to nightside, NOT escape
                                                     #                 NaN # No thermal escape to space, appropriate for global average model
                                               "ntf"=>[[NaN, "see boundaryconditions()"] for ihoriz in 1:n_horiz]),
 
                                     # # H2 mixing ratio at lower boundary adopted from Yung&DeMore1982 as in Fox&Sung2001
                                     # :H2=>Dict("n"=>[1e-7*ntot_at_lowerbdy, NaN],
-                                    #           "v"=>[NaN, effusion_velocity(Tn_arr[end], 2.0; zmax)],
+                                    #           "v"=>[NaN, effusion_velocity(Tn_arr[ihoriz, end], 2.0; zmax)],
                                     #           "ntf"=>[NaN, "see boundaryconditions()"]),
                                     # :HD=>Dict("n"=>[DH*1e-7*ntot_at_lowerbdy, NaN],
-                                    #           "v"=>[NaN, effusion_velocity(Tn_arr[end], 3.0; zmax)],
+                                    #           "v"=>[NaN, effusion_velocity(Tn_arr[ihoriz, end], 3.0; zmax)],
                                     #           "ntf"=>[NaN, "see boundaryconditions()"]),
 
                                     # unusued neutral boundary conditions
@@ -410,8 +468,8 @@ elseif planet=="Venus"
                                     #:NO=>Dict("v"=>[-KoverH_lowerbdy, NaN], #="n"=>[3e8, NaN],=# #="n"=>[5.5e-9*ntot_at_lowerbdy, NaN], =# "f"=>[NaN, 0.]),
 
                                     # assume no ion loss, appropriate for global average and small observed rates
-                                    #:Hpl=>Dict("v"=>[-KoverH_lowerbdy, 0.0 #=effusion_velocity(Ti_arr[end], 1.0; zmax)=#]),#, "f"=>[NaN, 1.6e7]),
-                                    #:H2pl=>Dict("v"=>[-KoverH_lowerbdy, 0.0 #=effusion_velocity(Ti_arr[end], 2.0; zmax)=#]),#, "f"=>[NaN, 2e5]),
+                                    #:Hpl=>Dict("v"=>[-KoverH_lowerbdy, 0.0 #=effusion_velocity(Ti_arr[ihoriz, end], 1.0; zmax)=#]),#, "f"=>[NaN, 1.6e7]),
+                                    #:H2pl=>Dict("v"=>[-KoverH_lowerbdy, 0.0 #=effusion_velocity(Ti_arr[ihoriz, end], 2.0; zmax)=#]),#, "f"=>[NaN, 2e5]),
                                     #:Opl=>Dict("v"=>[-KoverH_lowerbdy, 2e5], ), # "f"=>[NaN, 2.1e8] # tends to cause hollowing out of atmosphere
                                     );
 
@@ -625,4 +683,4 @@ PARAMETERS_BCS = DataFrame(Species=[], Type=[], Lower=[], Upper=[]);
 PARAMETERS_BCS_HORIZ = DataFrame(Species=[], Type=[], BackEdge=[], FrontEdge=[]);
 
 # LOG THE TEMPERATURES
-PARAMETERS_TEMPERATURE_ARRAYS = DataFrame(Neutrals=Tn_arr, Ions=Ti_arr, Electrons=Te_arr); 
+PARAMETERS_TEMPERATURE_ARRAYS = DataFrame(Neutrals = vec(Tn_arr), Ions = vec(Ti_arr), Electrons = vec(Te_arr))
