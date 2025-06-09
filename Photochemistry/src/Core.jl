@@ -2591,7 +2591,8 @@ Psat(T) = (1e-6 ./ (kB_MKS .* T)) .* (10 .^ (-2663.5 ./ T .+ 12.537))
 # However, this function is defined on the offchance someone studies HDO.
 Psat_HDO(T) = (1e-6/(kB_MKS * T))*(10^(-2663.5/T + 12.537))
 
-function set_h2oinitfrac_bySVP(atmdict, h_alt; globvars...)
+# function set_h2oinitfrac_bySVP(atmdict, h_alt; globvars...)
+function set_h2oinitfrac_bySVP(atmdict, h_alt; ihoriz=1, globvars...)
     #=
     Calculates the initial fraction of H2O in the atmosphere, based on the supplied mixing ratio (global variable)
     and the saturation vapor pressure of water.
@@ -2607,8 +2608,8 @@ function set_h2oinitfrac_bySVP(atmdict, h_alt; globvars...)
                :H2Osat, :water_mixing_ratio]
     check_requirements(keys(GV), required)
 
-    H2Osatfrac = GV.H2Osat ./ map(z->n_tot(atmdict, z, 1; GV.all_species, GV.n_alt_index), GV.alt)  # get SVP as fraction of total atmo # MULTICOL WARNING - ihoriz hardcoded as 1 in n_tot arguments for now -- change this
-
+    # H2Osatfrac = GV.H2Osat ./ map(z->n_tot(atmdict, z, 1; GV.all_species, GV.n_alt_index), GV.alt)  # get SVP as fraction of total atmo # MULTICOL WARNING - ihoriz hardcoded as 1 in n_tot arguments for now -- change this
+    H2Osatfrac = GV.H2Osat ./ map(z->n_tot(atmdict, z, ihoriz; GV.all_species, GV.n_alt_index), GV.alt)  # get SVP as fraction of total atmo for this column
     # set H2O SVP fraction to minimum for all alts above first time min is reached
     H2Oinitfrac = H2Osatfrac[1:something(findfirst(isequal(minimum(H2Osatfrac)), H2Osatfrac), 0)]
     H2Oinitfrac = [H2Oinitfrac;   # ensures no supersaturation
@@ -2644,7 +2645,8 @@ function setup_water_profile!(atmdict; constfrac=1, dust_storm_on=false, make_sa
     # Set the initial fraction of the atmosphere for water to take up, plus the saturation fraction
     # ================================================================================================================
     # Currently this doesn't change behavior based on planet. 5/15/24
-    H2Oinitfrac, H2Osatfrac = set_h2oinitfrac_bySVP(atmdict, hygropause_alt; globvars...)
+    # H2Oinitfrac, H2Osatfrac = set_h2oinitfrac_bySVP(atmdict, hygropause_alt; globvars...)
+    H2Oinitfrac, H2Osatfrac = set_h2oinitfrac_bySVP(atmdict, hygropause_alt; ihoriz=1, globvars...)
 
     if GV.planet=="Mars"
         required = [:alt, :H2Osat, :n_alt_index, :non_bdy_layers, :num_layers, :speciescolor, :speciesstyle, :upper_lower_bdy_i, :water_mixing_ratio,]

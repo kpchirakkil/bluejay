@@ -1159,8 +1159,9 @@ if update_water_profile
         if water_loc=="loweratmo"
 
             # Recalculate the initialization fraction for H2O 
-            H2Oinitfrac = set_h2oinitfrac_bySVP(n_current, hygropause_alt; all_species, alt, num_layers, n_alt_index, H2Osat, water_mixing_ratio)
-
+            # H2Oinitfrac = set_h2oinitfrac_bySVP(n_current, hygropause_alt; all_species, alt, num_layers, n_alt_index, H2Osat, water_mixing_ratio)
+            H2Oinitfrac = set_h2oinitfrac_bySVP(n_current, hygropause_alt; ihoriz=1, all_species, alt, num_layers, n_alt_index, H2Osat, water_mixing_ratio)
+            
             prevh2o = deepcopy(n_current[:H2O])
             prevhdo = deepcopy(n_current[:HDO])
 
@@ -1188,8 +1189,9 @@ if update_water_profile
                                                                    monospace_choice, sansserif_choice) 
     else
         # Recalculate the initialization fraction for H2O 
-        H2Oinitfrac, H2Osatfrac = set_h2oinitfrac_bySVP(n_current, hygropause_alt; all_species, alt, num_layers, n_alt_index, H2Osat, water_mixing_ratio)
-
+        # H2Oinitfrac, H2Osatfrac = set_h2oinitfrac_bySVP(n_current, hygropause_alt; all_species, alt, num_layers, n_alt_index, H2Osat, water_mixing_ratio)
+        H2Oinitfrac, H2Osatfrac = set_h2oinitfrac_bySVP(n_current, hygropause_alt; ihoriz=1, all_species, alt, num_layers, n_alt_index, H2Osat, water_mixing_ratio)
+        
         prevh2o = deepcopy(n_current[:H2O])
         prevhdo = deepcopy(n_current[:HDO])
 
