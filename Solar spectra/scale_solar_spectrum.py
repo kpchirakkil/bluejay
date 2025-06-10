@@ -63,7 +63,8 @@ def interpolate_solar_spectrum(spec, AU, show_plots=True, extrap_tail=False, sca
 
     # put the interpolated data together with the data that started out fine for one new data frame 
     i_interp = find_nearest(spec[col[0]], interp_start)
-    newsolardata = pd.concat([spec[:i_interp+1], interp_data[1:]], ignore_index="true")
+    # newsolardata = pd.concat([spec[:i_interp+1], interp_data[1:]], ignore_index="true")
+    newsolardata = pd.concat([spec[:i_interp+1], interp_data[1:]], ignore_index=True)
     
     if extrap_tail:
         # This data is still missing 10 or so datapoints near the end (Mike's solar photon flux goes out to 2399.5).

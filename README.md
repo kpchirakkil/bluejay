@@ -114,6 +114,9 @@ This list may be incomplete and will be updated.
 4. Set `adding_new_species` variable in `INPUT_PARAMETERS`.jl to true
 5. If you want to provide a non-zero initial guess profile for the species, set `use_nonzero_initial_profiles` to true in `INPUT_PARAMETERS`.jl, and enter the initial guess in a file with path (relative to the code directory) equal to `../Resources/initial_profiles/{speciesname}_initial_profile.txt`.
 
+### Horizontal winds and boundary conditions
+
+The variable `horiz_wind_v` in `MODEL_SETUP.jl` provides a horizontal wind profile for each column. `update_horiz_transport_coefficients` uses these velocities to create forward and backward transport rates. Edge fluxes are set through the `speciesbclist_horiz` dictionary; specify altitude profiles for each species to impose non-zero flux at the back and front edges. Passing `cyclic=true` treats the domain as periodic so that flux leaving one edge enters from the opposite side.
 
 **Running the model**:
 1. Modify `INPUT_PARAMETERS.jl` to your chosen conditions for the simulation. 

@@ -1727,7 +1727,14 @@ function boundaryconditions(fluxcoef_dict, atmdict, M, n_horiz::Int64; nontherma
     return bc_dict
 end
 
-function boundaryconditions_horiz(globvars)
+# function boundaryconditions_horiz(globvars)
+function boundaryconditions_horiz(
+    atmdict::Dict{Symbol, Vector{Array{ftype_ncur}}},
+    horiz_wind_v::Vector{Vector{Float64}},
+    n_horiz::Int64;
+    cyclic::Bool=false,
+    globvars...
+)
     #= 
     Inputs:
         M: total atmospheric density, required for the nonthermal escape boundary condition.
@@ -1768,54 +1775,78 @@ function boundaryconditions_horiz(globvars)
     required = [:all_species, :speciesbclist_horiz, :dx, :planet]
     check_requirements(keys(GV), required)
     
-    bc_dict_horiz = Dict{Symbol, Vector{Array{ftype_ncur}}}([s=>[[0.0 0.0; 0.0 0.0] for ialt in 1:GV.num_layers] for s in GV.all_species])
+    # bc_dict_horiz = Dict{Symbol, Vector{Array{ftype_ncur}}}([s=>[[0.0 0.0; 0.0 0.0] for ialt in 1:GV.num_layers] for s in GV.all_species])
+    bc_dict_horiz = Dict{Symbol, Vector{Array{ftype_ncur}}}(
+        [s => [fill(0.0, 2, 2) for ialt in 1:GV.num_layers] for s in GV.all_species]
+    )
 
     for sp in keys(GV.speciesbclist_horiz)
-        try 
-            global these_bcs_horiz = GV.speciesbclist_horiz[sp]
-        catch KeyError
-            println("No entry $(sp) in bcdict")
-            continue
-        end
+        # try 
+        #     global these_bcs_horiz = GV.speciesbclist_horiz[sp]
+        # catch KeyError
+        #     println("No entry $(sp) in bcdict")
+        #     continue
+        # end
  
-        # FLUX
-        for ialt in [1:GV.num_layers;]
-            try 
-                # back edge boundary...
-                if GV.planet=="Mars"
-                    f_backedge = [0, -these_bcs_horiz["f"][1][ialt]/GV.dx]
-                elseif GV.planet=="Venus"
-                    f_backedge = [0, these_bcs_horiz["f"][1][ialt]/GV.dx]
-                    #             ^ no (-) sign, negative flux at lower boundary represents loss to surface
+        # # FLUX
+        # for ialt in [1:GV.num_layers;]
+            # try 
+            #     # back edge boundary...
+            #     if GV.planet=="Mars"
+            #         f_backedge = [0, -these_bcs_horiz["f"][1][ialt]/GV.dx]
+            #     elseif GV.planet=="Venus"
+            #         f_backedge = [0, these_bcs_horiz["f"][1][ialt]/GV.dx]
+            #         #             ^ no (-) sign, negative flux at lower boundary represents loss to surface
+            #     end
+            #     try        
+            #         @assert all(x->!isnan(x), f_backedge)
+            #         bc_dict_horiz[sp][ialt][1, :] .+= f_backedge
+            #     catch y
+            #         if !isa(y, AssertionError)
+            #             throw("Unhandled exception in back edge flux bc: $(y)")
+            #         end
+            #     end
+            #     try 
+            #         # front edge boundary...
+            #         f_frontedge = [0, -these_bcs_horiz["f"][2][ialt]/GV.dx]
+            #         #             ^ (-) sign needed so that positive flux at upper boundary represents loss across front edge boundary
+            #         #             (see "Sign convention" note above)
+            #         @assert all(x->!isnan(x), f_frontedge)
+            #         bc_dict_horiz[sp][ialt][2, :] .+= f_frontedge
+            #     catch y
+            #         if !isa(y, AssertionError)
+            #             throw("Unhandled exception in front edge flux bc: $(y)")
+            #         end
+            #     end
+            # catch y
+            #     if !isa(y, KeyError)
+            #         throw("Unhandled exception in edge flux bcs for $(sp)")
+        these_bcs_horiz = GV.speciesbclist_horiz[sp]
+
+        for ialt in 1:GV.num_layers
+            if cyclic
+                cyc_back = horiz_wind_v[1][ialt] *
+                    (atmdict[sp][n_horiz][ialt] - atmdict[sp][1][ialt]) / GV.dx
+                cyc_front = horiz_wind_v[n_horiz][ialt] *
+                    (atmdict[sp][1][ialt] - atmdict[sp][n_horiz][ialt]) / GV.dx
+                bc_dict_horiz[sp][ialt][1, :] .= [0, cyc_back]
+                bc_dict_horiz[sp][ialt][2, :] .= [0, cyc_front]
+            else
+                back_flux = these_bcs_horiz["f"][1][ialt]
+                front_flux = these_bcs_horiz["f"][2][ialt]
+                if GV.planet == "Mars"
+                    f_backedge = [0, -back_flux / GV.dx]
+                else
+                    f_backedge = [0, back_flux / GV.dx]
                 end
-                try        
-                    @assert all(x->!isnan(x), f_backedge)
-                    bc_dict_horiz[sp][ialt][1, :] .+= f_backedge
-                catch y
-                    if !isa(y, AssertionError)
-                        throw("Unhandled exception in back edge flux bc: $(y)")
-                    end
-                end
-                try 
-                    # front edge boundary...
-                    f_frontedge = [0, -these_bcs_horiz["f"][2][ialt]/GV.dx]
-                    #             ^ (-) sign needed so that positive flux at upper boundary represents loss across front edge boundary
-                    #             (see "Sign convention" note above)
-                    @assert all(x->!isnan(x), f_frontedge)
-                    bc_dict_horiz[sp][ialt][2, :] .+= f_frontedge
-                catch y
-                    if !isa(y, AssertionError)
-                        throw("Unhandled exception in front edge flux bc: $(y)")
-                    end
-                end
-            catch y
-                if !isa(y, KeyError)
-                    throw("Unhandled exception in edge flux bcs for $(sp)")
-                end
+                f_frontedge = [0, -front_flux / GV.dx]
+                bc_dict_horiz[sp][ialt][1, :] .+= f_backedge
+                bc_dict_horiz[sp][ialt][2, :] .+= f_frontedge
             end
         end
     end
     
+
     return bc_dict_horiz
 end
 
@@ -2178,53 +2209,93 @@ function fluxcoefs(species_list::Vector, K, D, H0, n_horiz::Int64; globvars...)
     return fluxcoef_dict
 end
 
-#= # MULTICOL WARNING finish this function
-function fluxcoefs_horiz(species_list::Vector, horiz_wind_v::Vector{Vector{Float64}}, n_horiz::Int64; globvars...) 
-    #= # MULTICOL WARNING edit comment
-    New optimized version of fluxcoefs that calls the lower level version of fluxcoefs,
-    producing a dictionary that contains both up and down flux coefficients for each layer of
-    the atmosphere including boundary layers. Created to optimize calls to this function
-    during the solution of the production and loss equation.
+# MULTICOL WARNING finish this function
+# function fluxcoefs_horiz(species_list::Vector, horiz_wind_v::Vector{Vector{Float64}}, n_horiz::Int64; globvars...) 
+#     #= # MULTICOL WARNING edit comment
+#     New optimized version of fluxcoefs that calls the lower level version of fluxcoefs,
+#     producing a dictionary that contains both up and down flux coefficients for each layer of
+#     the atmosphere including boundary layers. Created to optimize calls to this function
+#     during the solution of the production and loss equation.
 
-    Here, D and Hs depend on the current atmospheric densities, and need to be pre-calculated
-    within the upper level function which calls this one.
-    The parameters below which vary by species are dictionaries, and those that are arrays
-    don't depend on the species. All profiles are by altitude. All lengths are the same 
-    as for the alt variable (full altitude grid including boundary layers).
+#     Here, D and Hs depend on the current atmospheric densities, and need to be pre-calculated
+#     within the upper level function which calls this one.
+#     The parameters below which vary by species are dictionaries, and those that are arrays
+#     don't depend on the species. All profiles are by altitude. All lengths are the same 
+#     as for the alt variable (full altitude grid including boundary layers).
     
-    Inputs:
-        species_list: Species for which to generate transport coefficients. This allows the code to only do it for
-                transport species during the main simulation run, and for all species when trying to plot 
-                rate balances after the run.
-        T_neutral: 1D neutral temperature profile
-        T_plasma: the same, but for the plasma temperature
-        K: Array; 1D eddy diffusion profile by altitude for current atmospheric state
-        D: Dictionary (key=species); 1D molecular diffusion profiles for current atmospheric state
-        H0: Dictionary (key="neutral" or "ion"); 1D mean atmospheric scale height profiles for each type
-        Hs: Dictionary (key=species); 1D species scale height profiles
-    Outputs:
-        fluxcoef_dict: dictionary of flux coefficients of the form [flux down, flux up] by altitude 
+#     Inputs:
+#         species_list: Species for which to generate transport coefficients. This allows the code to only do it for
+#                 transport species during the main simulation run, and for all species when trying to plot 
+#                 rate balances after the run.
+#         T_neutral: 1D neutral temperature profile
+#         T_plasma: the same, but for the plasma temperature
+#         K: Array; 1D eddy diffusion profile by altitude for current atmospheric state
+#         D: Dictionary (key=species); 1D molecular diffusion profiles for current atmospheric state
+#         H0: Dictionary (key="neutral" or "ion"); 1D mean atmospheric scale height profiles for each type
+#         Hs: Dictionary (key=species); 1D species scale height profiles
+#     Outputs:
+#         fluxcoef_dict: dictionary of flux coefficients of the form [flux down, flux up] by altitude 
 
-    =#
+#     =#
+"""
+Compute horizontal transport coefficients for each species and column.
 
+The return value is a dictionary where each entry ``fluxcoef_dict[s][i]`` is a
+``n_all_layers × 2`` matrix of coefficients linking column ``i`` to the column
+behind (column 1) and the column in front (column 2).  Diffusion coefficients
+are averaged between neighbouring columns and scaled by ``dx²`` while advection
+uses an upwind scheme based on the provided horizontal wind profile.
+"""
+function fluxcoefs_horiz(
+    species_list::Vector,
+    K::Vector{Vector{ftype_ncur}},
+    D::Dict{Symbol, Vector{Vector{ftype_ncur}}},
+    horiz_wind_v::Vector{Vector{Float64}},
+    n_horiz::Int64;
+    globvars...
+)
     GV = values(globvars)
-    required = [:Tn, :Tp, :n_all_layers, :dz] # MULTICOL WARNING edit -- probably don't need Tn, Tp
+    # required = [:Tn, :Tp, :n_all_layers, :dz] # MULTICOL WARNING edit -- probably don't need Tn, Tp
+    required = [:dx, :n_all_layers]
     check_requirements(keys(GV), required)
     
     # the return dictionary: Each species has 2 entries for every layer of the atmosphere.
-    fluxcoef_horiz_dict = Dict{Symbol, Vector{Array{ftype_ncur}}}([s=>[fill(0., GV.n_all_layers, 2) for ihoriz in 1:n_horiz] for s in species_list])
+    # fluxcoef_horiz_dict = Dict{Symbol, Vector{Array{ftype_ncur}}}([s=>[fill(0., GV.n_all_layers, 2) for ihoriz in 1:n_horiz] for s in species_list])
+    fluxcoef_dict = Dict{Symbol, Vector{Array{ftype_ncur}}}(
+        [s => [zeros(ftype_ncur, GV.n_all_layers, 2) for _ in 1:n_horiz]
+         for s in species_list],
+    )
 
     for s in species_list
-        for ihoriz in [1:n_horiz;]
-            column_behind_coefs, column_infront_coefs = fluxcoefs(s, K, D, H0, ihoriz; globvars...) # MULTICOL WARNING - START HERE
-            fluxcoef_horiz_dict[s][ihoriz][:, 1] .= column_behind_coefs
-            fluxcoef_horiz_dict[s][ihoriz][:, 2] .= column_infront_coefs
+        # for ihoriz in [1:n_horiz;]
+        #     column_behind_coefs, column_infront_coefs = fluxcoefs(s, K, D, H0, ihoriz; globvars...) # MULTICOL WARNING - START HERE
+        #     fluxcoef_horiz_dict[s][ihoriz][:, 1] .= column_behind_coefs
+        #     fluxcoef_horiz_dict[s][ihoriz][:, 2] .= column_infront_coefs
+        for ihoriz in 1:n_horiz
+            behind_idx = max(ihoriz - 1, 1)
+            infront_idx = min(ihoriz + 1, n_horiz)
+            for ialt in 1:GV.n_all_layers
+                K_back  = (K[ihoriz][ialt] + K[behind_idx][ialt]) / 2
+                K_front = (K[ihoriz][ialt] + K[infront_idx][ialt]) / 2
+                D_back  = (D[s][ihoriz][ialt] + D[s][behind_idx][ialt]) / 2
+                D_front = (D[s][ihoriz][ialt] + D[s][infront_idx][ialt]) / 2
+
+                diff_back  = (K_back + D_back) / GV.dx^2
+                diff_front = (K_front + D_front) / GV.dx^2
+
+                v = horiz_wind_v[ihoriz][ialt]
+                adv_front = max(v, 0) / GV.dx
+                adv_back  = max(-v, 0) / GV.dx
+
+                fluxcoef_dict[s][ihoriz][ialt, 1] = diff_back + adv_back
+                fluxcoef_dict[s][ihoriz][ialt, 2] = diff_front + adv_front
+            end
         end
     end
 
-    return fluxcoef_dict_horiz
+    # return fluxcoef_dict_horiz
+    return fluxcoef_dict
 end
-=#
 
 function Keddy(z::Vector, nt; ihoriz=nothing, globvars...)
     #=
@@ -2475,8 +2546,10 @@ function update_transport_coefficients(
     return tlower, tup, tdown, tupper
 end
 
-function update_horiz_transport_coefficients(species_list, atmdict::Dict{Symbol, Vector{Array{ftype_ncur}}}, D_coefs, M, n_horiz::Int64; 
-                                       calc_nonthermal=true, globvars...) # MULTICOL WARNING don't need all these inputs here
+# function update_horiz_transport_coefficients(species_list, atmdict::Dict{Symbol, Vector{Array{ftype_ncur}}}, D_coefs, M, n_horiz::Int64; 
+#                                        calc_nonthermal=true, globvars...) # MULTICOL WARNING don't need all these inputs here
+function update_horiz_transport_coefficients(species_list, atmdict::Dict{Symbol, Vector{Array{ftype_ncur}}}, D_coefs, M, n_horiz::Int64;
+                                       calc_nonthermal=true, cyclic=false, globvars...)
     #= # MULTICOL WARNING  - change comments here
     Input:
         species_list: Species which will have transport coefficients updated
@@ -2499,27 +2572,68 @@ function update_horiz_transport_coefficients(species_list, atmdict::Dict{Symbol,
     =#
 
     GV = values(globvars)
-    required = [:all_species, :alt, :speciesbclist, :dx, :hot_H_network, :hot_H_rc_funcs, :hot_D_network, :hot_D_rc_funcs, 
-               :hot_H2_network, :hot_H2_rc_funcs, :hot_HD_network, :hot_HD_rc_funcs, :Hs_dict, 
-               :ion_species, :M_P, :molmass, :neutral_species, :non_bdy_layers, :num_layers, :n_all_layers, :n_alt_index, 
-               :polarizability, :q, :R_P, :Tn, :Ti, :Te, :Tp, :Tprof_for_diffusion, :transport_species, :use_ambipolar, :use_molec_diff, :zmax]
+    # required = [:all_species, :alt, :speciesbclist, :dx, :hot_H_network, :hot_H_rc_funcs, :hot_D_network, :hot_D_rc_funcs, 
+    #            :hot_H2_network, :hot_H2_rc_funcs, :hot_HD_network, :hot_HD_rc_funcs, :Hs_dict, 
+    #            :ion_species, :M_P, :molmass, :neutral_species, :non_bdy_layers, :num_layers, :n_all_layers, :n_alt_index, 
+    #            :polarizability, :q, :R_P, :Tn, :Ti, :Te, :Tp, :Tprof_for_diffusion, :transport_species, :use_ambipolar, :use_molec_diff, :zmax]
+    required = [:all_species, :alt, :speciesbclist, :dx, :hot_H_network, :hot_H_rc_funcs, :hot_D_network, :hot_D_rc_funcs,
+               :hot_H2_network, :hot_H2_rc_funcs, :hot_HD_network, :hot_HD_rc_funcs, :Hs_dict,
+               :ion_species, :M_P, :molmass, :neutral_species, :non_bdy_layers, :num_layers, :n_all_layers, :n_alt_index,
+               :polarizability, :q, :R_P, :Tn, :Ti, :Te, :Tp, :Tprof_for_diffusion, :transport_species,
+               :use_ambipolar, :use_molec_diff, :zmax, :horiz_wind_v]
     check_requirements(keys(GV), required)
 
     # Get flux coefficients
-    fluxcoefs_horiz_all = Dict{Symbol, Array{Float64}}(s=>zeros(9,2) for s in GV.all_species)   # MULTICOL WARNING Work out better way to define this when have numbers. Make fluxcoefs_horiz_all and fluxcoefs_all have the same dimensions, because there should be values for each vertical column and altitude bin. This needs to be a dictionary with n_horiz arrays for each species. This does not need values for the boundary layers, but keeping them in as zeros to maintain consistency with fluxcoefs_all.
-    
+    # fluxcoefs_horiz_all = Dict{Symbol, Array{Float64}}(s=>zeros(9,2) for s in GV.all_species)   # MULTICOL WARNING Work out better way to define this when have numbers. Make fluxcoefs_horiz_all and fluxcoefs_all have the same dimensions, because there should be values for each vertical column and altitude bin. This needs to be a dictionary with n_horiz arrays for each species. This does not need values for the boundary layers, but keeping them in as zeros to maintain consistency with fluxcoefs_all.
+    # Calculate diffusion coefficients and scale heights
+    K_eddy_arr, H0_dict, Dcoef_dict = update_diffusion_and_scaleH(
+        species_list,
+        atmdict,
+        n_horiz;
+        globvars...
+    )
+
+    # Get horizontal flux coefficients
+    fluxcoefs_horiz_all = fluxcoefs_horiz(
+        species_list,
+        K_eddy_arr,
+        Dcoef_dict,
+        GV.horiz_wind_v,
+        n_horiz;
+        globvars...
+    )
+
     # Transport coefficients, non-boundary layers   # MULTICOL WARNING enter different values for different columns
-    tforwards = fill(-999., n_horiz, GV.num_layers, length(species_list)) # MULTICOL WARNING add another dimension for different columns here. X X X X X X X; X X X X X X X; X X X X X X X; X X X X X X X
-    tbackwards = fill(-999., n_horiz, GV.num_layers, length(species_list)) # MULTICOL WARNING add another dimension for different columns here
-    for (i, s) in enumerate(GV.transport_species)
-        for ihoriz in [1:n_horiz;] # MULTICOL WARNING temporary for loop -- implement different vertical columns when fluxcoefs_all_horiz is built
-            tforwards[ihoriz, :, i] .= fluxcoefs_horiz_all[s][2:end-1, 2] # MULTICOL WARNING fluxcoefs_horiz_all does not yet provide values for each vertical column. Using all the same values for now.
-            tbackwards[ihoriz, :, i] .= fluxcoefs_horiz_all[s][2:end-1, 1] # MULTICOL WARNING to do: test this soon with  numbers
+    # tforwards = fill(-999., n_horiz, GV.num_layers, length(species_list)) # MULTICOL WARNING add another dimension for different columns here. X X X X X X X; X X X X X X X; X X X X X X X; X X X X X X X
+    # tbackwards = fill(-999., n_horiz, GV.num_layers, length(species_list)) # MULTICOL WARNING add another dimension for different columns here
+    # tforwards = fill(0.0, n_horiz, GV.num_layers, length(species_list))
+    # tbackwards = fill(0.0, n_horiz, GV.num_layers, length(species_list))
+    # for (i, s) in enumerate(GV.transport_species)
+        # for ihoriz in [1:n_horiz;] # MULTICOL WARNING temporary for loop -- implement different vertical columns when fluxcoefs_all_horiz is built
+        #     tforwards[ihoriz, :, i] .= fluxcoefs_horiz_all[s][2:end-1, 2] # MULTICOL WARNING fluxcoefs_horiz_all does not yet provide values for each vertical column. Using all the same values for now.
+        #     tbackwards[ihoriz, :, i] .= fluxcoefs_horiz_all[s][2:end-1, 1] # MULTICOL WARNING to do: test this soon with  numbers
+        # end
+        # for ihoriz in 1:n_horiz
+        #     tforwards[ihoriz, :, i] .= fluxcoefs_horiz_all[s][ihoriz][2:end-1, 2]
+        #     tbackwards[ihoriz, :, i] .= fluxcoefs_horiz_all[s][ihoriz][2:end-1, 1]
+        # end
+        # Transport coefficients derived from horizontal winds
+    tforwards  = fill(0.0, n_horiz, GV.num_layers, length(species_list))
+    tbackwards = fill(0.0, n_horiz, GV.num_layers, length(species_list))
+    for ihoriz in 1:n_horiz
+        for ialt in 1:GV.num_layers
+            vel = GV.horiz_wind_v[ihoriz][ialt] / GV.dx
+            if vel >= 0
+                tforwards[ihoriz, ialt, :] .= vel
+            else
+                tbackwards[ihoriz, ialt, :] .= -vel
+            end
         end
     end
 
     # MULTICOL WARNING boundary conditions hardcoded here
-    bc_dict_horiz = boundaryconditions_horiz(globvars)  # MULTICOL temporary comment - should be 7 2x2 arrays of 0s
+    # bc_dict_horiz = boundaryconditions_horiz(globvars)  # MULTICOL temporary comment - should be 7 2x2 arrays of 0s
+    bc_dict_horiz = boundaryconditions_horiz(atmdict, GV.horiz_wind_v, n_horiz; cyclic=cyclic, globvars...)  # MULTICOL temporary comment - should be 7 2x2 arrays of 0s
 
     # transport coefficients for boundaries # MULTICOL WARNING should this be boundary layers like for the vertical transport?
     tbackedge = Vector{Array{Float64}}(undef, GV.num_layers) # MULTICOL temporary comment - ends up being 7 2x4 (XX;XX;XX;XX) arrays
