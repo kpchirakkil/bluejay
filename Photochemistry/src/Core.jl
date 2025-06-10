@@ -195,7 +195,11 @@ function meanmass(atmdict::Dict{Symbol, Vector{Array{ftype_ncur}}}, n_horiz::Int
     weighted_mm = zeros(size(n_mat)[1]) # This will store the result
 
     # Multiply densities of each species by appropriate molecular mass 
-    mul!(weighted_mm, n_mat[:,:,1], m) # MULTICOL WARNING hardcoded to use the first vertical column for all columns
+    # mul!(weighted_mm, n_mat[:,:,1], m) # MULTICOL WARNING hardcoded to use the first vertical column for all columns
+    # Multiply the density of each species in the requested column by its
+    # molecular mass.  The third dimension of `n_mat` corresponds to the
+    # horizontal column number.
+    mul!(weighted_mm, n_mat[:, :, ihoriz], m)
 
     return weighted_mm ./ n_tot(trimmed_atmdict, ihoriz; all_species=counted_species, GV.n_alt_index)
 end
@@ -219,7 +223,10 @@ function n_tot(atmdict::Dict{Symbol, Vector{Array{ftype_ncur}}}, z, ihoriz::Int6
     counted_species = setdiff(GV.all_species, ignore)
 
     thisaltindex = GV.n_alt_index[z]
-    return sum( [atmdict[s][ihoriz][thisaltindex] for s in counted_species] ) # MULTICOL WARNING hardcoded to the first vertical column; will need changing if want different values for each column. Mid-fix
+    # return sum( [atmdict[s][ihoriz][thisaltindex] for s in counted_species] ) # MULTICOL WARNING hardcoded to the first vertical column; will need changing if want different values for each column. Mid-fix
+    # Sum the densities of all counted species at the specified altitude and
+    # horizontal column.
+    return sum(atmdict[s][ihoriz][thisaltindex] for s in counted_species)
 end
 
 function n_tot(atmdict::Dict{Symbol, Vector{Array{ftype_ncur}}}, ihoriz::Int64; ignore=[], globvars...)
@@ -1125,7 +1132,8 @@ function effusion_velocity(Texo, m; globvars...)
 end
 
 # Nonthermal escape functions: 
-function escape_probability(sp, atmdict; globvars...)::Array       # MULTICOL WARNING change to use different values for each vertical column
+# function escape_probability(sp, atmdict; globvars...)::Array       # MULTICOL WARNING change to use different values for each vertical column
+function escape_probability(sp, atmdict, ihoriz; globvars...)::Array
     #=
     Returns an exponential profile of escape probability by altitude that accounts for collisions with the background 
     atmosphere. from Bethan Gregory, A and a for H. Could be redone for D, possibly.
@@ -1146,7 +1154,9 @@ function escape_probability(sp, atmdict; globvars...)::Array       # MULTICOL WA
                   "Venus"=>[0.868, 0.058]
                  )[GV.planet]
 
-    return params[1] .* exp.(-params[2] .* GV.collision_xsect[sp] .* column_density_above(n_tot(atmdict, 1; GV.all_species, GV.dz); globvars...) )  # MULTICOL WARNING hardcoded ihoriz as 1 in n_tot arguments -- change
+    # return params[1] .* exp.(-params[2] .* GV.collision_xsect[sp] .* column_density_above(n_tot(atmdict, 1; GV.all_species, GV.dz); globvars...) )  # MULTICOL WARNING hardcoded ihoriz as 1 in n_tot arguments -- change
+    totdens = n_tot(atmdict, ihoriz; GV.all_species, GV.dz)
+    return params[1] .* exp.(-params[2] .* GV.collision_xsect[sp] .* column_density_above(totdens; globvars...))
 end
 
 function escaping_hot_atom_production(sp, source_rxns, source_rxn_rc_funcs, atmdict, Mtot, ihoriz; returntype="array", globvars...)
@@ -1172,10 +1182,14 @@ function escaping_hot_atom_production(sp, source_rxns, source_rxn_rc_funcs, atmd
     produced_hot = volume_rate_wrapper(sp, source_rxns, source_rxn_rc_funcs, atmdict, Mtot, ihoriz; returntype="array", zmax=GV.alt[end], globvars...) 
 
     # Returns an array where rows represent altitudes and columns are reactions. Multiplies each vertical profile (each column) by escape_probability. 
-    if returntype=="array" # Used within the code to easily calculate the total flux later on. 
-        return produced_hot .* escape_probability(sp, atmdict; globvars...)    # MULTICOL WARNING change to use different values for each vertical column
+    # if returntype=="array" # Used within the code to easily calculate the total flux later on. 
+    #     return produced_hot .* escape_probability(sp, atmdict; globvars...)    # MULTICOL WARNING change to use different values for each vertical column
+    if returntype=="array" # Used within the code to easily calculate the total flux later on.
+        return produced_hot .* escape_probability(sp, atmdict, ihoriz; globvars...)
     elseif returntype=="df" # Useful if you want to look at the arrays yourself.
-        return DataFrame(produced_hot .* escape_probability(sp, atmdict; globvars...), vec([format_chemistry_string(r[1], r[2]) for r in source_rxns]))      # MULTICOL WARNING change to use different values for each vertical column
+        # return DataFrame(produced_hot .* escape_probability(sp, atmdict; globvars...), vec([format_chemistry_string(r[1], r[2]) for r in source_rxns]))      # MULTICOL WARNING change to use different values for each vertical column
+        return DataFrame(produced_hot .* escape_probability(sp, atmdict, ihoriz; globvars...),
+                         vec([format_chemistry_string(r[1], r[2]) for r in source_rxns]))
     end
 end
 

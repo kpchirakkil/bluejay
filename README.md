@@ -116,7 +116,7 @@ This list may be incomplete and will be updated.
 
 ### Horizontal winds and boundary conditions
 
-The variable `horiz_wind_v` in `MODEL_SETUP.jl` provides a horizontal wind profile for each column. `update_horiz_transport_coefficients` uses these velocities to create forward and backward transport rates. Edge fluxes are set through the `speciesbclist_horiz` dictionary; specify altitude profiles for each species to impose non-zero flux at the back and front edges. Passing `cyclic=true` treats the domain as periodic so that flux leaving one edge enters from the opposite side.
+The variable `horiz_wind_v` in `MODEL_SETUP.jl` provides a horizontal wind profile for each column.  By default a small constant wind of 10&nbsp;cm/s is applied at all altitudes so that horizontal transport is active.  `update_horiz_transport_coefficients` uses these velocities to create forward and backward transport rates. Edge fluxes are set through the `speciesbclist_horiz` dictionary; specify altitude profiles for each species to impose non-zero flux at the back and front edges. Passing `cyclic=true` treats the domain as periodic so that flux leaving one edge enters from the opposite side.
 
 **Running the model**:
 1. Modify `INPUT_PARAMETERS.jl` to your chosen conditions for the simulation. 
