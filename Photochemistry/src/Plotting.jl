@@ -524,7 +524,8 @@ function plot_net_volume_change(sp, atmdict; globvars...)
     show() 
 end
 
-function plot_production_and_loss(final_atm, results_dir, thefolder, n_horiz::Int64; globvars...)
+# function plot_production_and_loss(final_atm, results_dir, thefolder, n_horiz::Int64; globvars...)
+function plot_production_and_loss(final_atm, results_dir, thefolder, n_horiz::Int64; separate_cols=false, globvars...)
     #=
 
     =#
@@ -539,8 +540,45 @@ function plot_production_and_loss(final_atm, results_dir, thefolder, n_horiz::In
 
     println("Creating production and loss plots to show convergence of species...")
     create_folder("chemeq_plots", results_dir*thefolder*"/")
-    for sp in GV.all_species
-        plot_rxns(sp, final_atm, results_dir, n_horiz; subfolder=thefolder,num="final_atmosphere", globvars...)
+    # for sp in GV.all_species
+    #     plot_rxns(sp, final_atm, results_dir, n_horiz; subfolder=thefolder,num="final_atmosphere", globvars...)
+    if separate_cols
+        subfolder = thefolder*"/chemeq_plots"
+        for ihoriz in 1:n_horiz
+            colfolder = "column"*string(ihoriz)
+            create_folder(colfolder, results_dir*subfolder*"/")
+
+            # Copy every key, including Jrates, for this column only
+            atm_col = Dict{Symbol, Vector{Array{ftype_ncur}}}()
+            for k in keys(final_atm)
+                atm_col[k] = [final_atm[k][ihoriz]]
+            end
+
+            # Slice temperature-related arrays so get_volume_rates works with n_horiz=1
+            Tn_col = GV.Tn[ihoriz:ihoriz, :]
+            Ti_col = GV.Ti[ihoriz:ihoriz, :]
+            Te_col = GV.Te[ihoriz:ihoriz, :]
+            Tp_col = GV.Tp[ihoriz:ihoriz, :]
+            Tprof_Hs_col = Dict("neutral"=>GV.Tprof_for_Hs["neutral"][ihoriz:ihoriz, :],
+                                "ion"=>GV.Tprof_for_Hs["ion"][ihoriz:ihoriz, :])
+            Tprof_diff_col = Dict("neutral"=>GV.Tprof_for_diffusion["neutral"][ihoriz:ihoriz, :],
+                                  "ion"=>GV.Tprof_for_diffusion["ion"][ihoriz:ihoriz, :])
+
+            for sp in GV.all_species
+                plot_rxns(sp, atm_col, results_dir, 1;
+                          subfolder=subfolder,
+                          plotsfolder=colfolder,
+                          num="final_atmosphere",
+                          globvars...,
+                          Tn=Tn_col, Ti=Ti_col, Te=Te_col, Tp=Tp_col,
+                          Tprof_for_Hs=Tprof_Hs_col, Tprof_for_diffusion=Tprof_diff_col)
+            end
+        end
+    else
+        for sp in GV.all_species
+            plot_rxns(sp, final_atm, results_dir, n_horiz;
+                      subfolder=thefolder, num="final_atmosphere", globvars...)
+        end
     end
     println("Finished convergence plots")
 end
