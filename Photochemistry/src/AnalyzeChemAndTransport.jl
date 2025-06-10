@@ -516,8 +516,6 @@ function get_transport_PandL_rate(sp::Symbol, atmdict::Dict{Symbol, Vector{Array
     end
 
     # Generate the fluxcoefs dictionary and boundary conditions dictionary
-    # D_arr = [zeros(size(GV.Tn)) for ihoriz in 1:n_horiz]   # MULTICOL WARNING using same D_arr values for all columns. Mid-fix
-    # Keddy_arr, H0_dict, Dcoef_dict = update_diffusion_and_scaleH(GV.all_species, atmdict, D_arr, n_horiz; globvars...)  # MULTICOL WARNING using same K_eddy, H0_dict, Dcoef_dict values for all columns
     Keddy_arr, H0_dict, Dcoef_dict = update_diffusion_and_scaleH(GV.all_species, atmdict, n_horiz; globvars...)
     fluxcoefs_all = fluxcoefs(GV.all_species, Keddy_arr, Dcoef_dict, H0_dict, n_horiz; globvars...)
 
@@ -610,8 +608,6 @@ function get_directional_fluxes(sp::Symbol, atmdict::Dict{Symbol, Vector{ftype_n
     end
 
     # Generate the fluxcoefs dictionary and boundary conditions dictionary
-    # D_arr = [zeros(size(GV.Tn)) for ihoriz in 1:n_horiz] # MULTICOL WARNING  -- changed this line, but the rest of this function might need to be made flexible for multiple columns, in case it is called at some point (called in Plotting.jl and MakePlots.jl)
-    # Keddy_arr, H0_dict, Dcoef_dict = update_diffusion_and_scaleH(GV.all_species, atmdict, D_arr, n_horiz; globvars...) 
     Keddy_arr, H0_dict, Dcoef_dict = update_diffusion_and_scaleH(GV.all_species, atmdict, n_horiz; globvars...)
     fluxcoefs_all = fluxcoefs(GV.all_species, Keddy_arr, Dcoef_dict, H0_dict, n_horiz; globvars...)
 

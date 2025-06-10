@@ -194,8 +194,6 @@ function meanmass(atmdict::Dict{Symbol, Vector{Array{ftype_ncur}}}, n_horiz::Int
 
     weighted_mm = zeros(size(n_mat)[1]) # This will store the result
 
-    # Multiply densities of each species by appropriate molecular mass 
-    # mul!(weighted_mm, n_mat[:,:,1], m) # MULTICOL WARNING hardcoded to use the first vertical column for all columns
     # Multiply the density of each species in the requested column by its
     # molecular mass.  The third dimension of `n_mat` corresponds to the
     # horizontal column number.
@@ -223,7 +221,6 @@ function n_tot(atmdict::Dict{Symbol, Vector{Array{ftype_ncur}}}, z, ihoriz::Int6
     counted_species = setdiff(GV.all_species, ignore)
 
     thisaltindex = GV.n_alt_index[z]
-    # return sum( [atmdict[s][ihoriz][thisaltindex] for s in counted_species] ) # MULTICOL WARNING hardcoded to the first vertical column; will need changing if want different values for each column. Mid-fix
     # Sum the densities of all counted species at the specified altitude and
     # horizontal column.
     return sum(atmdict[s][ihoriz][thisaltindex] for s in counted_species)
@@ -1864,7 +1861,7 @@ function boundaryconditions_horiz(
     return bc_dict_horiz
 end
 
-function Dcoef_neutrals(z, sp::Symbol, b, atmdict::Dict{Symbol, Vector{ftype_ncur}}; globvars...)
+function Dcoef_neutrals(z, sp::Symbol, b, atmdict::Dict{Symbol, Vector{ftype_ncur}}; ihoriz=1, globvars...)
     #=
     Calculate the basic diffusion coefficient, AT^s/n.
     Inputs:
@@ -1882,9 +1879,9 @@ function Dcoef_neutrals(z, sp::Symbol, b, atmdict::Dict{Symbol, Vector{ftype_ncu
     check_requirements(keys(GV), required)
 
     if (typeof(z)==Float64) & (typeof(b)==Float64)
-        return b ./ n_tot(atmdict, z, 1; GV.all_species, GV.n_alt_index) # MULTICOL WARNING - ihoriz hardcoded as 1 for now -- change this
-    else 
-        return b ./ n_tot(atmdict, 1; GV.all_species, GV.n_alt_index)  # MULTICOL WARNING - ihoriz hardcoded as 1 for now -- change this
+        return b ./ n_tot(atmdict, z, ihoriz; GV.all_species, GV.n_alt_index)
+    else
+        return b ./ n_tot(atmdict, ihoriz; GV.all_species, GV.n_alt_index)
     end
 end
 
@@ -2774,7 +2771,14 @@ function setup_water_profile!(atmdict; constfrac=1, dust_storm_on=false, make_sa
     # ================================================================================================================
     # Currently this doesn't change behavior based on planet. 5/15/24
     # H2Oinitfrac, H2Osatfrac = set_h2oinitfrac_bySVP(atmdict, hygropause_alt; globvars...)
-    H2Oinitfrac, H2Osatfrac = set_h2oinitfrac_bySVP(atmdict, hygropause_alt; ihoriz=1, globvars...)
+    # H2Oinitfrac, H2Osatfrac = set_h2oinitfrac_bySVP(atmdict, hygropause_alt; ihoriz=1, globvars...)
+    H2Oinitfrac_all = Vector{Vector{ftype_ncur}}(undef, n_horiz)
+    H2Osatfrac_all = Vector{Vector{ftype_ncur}}(undef, n_horiz)
+
+    for ihoriz in 1:n_horiz
+        H2Oinitfrac_all[ihoriz], H2Osatfrac_all[ihoriz] =
+            set_h2oinitfrac_bySVP(atmdict, hygropause_alt; ihoriz=ihoriz, globvars...)
+    end
 
     if GV.planet=="Mars"
         required = [:alt, :H2Osat, :n_alt_index, :non_bdy_layers, :num_layers, :speciescolor, :speciesstyle, :upper_lower_bdy_i, :water_mixing_ratio,]
@@ -2790,44 +2794,70 @@ function setup_water_profile!(atmdict; constfrac=1, dust_storm_on=false, make_sa
             toplim_dict = Dict("mesosphere"=>GV.upper_lower_bdy_i, "everywhere"=>GV.n_alt_index[GV.alt[end]])
             a = 1
             b = toplim_dict[excess_water_in]
-            H2Oinitfrac[a:b] = H2Oinitfrac[a:b] .* water_tanh_prof(GV.non_bdy_layers./1e5; z0=GV.ealt, f=GV.ffac)[a:b]
+            # H2Oinitfrac[a:b] = H2Oinitfrac[a:b] .* water_tanh_prof(GV.non_bdy_layers./1e5; z0=GV.ealt, f=GV.ffac)[a:b]
+            for ihoriz in 1:n_horiz
+                prof = H2Oinitfrac_all[ihoriz]
+                prof[a:b] .= prof[a:b] .* water_tanh_prof(GV.non_bdy_layers./1e5; z0=GV.ealt, f=GV.ffac)[a:b]
+                H2Oinitfrac_all[ihoriz] = prof
+            end
 
             # Set the upper atmo to be a constant mixing ratio, wherever the disturbance ends
             if excess_water_in=="everywhere"
-                H2Oinitfrac[GV.upper_lower_bdy_i:end] .= H2Oinitfrac[GV.upper_lower_bdy_i]
+                # H2Oinitfrac[GV.upper_lower_bdy_i:end] .= H2Oinitfrac[GV.upper_lower_bdy_i]
+                for ihoriz in 1:n_horiz
+                    prof = H2Oinitfrac_all[ihoriz]
+                    prof[GV.upper_lower_bdy_i:end] .= prof[GV.upper_lower_bdy_i]
+                    H2Oinitfrac_all[ihoriz] = prof
+                end
             end
         end
 
         # set the water profiles 
         # ===========================================================================================================
-        atmdict[:H2O] = H2Oinitfrac.*n_tot(atmdict, 1; GV.n_alt_index, GV.all_species)  # MULTICOL WARNING - ihoriz hardcoded as 1 in n_tot arguments for now -- change this
-        atmdict[:HDO] = 2 * GV.DH * atmdict[:H2O] 
-        HDOinitfrac = atmdict[:HDO] ./ n_tot(atmdict, 1; GV.n_alt_index, GV.all_species)  # Needed to make water plots. # MULTICOL WARNING - ihoriz hardcoded as 1 in n_tot arguments for now -- change this
+        # atmdict[:H2O] = H2Oinitfrac.*n_tot(atmdict, 1; GV.n_alt_index, GV.all_species)  # MULTICOL WARNING - ihoriz hardcoded as 1 in n_tot arguments for now -- change this
+        # atmdict[:HDO] = 2 * GV.DH * atmdict[:H2O] 
+        # HDOinitfrac = atmdict[:HDO] ./ n_tot(atmdict, 1; GV.n_alt_index, GV.all_species)  # Needed to make water plots. # MULTICOL WARNING - ihoriz hardcoded as 1 in n_tot arguments for now -- change this
+        for ihoriz in 1:n_horiz
+            atmdict[:H2O][ihoriz] = H2Oinitfrac_all[ihoriz] .* n_tot(atmdict, ihoriz; GV.n_alt_index, GV.all_species)
+            atmdict[:HDO][ihoriz] = 2 * GV.DH * atmdict[:H2O][ihoriz]
+        end
+        HDOinitfrac = atmdict[:HDO][1] ./ n_tot(atmdict, 1; GV.n_alt_index, GV.all_species)
 
         # Add a gaussian parcel of water, to simulate the effect of a dust storm
         # ===========================================================================================================
         if dust_storm_on
             sigma = 12.5
-            H2Oppm = 1e-6*map(z->GV.H2O_excess .* exp(-((z-GV.ealt)/sigma)^2), GV.non_bdy_layers/1e5) + H2Oinitfrac 
+            # H2Oppm = 1e-6*map(z->GV.H2O_excess .* exp(-((z-GV.ealt)/sigma)^2), GV.non_bdy_layers/1e5) + H2Oinitfrac 
+            H2Oppm = 1e-6*map(z->GV.H2O_excess .* exp(-((z-GV.ealt)/sigma)^2), GV.non_bdy_layers/1e5) + H2Oinitfrac_all[1]
             HDOppm = 1e-6*map(z->GV.HDO_excess .* exp(-((z-GV.ealt)/sigma)^2), GV.non_bdy_layers/1e5) + HDOinitfrac
-            atmdict[:H2O][1:GV.upper_lower_bdy_i] = (H2Oppm .* n_tot(atmdict, 1; GV.n_alt_index, GV.all_species))[1:GV.upper_lower_bdy_i] # MULTICOL WARNING - ihoriz hardcoded as 1 in n_tot arguments for now -- change this
-            atmdict[:HDO][1:GV.upper_lower_bdy_i] = (HDOppm .* n_tot(atmdict, 1; GV.all_species))[1:GV.upper_lower_bdy_i] # MULTICOL WARNING - ihoriz hardcoded as 1 in n_tot arguments for now -- change this
+            # atmdict[:H2O][1:GV.upper_lower_bdy_i] = (H2Oppm .* n_tot(atmdict, 1; GV.n_alt_index, GV.all_species))[1:GV.upper_lower_bdy_i] # MULTICOL WARNING - ihoriz hardcoded as 1 in n_tot arguments for now -- change this
+            # atmdict[:HDO][1:GV.upper_lower_bdy_i] = (HDOppm .* n_tot(atmdict, 1; GV.all_species))[1:GV.upper_lower_bdy_i] # MULTICOL WARNING - ihoriz hardcoded as 1 in n_tot arguments for now -- change this
+            for ihoriz in 1:n_horiz
+                atmdict[:H2O][ihoriz][1:GV.upper_lower_bdy_i] = (H2Oppm .* n_tot(atmdict, ihoriz; GV.n_alt_index, GV.all_species))[1:GV.upper_lower_bdy_i]
+                atmdict[:HDO][ihoriz][1:GV.upper_lower_bdy_i] = (HDOppm .* n_tot(atmdict, ihoriz; GV.all_species))[1:GV.upper_lower_bdy_i]
+            end
         end
     elseif GV.planet=="Venus"
         # TODO: Add a more interesting implementation as needed.
-        atmdict[:H2O] = constfrac .* n_tot(atmdict, 1; GV.n_alt_index, GV.all_species) # MULTICOL WARNING - ihoriz hardcoded as 1 in n_tot arguments for now -- change this
-        atmdict[:HDO] = 2 * GV.DH * atmdict[:H2O] 
+        # atmdict[:H2O] = constfrac .* n_tot(atmdict, 1; GV.n_alt_index, GV.all_species) # MULTICOL WARNING - ihoriz hardcoded as 1 in n_tot arguments for now -- change this
+        # atmdict[:HDO] = 2 * GV.DH * atmdict[:H2O] 
+        for ihoriz in 1:n_horiz
+            atmdict[:H2O][ihoriz] = constfrac .* n_tot(atmdict, ihoriz; GV.n_alt_index, GV.all_species)
+            atmdict[:HDO][ihoriz] = 2 * GV.DH * atmdict[:H2O][ihoriz]
+        end
     end
 
     # Plot the water profile 
     # ===========================================================================================================
     if make_sat_curve
-        satarray = H2Osatfrac
+        # satarray = H2Osatfrac
+        satarray = H2Osatfrac_all[1]
     else
         satarray = nothing 
     end
 
-    plot_water_profile(atmdict, GV.results_dir*GV.sim_folder_name; watersat=satarray, H2Oinitf=H2Oinitfrac, plot_grid=GV.plot_grid, showonly=showonly, globvars...)
+    # plot_water_profile(atmdict, GV.results_dir*GV.sim_folder_name; watersat=satarray, H2Oinitf=H2Oinitfrac, plot_grid=GV.plot_grid, showonly=showonly, globvars...)
+    plot_water_profile(atmdict, GV.results_dir*GV.sim_folder_name; watersat=satarray, H2Oinitf=H2Oinitfrac_all[1], plot_grid=GV.plot_grid, showonly=showonly, globvars...)
 end 
 
 function water_tanh_prof(z; f=10, z0=62, dz=11)
