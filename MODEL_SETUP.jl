@@ -501,6 +501,13 @@ end
 # The zero flux boundary conditions will be input as vectors with altitude.
 # For each species, there are two vectors of length num_layers. The first directs the BC values at the first vertical column and the second directs the BC values at the last vertical column
 
+# The dictionary `speciesbclist_horiz` sets horizontal fluxes at the back and
+# front edges.  By default both profiles are zero, representing closed
+# boundaries, but you can modify the values below (or in a separate script)
+# to impose an influx or outflux for any species.  Each entry contains two
+# vectors of length `num_layers` giving the flux [#/cm²/s] at the back and front
+# edges respectively.
+
 # add in zero flux edge boundary conditions on both edges for all species
 auto_speciesbclist_horiz = Dict()
 for sp in all_species
@@ -508,6 +515,14 @@ for sp in all_species
 end
 
 const speciesbclist_horiz = deepcopy(auto_speciesbclist_horiz)
+
+# Example modification: Set non-zero flux boundary conditions for O
+# speciesbclist_horiz[:O] = Dict(
+#     "f" => [
+#         fill(1e7, num_layers),   # Influx at the back edge (cm⁻² s⁻¹)
+#         fill(-1e7, num_layers)   # Outflux at the front edge (cm⁻² s⁻¹)
+#     ]
+# )
 
 # ***************************************************************************************************** #
 #                                                                                                       #

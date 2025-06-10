@@ -131,7 +131,8 @@ function find_exobase(sp::Symbol, atmdict::Dict{Symbol, Vector{Array{ftype_ncur}
         Tn_col = GV.Tn[ihoriz, :]
 
         # Calculate scale height using temperature for this column
-        H_s = scaleH(GV.non_bdy_layers, sp, Tn_col[ihoriz, 2:end-1]; globvars...)
+        # H_s = scaleH(GV.non_bdy_layers, sp, Tn_col[ihoriz, 2:end-1]; globvars...)
+        H_s = scaleH(GV.non_bdy_layers, sp, Tn_col[2:end-1]; globvars...)
 
         # Mean free path calculation for each vertical column separately
         mfp_sp = 1 ./ (GV.collision_xsect[sp] .* n_tot(atmdict, ihoriz; GV.all_species, GV.n_alt_index))
@@ -1780,6 +1781,11 @@ function boundaryconditions_horiz(
                          terms (bc_dict[sp][ialt][:, 2]) are not. # MULTICOL WARNING - to do
 
         However, please note that the model is currently set up to use zero flux edge boundary conditions only. The above comments have been left for future development and flexibility.
+        By default the dictionary ``speciesbclist_horiz`` in ``MODEL_SETUP.jl`` supplies
+        zero-flux edge conditions for all species.  You may override these values
+        to impose custom influxes or outfluxes at either edge.  The sign
+        convention is the same as for vertical boundary conditions: positive
+        numbers inject material and negative numbers remove it.
     =#
     
     GV = values(globvars)
