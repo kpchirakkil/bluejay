@@ -145,7 +145,7 @@ function get_volume_rates(sp::Symbol, atmdict::Dict{Symbol, Vector{Array{ftype_n
         sp: Species name
         atmdict: Present atmospheric state dictionary
         n_horiz: Number of vertical columns in the simulation
-        Tn, Ti, Te: 2D temperature arrays each of shape (num_layers+2, n_horiz)
+        Tn, Ti, Te: 2D temperature arrays each of shape (n_horiz, num_layers+2)
         species_role: whether to look for sp as a "reactant", "product", or "both"
         which: "all", "Jrates", "krates"
         remove_sp_density: if set to true, remove sp from the reactants
@@ -157,12 +157,6 @@ function get_volume_rates(sp::Symbol, atmdict::Dict{Symbol, Vector{Array{ftype_n
     GV = values(globvars)
     required = [:all_species, :ion_species, :num_layers, :reaction_network, :Tn, :Ti, :Te]
     check_requirements(keys(GV), required)
-
-    # Debug output
-    # println("\n[DEBUG - first get_volume_rates called]")
-    # println("GV.num_layers = ", GV.num_layers)
-    # println("size(GV.Tn) = ", size(GV.Tn))
-    # println("n_horiz = ", n_horiz)
 
     rxn_dat = Dict{String, Vector{Array{ftype_ncur}}}()
     rate_coefs = Dict{String, Vector{Array{ftype_ncur}}}()

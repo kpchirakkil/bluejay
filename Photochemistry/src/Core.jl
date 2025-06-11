@@ -1923,7 +1923,7 @@ function Dcoef!(D_arr, T_arr_2D, sp::Symbol, atmdict::Dict{Symbol, Vector{Array{
     Inputs:
         D_arr: the container for the diffusion coefficients for ONE species.
                D_arr[ihoriz] is a 1D array with altitude for column ihoriz.
-        T_arr_2D: 2D temperature (K), shape (num_layers+2, n_horiz).
+        T_arr_2D: 2D temperature (K), shape (n_horiz, num_layers+2).
                   Neutral temp if sp is neutral; plasma temp if sp is ion.
         sp: whichever species we are calculating for
         atmdict: state of the atmosphere; should include boundary layers, i.e.
@@ -1941,15 +1941,6 @@ function Dcoef!(D_arr, T_arr_2D, sp::Symbol, atmdict::Dict{Symbol, Vector{Array{
         :q, :speciesbclist, :use_ambipolar, :use_molec_diff
     ]
     check_requirements(keys(GV), required)
-
-    # num_layers_plus2 = length(atmdict[GV.all_species[1]][1])
-
-    # # Explicit assertions for dimensions
-    # @assert size(T_arr_2D) == (num_layers_plus2, n_horiz) "T_arr_2D should be (num_layers+2, n_horiz), got $(size(T_arr_2D))"
-    # @assert length(D_arr) == n_horiz "D_arr should have length n_horiz ($(n_horiz)), got $(length(D_arr))"
-    # for i in 1:n_horiz
-    #     @assert length(D_arr[i]) == num_layers_plus2 "D_arr[$i] length mismatch, expected $(num_layers_plus2), got $(length(D_arr[i]))"
-    # end
 
     # Loop over each vertical column
     for ihoriz in 1:n_horiz
