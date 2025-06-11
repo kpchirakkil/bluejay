@@ -1543,16 +1543,29 @@ println("$(Dates.format(now(), "(HH:MM:SS)")) Creating the simulation log file..
 
 # Boundary condition write out messages
 bc_type = Dict("n"=>"density", "f"=>"thermal flux", "v"=>"velocity", "ntf"=>"nonthermal flux")
-for k in keys(speciesbclist)
-    for k2 in keys(speciesbclist[k])
-        push!(PARAMETERS_BCS, ("$(string(k))", "$(bc_type[string(k2)])", "$(speciesbclist[k][k2][1])", "$(speciesbclist[k][k2][2])")) 
+# for k in keys(speciesbclist)
+#     for k2 in keys(speciesbclist[k])
+#         push!(PARAMETERS_BCS, ("$(string(k))", "$(bc_type[string(k2)])", "$(speciesbclist[k][k2][1])", "$(speciesbclist[k][k2][2])")) 
+for sp in keys(speciesbclist)
+    for bctype in keys(speciesbclist[sp])
+        for ihoriz in 1:length(speciesbclist[sp][bctype])
+            vals = speciesbclist[sp][bctype][ihoriz]
+            push!(PARAMETERS_BCS, (string(sp), bc_type[string(bctype)], ihoriz, vals[1], vals[2]))
+        end
     end
 end
 
 bc_type_horiz = Dict("n"=>"density", "f"=>"flux", "v"=>"velocity")
-for k in keys(speciesbclist_horiz)
-    for k2 in keys(speciesbclist_horiz[k])
-        push!(PARAMETERS_BCS_HORIZ, ("$(string(k))", "$(bc_type_horiz[string(k2)])", "$(speciesbclist_horiz[k][k2][1])", "$(speciesbclist_horiz[k][k2][2])")) 
+# for k in keys(speciesbclist_horiz)
+#     for k2 in keys(speciesbclist_horiz[k])
+#         push!(PARAMETERS_BCS_HORIZ, ("$(string(k))", "$(bc_type_horiz[string(k2)])", "$(speciesbclist_horiz[k][k2][1])", "$(speciesbclist_horiz[k][k2][2])")) 
+for sp in keys(speciesbclist_horiz)
+    for bctype in keys(speciesbclist_horiz[sp])
+        for ialt in 1:length(speciesbclist_horiz[sp][bctype][1])
+            back_edge = speciesbclist_horiz[sp][bctype][1][ialt]
+            front_edge = speciesbclist_horiz[sp][bctype][2][ialt]
+            push!(PARAMETERS_BCS_HORIZ, (string(sp), bc_type_horiz[string(bctype)], ialt, back_edge, front_edge))
+        end
     end
 end
 

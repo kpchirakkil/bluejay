@@ -702,8 +702,10 @@ PARAMETERS_SPLISTS = DataFrame(AllSpecies=[[string(a) for a in all_species]..., 
                                Jratelist=[[string(j) for j in Jratelist]..., ["" for i in 1:L-length(Jratelist)]...]);
 PARAMETERS_SOLVER = DataFrame(Field=[], Value=[]);
 PARAMETERS_XSECTS = DataFrame(Species=[], Description=[], Filename=[]);
-PARAMETERS_BCS = DataFrame(Species=[], Type=[], Lower=[], Upper=[]);
-PARAMETERS_BCS_HORIZ = DataFrame(Species=[], Type=[], BackEdge=[], FrontEdge=[]);
+# PARAMETERS_BCS = DataFrame(Species=[], Type=[], Lower=[], Upper=[]);
+# PARAMETERS_BCS_HORIZ = DataFrame(Species=[], Type=[], BackEdge=[], FrontEdge=[]);
+PARAMETERS_BCS = DataFrame(Species=[], Type=[], Column=Int[], Lower=[], Upper=[]);
+PARAMETERS_BCS_HORIZ = DataFrame(Species=[], Type=[], Altitude=Int[], BackEdge=[], FrontEdge=[]);
 
 # LOG THE TEMPERATURES
 PARAMETERS_TEMPERATURE_ARRAYS = DataFrame(Neutrals = vec(Tn_arr), Ions = vec(Ti_arr), Electrons = vec(Te_arr))
