@@ -261,10 +261,14 @@ function chemJmat(n_active_longlived, n_active_shortlived, n_inactive, Jrates, t
                           M[ialt, ihoriz]; E[ihoriz][ialt];
                           tup[ihoriz, ialt, :]; tlower[ihoriz][:,ialt];     
                           tdown[ihoriz, ialt+1, :]; tlower[ihoriz][:,ialt+1];
-                          tforwards[ihoriz, ialt, :];
-                          ihoriz == 1 ? tbackedge[ialt][:,1] : tforwards[ihoriz-1, ialt, :];
-                          ihoriz == n_horiz ? tbackedge[ialt][:,2] : tbackwards[ihoriz+1, ialt, :];
-                          tbackwards[ihoriz, ialt, :]]
+                        #   tforwards[ihoriz, ialt, :];
+                        #   ihoriz == 1 ? tbackedge[ialt][:,1] : tforwards[ihoriz-1, ialt, :];
+                        #   ihoriz == n_horiz ? tbackedge[ialt][:,2] : tbackwards[ihoriz+1, ialt, :];
+                        #   tbackwards[ihoriz, ialt, :]]
+                          ihoriz == n_horiz ? tfrontedge[ialt][:,1] : tforwards[ihoriz, ialt, :];
+                          ihoriz == 1 ? tbackedge[ialt][:,2] : tforwards[ihoriz-1, ialt, :];
+                          ihoriz == n_horiz ? tfrontedge[ialt][:,2] : tbackwards[ihoriz+1, ialt, :];
+                          ihoriz == 1 ? tbackedge[ialt][:,1] : tbackwards[ihoriz, ialt, :]]
             elseif ialt == GV.num_layers
                 argvec = [nmat_llsp[:, ialt, ihoriz];
                           fill(1.0, length(GV.active_longlived));
@@ -278,10 +282,14 @@ function chemJmat(n_active_longlived, n_active_shortlived, n_inactive, Jrates, t
                           M[ialt, ihoriz]; E[ihoriz][ialt];
                           tupper[ihoriz][:,1]; tdown[ihoriz, ialt, :];
                           tupper[ihoriz][:,2]; tup[ihoriz, ialt-1, :];
-                          tforwards[ihoriz, ialt, :];
-                          ihoriz == 1 ? tbackedge[ialt][:,1] : tforwards[ihoriz-1, ialt, :];
-                          ihoriz == n_horiz ? tbackedge[ialt][:,2] : tbackwards[ihoriz+1, ialt, :];
-                          tbackwards[ihoriz, ialt, :]]
+                        #   tforwards[ihoriz, ialt, :];
+                        #   ihoriz == 1 ? tbackedge[ialt][:,1] : tforwards[ihoriz-1, ialt, :];
+                        #   ihoriz == n_horiz ? tbackedge[ialt][:,2] : tbackwards[ihoriz+1, ialt, :];
+                        #   tbackwards[ihoriz, ialt, :]]
+                          ihoriz == n_horiz ? tfrontedge[ialt][:,1] : tforwards[ihoriz, ialt, :];
+                          ihoriz == 1 ? tbackedge[ialt][:,2] : tforwards[ihoriz-1, ialt, :];
+                          ihoriz == n_horiz ? tfrontedge[ialt][:,2] : tbackwards[ihoriz+1, ialt, :];
+                          ihoriz == 1 ? tbackedge[ialt][:,1] : tbackwards[ihoriz, ialt, :]]
             else
                 argvec = [nmat_llsp[:, ialt, ihoriz];
                           nmat_llsp[:, ialt+1, ihoriz];
@@ -297,10 +305,14 @@ function chemJmat(n_active_longlived, n_active_shortlived, n_inactive, Jrates, t
                           tdown[ihoriz, ialt, :];
                           tdown[ihoriz, ialt+1, :];
                           tup[ihoriz, ialt-1, :];
-                          tforwards[ihoriz, ialt, :]; 
-                          ihoriz == 1 ? tbackedge[ialt][:,1] : tforwards[ihoriz-1, ialt, :];
-                          ihoriz == n_horiz ? tbackedge[ialt][:,2] : tbackwards[ihoriz+1, ialt, :];
-                          tbackwards[ihoriz, ialt, :]]
+                        #   tforwards[ihoriz, ialt, :]; 
+                        #   ihoriz == 1 ? tbackedge[ialt][:,1] : tforwards[ihoriz-1, ialt, :];
+                        #   ihoriz == n_horiz ? tbackedge[ialt][:,2] : tbackwards[ihoriz+1, ialt, :];
+                        #   tbackwards[ihoriz, ialt, :]]
+                          ihoriz == n_horiz ? tfrontedge[ialt][:,1] : tforwards[ihoriz, ialt, :];
+                          ihoriz == 1 ? tbackedge[ialt][:,2] : tforwards[ihoriz-1, ialt, :];
+                          ihoriz == n_horiz ? tfrontedge[ialt][:,2] : tbackwards[ihoriz+1, ialt, :];
+                          ihoriz == 1 ? tbackedge[ialt][:,1] : tbackwards[ihoriz, ialt, :]]
             end
             
             argvec = convert(Array{ftype_chem}, argvec)
@@ -375,10 +387,14 @@ function ratefn(n_active_longlived, n_active_shortlived, n_inactive, Jrates, tup
                   GV.Tn[ihoriz, ialt]; GV.Ti[ihoriz, ialt]; GV.Te[ihoriz, ialt];   # :Tn; :Ti; :Te;
                   M[ialt, ihoriz]; E[ihoriz][ialt];                # total density and electrons, # MULTICOL WARNING will need to allow for different values for different vertical columns
                   tup[ihoriz, ialt, :]; tlower[ihoriz][:, ialt]; tdown[ihoriz, ialt+1, :]; tlower[ihoriz][:, ialt+1]; # local transport coefficients
-                  tforwards[ihoriz, ialt, :];
-                  (ihoriz == 1 ? tbackedge[ialt][:,1] : tforwards[ihoriz-1, ialt, :]);
-                  (ihoriz == n_horiz ? tbackedge[ialt][:,2] : tbackwards[ihoriz+1, ialt, :]);
-                  tbackwards[ihoriz, ialt, :]]
+                #   tforwards[ihoriz, ialt, :];
+                #   (ihoriz == 1 ? tbackedge[ialt][:,1] : tforwards[ihoriz-1, ialt, :]);
+                #   (ihoriz == n_horiz ? tbackedge[ialt][:,2] : tbackwards[ihoriz+1, ialt, :]);
+                #   tbackwards[ihoriz, ialt, :]]
+                  ihoriz == n_horiz ? tfrontedge[ialt][:,1] : tforwards[ihoriz, ialt, :];
+                  (ihoriz == 1 ? tbackedge[ialt][:,2] : tforwards[ihoriz-1, ialt, :]);
+                  (ihoriz == n_horiz ? tfrontedge[ialt][:,2] : tbackwards[ihoriz+1, ialt, :]);
+                  (ihoriz == 1 ? tbackedge[ialt][:,1] : tbackwards[ihoriz, ialt, :])]
 
         argvec = convert(Array{ftype_chem}, argvec)
         returnrates[:, ialt, ihoriz] .= ratefn_local(argvec...)
@@ -399,10 +415,14 @@ function ratefn(n_active_longlived, n_active_shortlived, n_inactive, Jrates, tup
                       tdown[ihoriz, ialt, :];
                       tdown[ihoriz, ialt+1, :];
                       tup[ihoriz, ialt-1, :];
-                      tforwards[ihoriz, ialt, :];
-                      (ihoriz == 1 ? tbackedge[ialt][:,1] : tforwards[ihoriz-1, ialt, :]);
-                      (ihoriz == n_horiz ? tbackedge[ialt][:,2] : tbackwards[ihoriz+1, ialt, :]);
-                      tbackwards[ihoriz, ialt, :]]
+                    #   tforwards[ihoriz, ialt, :];
+                    #   (ihoriz == 1 ? tbackedge[ialt][:,1] : tforwards[ihoriz-1, ialt, :]);
+                    #   (ihoriz == n_horiz ? tbackedge[ialt][:,2] : tbackwards[ihoriz+1, ialt, :]);
+                    #   tbackwards[ihoriz, ialt, :]]
+                      ihoriz == n_horiz ? tfrontedge[ialt][:,1] : tforwards[ihoriz, ialt, :];
+                      (ihoriz == 1 ? tbackedge[ialt][:,2] : tforwards[ihoriz-1, ialt, :]);
+                      (ihoriz == n_horiz ? tfrontedge[ialt][:,2] : tbackwards[ihoriz+1, ialt, :]);
+                      (ihoriz == 1 ? tbackedge[ialt][:,1] : tbackwards[ihoriz, ialt, :])]
 
             argvec = convert(Array{ftype_chem}, argvec)
             returnrates[:, ialt, ihoriz] .= ratefn_local(argvec...)
@@ -424,10 +444,14 @@ function ratefn(n_active_longlived, n_active_shortlived, n_inactive, Jrates, tup
                   tdown[ihoriz, ialt, :];
                   tupper[ihoriz][:,2];
                   tup[ihoriz, ialt-1, :];
-                  tforwards[ihoriz, ialt, :];
-                  (ihoriz == 1 ? tbackedge[ialt][:,1] : tforwards[ihoriz-1, ialt, :]);
-                  (ihoriz == n_horiz ? tbackedge[ialt][:,2] : tbackwards[ihoriz+1, ialt, :]);
-                  tbackwards[ihoriz, ialt, :]]
+                #   tforwards[ihoriz, ialt, :];
+                #   (ihoriz == 1 ? tbackedge[ialt][:,1] : tforwards[ihoriz-1, ialt, :]);
+                #   (ihoriz == n_horiz ? tbackedge[ialt][:,2] : tbackwards[ihoriz+1, ialt, :]);
+                #   tbackwards[ihoriz, ialt, :]]
+                  ihoriz == n_horiz ? tfrontedge[ialt][:,1] : tforwards[ihoriz, ialt, :];
+                  (ihoriz == 1 ? tbackedge[ialt][:,2] : tforwards[ihoriz-1, ialt, :]);
+                  (ihoriz == n_horiz ? tfrontedge[ialt][:,2] : tbackwards[ihoriz+1, ialt, :]);
+                  (ihoriz == 1 ? tbackedge[ialt][:,1] : tbackwards[ihoriz, ialt, :])]
 
         argvec = convert(Array{ftype_chem}, argvec)
         returnrates[:, ialt, ihoriz] .= ratefn_local(argvec...)

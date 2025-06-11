@@ -2332,21 +2332,38 @@ function fluxcoefs_horiz(
                 behind_idx  = ihoriz == 1        ? n_horiz : ihoriz - 1
                 infront_idx = ihoriz == n_horiz ? 1       : ihoriz + 1
             else
-                behind_idx  = max(ihoriz - 1, 1)
-                infront_idx = min(ihoriz + 1, n_horiz)
+                # behind_idx  = max(ihoriz - 1, 1)
+                # infront_idx = min(ihoriz + 1, n_horiz)
+                behind_idx  = ihoriz - 1
+                infront_idx = ihoriz + 1
             end
             for ialt in 1:GV.n_all_layers
-                K_back  = (K[ihoriz][ialt] + K[behind_idx][ialt]) / 2
-                K_front = (K[ihoriz][ialt] + K[infront_idx][ialt]) / 2
-                D_back  = (D[s][ihoriz][ialt] + D[s][behind_idx][ialt]) / 2
-                D_front = (D[s][ihoriz][ialt] + D[s][infront_idx][ialt]) / 2
+                # K_back  = (K[ihoriz][ialt] + K[behind_idx][ialt]) / 2
+                # K_front = (K[ihoriz][ialt] + K[infront_idx][ialt]) / 2
+                # D_back  = (D[s][ihoriz][ialt] + D[s][behind_idx][ialt]) / 2
+                # D_front = (D[s][ihoriz][ialt] + D[s][infront_idx][ialt]) / 2
+                diff_back = 0.0
+                diff_front = 0.0
 
-                diff_back  = (K_back + D_back) / GV.dx^2
-                diff_front = (K_front + D_front) / GV.dx^2
+                if behind_idx >= 1
+                    K_back = (K[ihoriz][ialt] + K[behind_idx][ialt]) / 2
+                    D_back = (D[s][ihoriz][ialt] + D[s][behind_idx][ialt]) / 2
+                    diff_back = (K_back + D_back) / GV.dx^2
+                end
+
+                # diff_back  = (K_back + D_back) / GV.dx^2
+                # diff_front = (K_front + D_front) / GV.dx^2
+                if infront_idx <= n_horiz
+                    K_front = (K[ihoriz][ialt] + K[infront_idx][ialt]) / 2
+                    D_front = (D[s][ihoriz][ialt] + D[s][infront_idx][ialt]) / 2
+                    diff_front = (K_front + D_front) / GV.dx^2
+                end
 
                 v = horiz_wind_v[ihoriz][ialt]
-                adv_front = max(v, 0) / GV.dx
-                adv_back  = max(-v, 0) / GV.dx
+                # adv_front = max(v, 0) / GV.dx
+                # adv_back  = max(-v, 0) / GV.dx
+                adv_front = v > 0 ? v / GV.dx : 0.0
+                adv_back  = v < 0 ? -v / GV.dx : 0.0
 
                 fluxcoef_dict[s][ihoriz][ialt, 1] = diff_back + adv_back
                 fluxcoef_dict[s][ihoriz][ialt, 2] = diff_front + adv_front
@@ -2684,14 +2701,18 @@ function update_horiz_transport_coefficients(species_list, atmdict::Dict{Symbol,
         # Transport coefficients derived from horizontal winds
     tforwards  = fill(0.0, n_horiz, GV.num_layers, length(species_list))
     tbackwards = fill(0.0, n_horiz, GV.num_layers, length(species_list))
-    for ihoriz in 1:n_horiz
-        for ialt in 1:GV.num_layers
-            vel = GV.horiz_wind_v[ihoriz][ialt] / GV.dx
-            if vel >= 0
-                tforwards[ihoriz, ialt, :] .= vel
-            else
-                tbackwards[ihoriz, ialt, :] .= -vel
-            end
+    # for ihoriz in 1:n_horiz
+    #     for ialt in 1:GV.num_layers
+    #         vel = GV.horiz_wind_v[ihoriz][ialt] / GV.dx
+    #         if vel >= 0
+    #             tforwards[ihoriz, ialt, :] .= vel
+    #         else
+    #             tbackwards[ihoriz, ialt, :] .= -vel
+    #         end
+    for (isp, sp) in enumerate(species_list)
+        for ihoriz in 1:n_horiz
+            tbackwards[ihoriz, :, isp] .= fluxcoefs_horiz_all[sp][ihoriz][2:end-1, 1]
+            tforwards[ihoriz, :, isp]  .= fluxcoefs_horiz_all[sp][ihoriz][2:end-1, 2]
         end
     end
 
