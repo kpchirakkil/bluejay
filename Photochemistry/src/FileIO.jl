@@ -276,9 +276,12 @@ function load_from_paramlog(folder; quiet=true, globvars...)
     ## Temperatures first
     if "TemperatureArrays" in XLSX.sheetnames(paramlog_wb)
         df_temps = DataFrame(XLSX.readtable("$(folder)PARAMETERS.xlsx", "TemperatureArrays"));
-        Tn_arr = df_temps.Neutrals
-        Ti_arr = df_temps.Ions
-        Te_arr = df_temps.Electrons
+        # Tn_arr = df_temps.Neutrals
+        # Ti_arr = df_temps.Ions
+        # Te_arr = df_temps.Electrons
+        Tn_arr = reshape(df_temps.Neutrals, GV.n_horiz, GV.num_layers+2)
+        Ti_arr = reshape(df_temps.Ions, GV.n_horiz, GV.num_layers+2)
+        Te_arr = reshape(df_temps.Electrons, GV.n_horiz, GV.num_layers+2)
     else 
         if quiet==false
             println("WARNING: Reconstructing temperature profiles with default options based on logged control temperatures. It is POSSIBLE the reconstruction could be wrong if the temp function changed.")

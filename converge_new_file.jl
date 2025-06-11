@@ -1536,7 +1536,8 @@ end
 # **************************************************************************** #
 println("$(Dates.format(now(), "(HH:MM:SS)")) Populating cross section dictionary...")
 
-const crosssection = populate_xsect_dict(photochem_data_files, xsecfolder; ion_xsects=ions_included, Tn=Tn_arr, n_all_layers)
+# const crosssection = populate_xsect_dict(photochem_data_files, xsecfolder; ion_xsects=ions_included, Tn=Tn_arr, n_all_layers)
+const crosssection = populate_xsect_dict(photochem_data_files, xsecfolder; ion_xsects=ions_included, Tn=Tn_arr, n_all_layers, n_horiz)
 
 # **************************************************************************** #
 #                                                                              #
@@ -1547,8 +1548,11 @@ solarflux = readdlm(code_dir*solarfile,'\t', Float64, comments=true, comment_cha
 solarflux[:,2] = solarflux[:,2] * cosd(SZA)  # Adjust the flux according to specified SZA
 
 lambdas = Float64[]
-for j in Jratelist, ialt in 1:length(alt)
-    global lambdas = union(lambdas, crosssection[j][ialt][:,1]) # MULTICOL WARNING expand crosssection to include values for all vertical columns
+# for j in Jratelist, ialt in 1:length(alt)
+#     global lambdas = union(lambdas, crosssection[j][ialt][:,1]) # MULTICOL WARNING expand crosssection to include values for all vertical columns
+# end
+for j in Jratelist, ihoriz in 1:n_horiz, ialt in 1:length(alt)
+    global lambdas = union(lambdas, crosssection[j][ihoriz][ialt][:,1])
 end
 
 if !(setdiff(solarflux[:,1],lambdas)==[])
@@ -1556,8 +1560,11 @@ if !(setdiff(solarflux[:,1],lambdas)==[])
 end
 
 # pad all cross-sections to solar
-for j in Jratelist, ialt in 1:length(alt)
-    crosssection[j][ialt] = padtosolar(solarflux, crosssection[j][ialt])
+# for j in Jratelist, ialt in 1:length(alt)
+#     crosssection[j][ialt] = padtosolar(solarflux, crosssection[j][ialt])
+# end
+for j in Jratelist, ihoriz in 1:n_horiz, ialt in 1:length(alt)
+    crosssection[j][ihoriz][ialt] = padtosolar(solarflux, crosssection[j][ihoriz][ialt])
 end
 
 # this is the unitialized array for storing values

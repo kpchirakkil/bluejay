@@ -297,7 +297,8 @@ function optical_depth(n_cur_densities; n_horiz::Int64, globvars...)
                 # ARG 5: Y, an array of length n
                 # ARG 6: increment of index values of Y, maybe?
 
-                BLAS.axpy!(nlambda, jcolumn, GV.crosssection[jspecies][ialt+1], 1, solarabs[ihoriz][ialt], 1)
+                # BLAS.axpy!(nlambda, jcolumn, GV.crosssection[jspecies][ialt+1], 1, solarabs[ihoriz][ialt], 1)
+                BLAS.axpy!(nlambda, jcolumn, GV.crosssection[jspecies][ihoriz][ialt+1], 1, solarabs[ihoriz][ialt], 1)
             end
         end
     end
@@ -1096,7 +1097,8 @@ function update_Jrates!(n_cur_densities::Dict{Symbol, Vector{Array{ftype_ncur}}}
         for ihoriz in 1:n_horiz
             for ialt in 1:GV.num_layers
                 n_cur_densities[j][ihoriz][ialt] = ftype_ncur(
-                    BLAS.dot(nlambda, solarabs[ihoriz][ialt], 1, GV.crosssection[j][ialt+1], 1)
+                    # BLAS.dot(nlambda, solarabs[ihoriz][ialt], 1, GV.crosssection[j][ialt+1], 1)
+                    BLAS.dot(nlambda, solarabs[ihoriz][ialt], 1, GV.crosssection[j][ihoriz][ialt+1], 1)
                 )
             end
         end
