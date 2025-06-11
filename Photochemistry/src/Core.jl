@@ -1763,7 +1763,7 @@ function boundaryconditions_horiz(
     atmdict::Dict{Symbol, Vector{Array{ftype_ncur}}},
     horiz_wind_v::Vector{Vector{Float64}},
     n_horiz::Int64;
-    cyclic::Bool=false,
+    cyclic::Bool=true,
     globvars...
 )
     #= 
@@ -1861,18 +1861,14 @@ function boundaryconditions_horiz(
 
         for ialt in 1:GV.num_layers
             if cyclic
-                cyc_back = horiz_wind_v[1][ialt] *
-                    (atmdict[sp][n_horiz][ialt] - atmdict[sp][1][ialt]) / GV.dx
-                cyc_front = horiz_wind_v[n_horiz][ialt] *
-                    (atmdict[sp][1][ialt] - atmdict[sp][n_horiz][ialt]) / GV.dx
-                bc_dict_horiz[sp][ialt][1, :] .= [0, cyc_back]
-                bc_dict_horiz[sp][ialt][2, :] .= [0, cyc_front]
+                # Periodic domain: no exchange with the environment
+                bc_dict_horiz[sp][ialt] .= 0.0
             else
-                back_flux = these_bcs_horiz["f"][1][ialt]
+                back_flux  = these_bcs_horiz["f"][1][ialt]
                 front_flux = these_bcs_horiz["f"][2][ialt]
                 if GV.planet == "Mars"
                     f_backedge = [0, -back_flux / GV.dx]
-                else
+                elseif GV.planet == "Venus"
                     f_backedge = [0, back_flux / GV.dx]
                 end
                 f_frontedge = [0, -front_flux / GV.dx]
@@ -2267,11 +2263,12 @@ end
 """
 Compute horizontal transport coefficients for each species and column.
 
-The return value is a dictionary where each entry ``fluxcoef_dict[s][i]`` is a
-``n_all_layers × 2`` matrix of coefficients linking column ``i`` to the column
-behind (column 1) and the column in front (column 2).  Diffusion coefficients
-are averaged between neighbouring columns and scaled by ``dx²`` while advection
-uses an upwind scheme based on the provided horizontal wind profile.
+Each entry ``fluxcoef_dict[s][i]`` contains a ``n_all_layers × 2`` matrix of
+coefficients linking column ``i`` to the column behind (column 1) and the column
+in front (column 2). Diffusion coefficients are averaged between neighbouring
+columns and scaled by ``dx²`` while advection uses an upwind scheme based on the
+provided horizontal wind profile.  Passing `cyclic=true` wraps the indices so
+that column 1 connects to column ``n_horiz`` and vice versa.
 """
 function fluxcoefs_horiz(
     species_list::Vector,
@@ -2279,6 +2276,7 @@ function fluxcoefs_horiz(
     D::Dict{Symbol, Vector{Vector{ftype_ncur}}},
     horiz_wind_v::Vector{Vector{Float64}},
     n_horiz::Int64;
+    cyclic::Bool = true,
     globvars...
 )
     GV = values(globvars)
@@ -2299,8 +2297,13 @@ function fluxcoefs_horiz(
         #     fluxcoef_horiz_dict[s][ihoriz][:, 1] .= column_behind_coefs
         #     fluxcoef_horiz_dict[s][ihoriz][:, 2] .= column_infront_coefs
         for ihoriz in 1:n_horiz
-            behind_idx = max(ihoriz - 1, 1)
-            infront_idx = min(ihoriz + 1, n_horiz)
+            if cyclic
+                behind_idx  = ihoriz == 1        ? n_horiz : ihoriz - 1
+                infront_idx = ihoriz == n_horiz ? 1       : ihoriz + 1
+            else
+                behind_idx  = max(ihoriz - 1, 1)
+                infront_idx = min(ihoriz + 1, n_horiz)
+            end
             for ialt in 1:GV.n_all_layers
                 K_back  = (K[ihoriz][ialt] + K[behind_idx][ialt]) / 2
                 K_front = (K[ihoriz][ialt] + K[infront_idx][ialt]) / 2
@@ -2576,7 +2579,7 @@ end
 # function update_horiz_transport_coefficients(species_list, atmdict::Dict{Symbol, Vector{Array{ftype_ncur}}}, D_coefs, M, n_horiz::Int64; 
 #                                        calc_nonthermal=true, globvars...) # MULTICOL WARNING don't need all these inputs here
 function update_horiz_transport_coefficients(species_list, atmdict::Dict{Symbol, Vector{Array{ftype_ncur}}}, D_coefs, M, n_horiz::Int64;
-                                       calc_nonthermal=true, cyclic=false, globvars...)
+                                       calc_nonthermal=true, cyclic=true, globvars...)
     #= # MULTICOL WARNING  - change comments here
     Input:
         species_list: Species which will have transport coefficients updated
@@ -2588,6 +2591,8 @@ function update_horiz_transport_coefficients(species_list, atmdict::Dict{Symbol,
         species_list: Species for which to generate molecular diffusion coefficients. This allows the code to only do it for
                  transport species during the main simulation run, and for all species when trying to plot 
                  rate balances after the run.
+        cyclic: wrap the horizontal domain so that material leaving one edge
+                enters from the opposite side
 
     Return: 
         Horizontal transport coefficients for all atmospheric layers, units 1/s
@@ -2627,6 +2632,7 @@ function update_horiz_transport_coefficients(species_list, atmdict::Dict{Symbol,
         Dcoef_dict,
         GV.horiz_wind_v,
         n_horiz;
+        cyclic=cyclic,
         globvars...
     )
 
