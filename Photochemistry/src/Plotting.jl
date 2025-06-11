@@ -662,9 +662,19 @@ function plot_rxns(sp::Symbol, atmdict::Dict{Symbol, Vector{Array{ftype_ncur}}},
         # index these in this way to make the evaluation of chemistry reaction rate coefficients work. 
         # Entering them separately from globvars allows us to keep passing globvars as a "packed" variable but 
         # use the most recent Tn, Ti, Te according to rightmost taking precedence.
-        rxd_prod, rate_coefs_prod = get_volume_rates(sp, atmdict, n_horiz; species_role="product", globvars..., Tn=GV.Tn[2:end-1], Ti=GV.Ti[2:end-1], Te=GV.Te[2:end-1])
-        rxd_loss, rate_coefs_loss = get_volume_rates(sp, atmdict, n_horiz; species_role="reactant", globvars..., Tn=GV.Tn[2:end-1], Ti=GV.Ti[2:end-1], Te=GV.Te[2:end-1])
-
+        
+        # rxd_prod, rate_coefs_prod = get_volume_rates(sp, atmdict, n_horiz; species_role="product", globvars..., Tn=GV.Tn[2:end-1], Ti=GV.Ti[2:end-1], Te=GV.Te[2:end-1])
+        # rxd_loss, rate_coefs_loss = get_volume_rates(sp, atmdict, n_horiz; species_role="reactant", globvars..., Tn=GV.Tn[2:end-1], Ti=GV.Ti[2:end-1], Te=GV.Te[2:end-1])
+        rxd_prod, rate_coefs_prod = get_volume_rates(
+            sp, atmdict, n_horiz;
+            species_role="product", globvars...,
+            Tn=GV.Tn, Ti=GV.Ti, Te=GV.Te
+        )
+        rxd_loss, rate_coefs_loss = get_volume_rates(
+            sp, atmdict, n_horiz;
+            species_role="reactant", globvars...,
+            Tn=GV.Tn, Ti=GV.Ti, Te=GV.Te
+        )
         # Water is turned off in the lower atmosphere, so we should represent that.
         if sp in [:H2O, :HDO]
 	    for ihoriz in [1:n_horiz;]
@@ -714,12 +724,20 @@ function plot_rxns(sp::Symbol, atmdict::Dict{Symbol, Vector{Array{ftype_ncur}}},
         for kv in rxd_loss
             if shown_rxns != nothing
                 if kv[1] in shown_rxns
-                    ax[1].semilogx(kv[2], GV.plot_grid, linestyle=ls[ls_i], marker=8, markevery=20, color=cols[col_i], linewidth=1, label=kv[1])
+                    # ax[1].semilogx(kv[2], GV.plot_grid, linestyle=ls[ls_i], marker=8, markevery=20, color=cols[col_i], linewidth=1, label=kv[1])
+                    for ihoriz in [1:n_horiz;]
+                        ax[1].semilogx(kv[2][ihoriz], GV.plot_grid,
+                            linestyle=ls[ls_i], marker=8, markevery=20,
+                            color=cols[col_i], linewidth=1, label=kv[1])
+                    end
                     col_i = next_in_loop(col_i, length(cols))
                     ls_i = next_in_loop(ls_i, length(ls))
                 end
             end
-            total_chem_loss += kv[2]
+            # total_chem_loss += kv[2]
+            for ihoriz in [1:n_horiz;]
+                total_chem_loss[ihoriz] += kv[2][ihoriz]
+            end
         end
         for kv in rate_coefs_loss
 	    for ihoriz in [1:n_horiz;]
@@ -747,8 +765,16 @@ function plot_rxns(sp::Symbol, atmdict::Dict{Symbol, Vector{Array{ftype_ncur}}},
             ax_1_2 = ax[1].twiny()
             ax_1_2.tick_params(axis="x", labelcolor="xkcd:royal purple")
             ax_1_2.set_ylabel("Rate coefficient (cm^3/s)", color="xkcd:royal purple")
-            ax_1_2.semilogx(total_chem_prod_ratecoef, GV.plot_grid, color="xkcd:royal purple", linestyle=":", linewidth=3, label="Total chemical production rate coef", zorder=6)
-            ax_1_2.semilogx(total_chem_loss_ratecoef, GV.plot_grid, color="xkcd:lavender", linestyle=":", linewidth=3, label="Total chemical loss rate coef", zorder=6)
+            # ax_1_2.semilogx(total_chem_prod_ratecoef, GV.plot_grid, color="xkcd:royal purple", linestyle=":", linewidth=3, label="Total chemical production rate coef", zorder=6)
+            # ax_1_2.semilogx(total_chem_loss_ratecoef, GV.plot_grid, color="xkcd:lavender", linestyle=":", linewidth=3, label="Total chemical loss rate coef", zorder=6)
+            for ihoriz in [1:n_horiz;]
+                ax_1_2.semilogx(total_chem_prod_ratecoef[ihoriz], GV.plot_grid,
+                    color="xkcd:royal purple", linestyle=":", linewidth=3,
+                    label="Total chemical production rate coef", zorder=6)
+                ax_1_2.semilogx(total_chem_loss_ratecoef[ihoriz], GV.plot_grid,
+                    color="xkcd:lavender", linestyle=":", linewidth=3,
+                    label="Total chemical loss rate coef", zorder=6)
+            end
             ax_1_2.legend()
         end
 

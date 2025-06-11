@@ -46,6 +46,7 @@ Note that this is a simplified version with 4 species and 7 altitude bins.
 
 # Bluejay expansion from 1-D to 2-D: NEW UPDATES
 
+- Continuing working on a simplified version with 4 species (O, O2, O3, and O+) and 7 altitude bins (90 to 106 km, dz = 2 km) and 3 horizontal columns
 - Two-dimensional temperature arrays are defined with horizontal index first and altitude second. MODEL_SETUP.jl initializes Tn_temp, Ti_temp, and Te_temp with shape (n_horiz, num_layers+2) and fills them using Tn_temp[ihoriz, :] etc., then stores them as global constants Tn_arr, Ti_arr, and Te_arr
 - Dcoef! operates column-by-column by extracting T_arr_2D[ihoriz, :]; the indexing matches the (n_horiz, num_layers+2) layout used throughout the codebase
 - Solar absorption arrays from optical_depth are built as a vector over horizontal columns containing altitude arrays (solarabs[ihoriz][ialt]), explicitly documented as “structured as [n_horiz, num_layers]” and accessed with that ordering when computing Jrates
@@ -57,4 +58,4 @@ Note that this is a simplified version with 4 species and 7 altitude bins.
 - Make sure the horizontal transport coefficients are placed correctly in the transport matrices (chemical Jacobian and rate functions)
 - Focus on important model files (such as but not limited to): converge_new_file.jl, MODEL_SETUP.jl, INPUT_PARAMETERS.jl, ReactionNetwork.jl, Plotting.jl, Core.jl, AnalyzeChemAndTransport.jl
 - Resolve any remaining "MULTICOL WARNING" or "MID-FIX" issues in the implementation of 2-D multicolumn model with horizontal transport
-
+- No need to do tests like "python3 -m py_compile simple_analytic_test.py scale_solar_spectrum.py" in every iteration

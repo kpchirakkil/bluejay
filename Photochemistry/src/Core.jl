@@ -743,7 +743,13 @@ function chemical_jacobian(specieslist, dspecieslist; diff_wrt_e=true, diff_wrt_
     return (ivec, jvec, tvec)
 end
 
-function eval_rate_coef(atmdict::Dict{Symbol, Vector{Array{ftype_ncur}}}, krate::Expr, ihoriz::Int64; globvars...)
+# function eval_rate_coef(atmdict::Dict{Symbol, Vector{Array{ftype_ncur}}}, krate::Expr, ihoriz::Int64; globvars...)
+function eval_rate_coef(
+    atmdict::Dict{Symbol, Vector{Array{ftype_ncur}}},
+    krate::Expr,
+    ihoriz::Int64;
+    globvars...
+)
     #=
     Evaluates a chemical reaction rate coefficient, krate, for all levels of the atmosphere. 
 
@@ -762,7 +768,30 @@ function eval_rate_coef(atmdict::Dict{Symbol, Vector{Array{ftype_ncur}}}, krate:
     # Set stuff up
     eval_k = mk_function(:((Tn, Ti, Te, M) -> $krate))
 
-    return eval_k(GV.Tn, GV.Ti, GV.Te, sum([atmdict[sp][ihoriz] for sp in GV.all_species])) # MULTICOL WARNING hardcoded to use the same T values for all vertical columns 
+    # Grab the temperature profiles for this column and drop the boundary layers
+    Tn_data = GV.Tn
+    Ti_data = GV.Ti
+    Te_data = GV.Te
+
+    # When get_volume_rates is called for a single column, Tn, Ti and Te may
+    # already be 1-D vectors. Support both cases gracefully.
+    if ndims(Tn_data) == 2
+        Tn_col = Tn_data[ihoriz, 2:end-1]
+        Ti_col = Ti_data[ihoriz, 2:end-1]
+        Te_col = Te_data[ihoriz, 2:end-1]
+    else
+        # The arrays already exclude boundary layers
+        Tn_col = Tn_data
+        Ti_col = Ti_data
+        Te_col = Te_data
+    end
+
+    return eval_k(
+        Tn_col,
+        Ti_col,
+        Te_col,
+        sum([atmdict[sp][ihoriz] for sp in GV.all_species]),
+    )
 end 
 
 # function getrate(sp::Symbol; chemistry_on=true, transport_on=true, sepvecs=false, globvars...)
