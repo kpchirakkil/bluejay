@@ -245,10 +245,14 @@ function n_tot(atmdict::Dict{Symbol, Vector{Array{ftype_ncur}}}, ihoriz::Int64; 
     check_requirements(keys(GV), required)
 
     counted_species = setdiff(GV.all_species, ignore)
-    ndensities = zeros(length(counted_species), length(atmdict[collect(keys(atmdict))[1]][ihoriz])) # MULTICOL WARNING hardcoded to the first vertical column; will need changing if want different values for each column. Mid-fix.
+    # ndensities = zeros(length(counted_species), length(atmdict[collect(keys(atmdict))[1]][ihoriz])) # MULTICOL WARNING hardcoded to the first vertical column; will need changing if want different values for each column. Mid-fix.
+    # allocate an array to gather density profiles for this vertical column
+    ndensities = zeros(length(counted_species), length(atmdict[collect(keys(atmdict))[1]][ihoriz]))
 
     for i in 1:length(counted_species)
-        ndensities[i, :] = atmdict[counted_species[i]][ihoriz] # MULTICOL WARNING hardcoded to the first vertical column; will need changing if want different values for each column. Mid-fix
+        # ndensities[i, :] = atmdict[counted_species[i]][ihoriz] # MULTICOL WARNING hardcoded to the first vertical column; will need changing if want different values for each column. Mid-fix
+        # copy the density profile for each species at this column
+        ndensities[i, :] = atmdict[counted_species[i]][ihoriz]
     end
 
     # returns the sum over all species at each altitude as a vector.
@@ -761,7 +765,9 @@ function eval_rate_coef(atmdict::Dict{Symbol, Vector{Array{ftype_ncur}}}, krate:
     return eval_k(GV.Tn, GV.Ti, GV.Te, sum([atmdict[sp][ihoriz] for sp in GV.all_species])) # MULTICOL WARNING hardcoded to use the same T values for all vertical columns 
 end 
 
-function getrate(sp::Symbol; chemistry_on=true, transport_on=true, sepvecs=false, globvars...)
+# function getrate(sp::Symbol; chemistry_on=true, transport_on=true, sepvecs=false, globvars...)
+function getrate(sp::Symbol; chemistry_on=true, transport_on=true, sepvecs=false,
+                  transportnet_horiz=[], globvars...)
     #=
     Creates a symbolic expression for the rate at which a given species is
     either produced or lost due to chemical reactions or transport.
@@ -769,7 +775,8 @@ function getrate(sp::Symbol; chemistry_on=true, transport_on=true, sepvecs=false
     Input:
         sp: species for which to get the rate 
         chemnet: chemistry reaction array
-        transportnet: transport network array
+        transportnet: vertical transport network array
+        transportnet_horiz: horizontal transport network array
         chem_species: species with active chemistry
         transport_species: species which transport
         chemistry_on: set to false to disallow chemical changes to species
@@ -790,15 +797,23 @@ function getrate(sp::Symbol; chemistry_on=true, transport_on=true, sepvecs=false
     if sepvecs == false
         rate = :(0.0)
         if issubset([sp], GV.chem_species) && chemistry_on
-            rate = :($rate 
-                     + $(production_rate(sp, GV.chemnet, sepvecs=sepvecs)) 
-                     - $(loss_rate(sp, GV.chemnet, sepvecs=sepvecs)) 
+            # rate = :($rate 
+            #          + $(production_rate(sp, GV.chemnet, sepvecs=sepvecs)) 
+            #          - $(loss_rate(sp, GV.chemnet, sepvecs=sepvecs)) 
+            rate = :($rate
+                     + $(production_rate(sp, GV.chemnet, sepvecs=sepvecs))
+                     - $(loss_rate(sp, GV.chemnet, sepvecs=sepvecs))
                     )
         end
         if issubset([sp], GV.transport_species) && transport_on
-            rate = :($rate 
-                     + $(production_rate(sp, GV.transportnet, sepvecs=sepvecs)) 
+            # rate = :($rate 
+            #          + $(production_rate(sp, GV.transportnet, sepvecs=sepvecs)) 
+            #          - $(loss_rate(sp, GV.transportnet, sepvecs=sepvecs))
+            rate = :($rate
+                     + $(production_rate(sp, GV.transportnet, sepvecs=sepvecs))
                      - $(loss_rate(sp, GV.transportnet, sepvecs=sepvecs))
+                     + $(production_rate(sp, transportnet_horiz, sepvecs=sepvecs))
+                     - $(loss_rate(sp, transportnet_horiz, sepvecs=sepvecs))
                     )
         end
         return rate
@@ -812,8 +827,12 @@ function getrate(sp::Symbol; chemistry_on=true, transport_on=true, sepvecs=false
         end
         
         if issubset([sp], GV.transport_species) && transport_on
-            transprod_rate = production_rate(sp, GV.transportnet, sepvecs=sepvecs)
-            transloss_rate = loss_rate(sp, GV.transportnet, sepvecs=sepvecs)
+            # transprod_rate = production_rate(sp, GV.transportnet, sepvecs=sepvecs)
+            # transloss_rate = loss_rate(sp, GV.transportnet, sepvecs=sepvecs)
+            transprod_rate = vcat(production_rate(sp, GV.transportnet, sepvecs=sepvecs),
+                                  production_rate(sp, transportnet_horiz, sepvecs=sepvecs))
+            transloss_rate = vcat(loss_rate(sp, GV.transportnet, sepvecs=sepvecs),
+                                  loss_rate(sp, transportnet_horiz, sepvecs=sepvecs))
         else
             transprod_rate = [:(0.0 + 0.0)]
             transloss_rate = [:(0.0 + 0.0)]
@@ -3088,7 +3107,9 @@ function linear_in_species_density(sp, lossnet)
     return true 
 end
 
-function setup_photochemical_equilibrium(; globvars...)
+# function setup_photochemical_equilibrium(; globvars...)
+function setup_photochemical_equilibrium(; transportnet_horiz=[], globvars...)
+
     #=
     Output
         active_longlived_species_rates: rate expressions for species which are actively solved for.
@@ -3112,7 +3133,14 @@ function setup_photochemical_equilibrium(; globvars...)
     # transport production, transport loss, in that order.
     active_longlived_species_rates = Array{Array{Expr}}(undef, length(GV.active_longlived), 4)
     for (i, sp) in enumerate(GV.active_longlived)
-        active_longlived_species_rates[i, :] .= getrate(sp, sepvecs=true; chemnet=GV.reaction_network, GV.transportnet, GV.chem_species, GV.transport_species, )
+        # active_longlived_species_rates[i, :] .= getrate(sp, sepvecs=true; chemnet=GV.reaction_network, GV.transportnet, GV.chem_species, GV.transport_species, )
+        active_longlived_species_rates[i, :] .= getrate(sp, sepvecs=true,
+                                                       transportnet_horiz=transportnet_horiz;
+                                                       chemnet=GV.reaction_network,
+                                                       GV.transportnet,
+                                                       GV.chem_species,
+                                                       GV.transport_species, )
+
     end
 
     # ------------------ Short-lived species expression array ----------------------- #

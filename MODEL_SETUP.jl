@@ -347,10 +347,13 @@ const Tprof_for_Hs = Dict("neutral"=>Tn_arr, "ion"=>Ti_arr)
 #                              Horizontal winds construction                      
 # =======================================================================================================
 # const horiz_wind_v = [zeros(9) for ihoriz in 1:n_horiz]   # horizontal wind profiles; one altitude profile for each vertical column; units cm/s # MULTICOL WARNING hardcoded values
+
 # Provide a simple default horizontal wind profile for each column.  These
 # values may be overwritten by user supplied profiles in `INPUT_PARAMETERS.jl`.
 # A small constant wind of 10 cm/s is used at all altitudes so that the
 # horizontal transport terms are non-zero by default.
+
+# const horiz_wind_v = [fill(0.0, length(alt)) for ihoriz in 1:n_horiz]
 const horiz_wind_v = [fill(10.0, length(alt)) for ihoriz in 1:n_horiz]
 
 #                                      Water profile settings

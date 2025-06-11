@@ -244,17 +244,24 @@ function chemJmat(n_active_longlived, n_active_shortlived, n_inactive, Jrates, t
     for ihoriz in 1:n_horiz
         for ialt in 1:GV.num_layers
             if ialt == 1
-                argvec = [nmat_llsp[:, ialt, ihoriz];                         
-                          nmat_llsp[:, ialt+1, ihoriz];                      
-                          fill(1.0, length(GV.active_longlived));           
-                          nmat_slsp[:, ialt, ihoriz];                       
-                          nmat_inactive[:, ialt, ihoriz];                    
+                # argvec = [nmat_llsp[:, ialt, ihoriz];                         
+                #           nmat_llsp[:, ialt+1, ihoriz];                      
+                #           fill(1.0, length(GV.active_longlived));           
+                #           nmat_slsp[:, ialt, ihoriz];                       
+                #           nmat_inactive[:, ialt, ihoriz];
+                argvec = [nmat_llsp[:, ialt, ihoriz];
+                          nmat_llsp[:, ialt+1, ihoriz];
+                          fill(1.0, length(GV.active_longlived));
+                          ihoriz == 1 ? fill(1.0, length(GV.active_longlived)) : nmat_llsp[:, ialt, ihoriz-1];
+                          ihoriz == n_horiz ? fill(1.0, length(GV.active_longlived)) : nmat_llsp[:, ialt, ihoriz+1];
+                          nmat_slsp[:, ialt, ihoriz];
+                          nmat_inactive[:, ialt, ihoriz];                   
                           Jrates[:, ihoriz, ialt];                         # COLUMN-SPECIFIC Jrates
-                          GV.Tn[ihoriz, ialt]; GV.Ti[ihoriz, ialt]; GV.Te[ihoriz, ialt];           
-                          M[ialt, ihoriz]; E[ihoriz][ialt];                 
-                          tup[ihoriz, ialt, :]; tlower[ihoriz][:,ialt];      
+                          GV.Tn[ihoriz, ialt]; GV.Ti[ihoriz, ialt]; GV.Te[ihoriz, ialt];
+                          M[ialt, ihoriz]; E[ihoriz][ialt];
+                          tup[ihoriz, ialt, :]; tlower[ihoriz][:,ialt];     
                           tdown[ihoriz, ialt+1, :]; tlower[ihoriz][:,ialt+1];
-                          tforwards[ihoriz, ialt, :]; 
+                          tforwards[ihoriz, ialt, :];
                           ihoriz == 1 ? tbackedge[ialt][:,1] : tforwards[ihoriz-1, ialt, :];
                           ihoriz == n_horiz ? tbackedge[ialt][:,2] : tbackwards[ihoriz+1, ialt, :];
                           tbackwards[ihoriz, ialt, :]]
@@ -262,6 +269,8 @@ function chemJmat(n_active_longlived, n_active_shortlived, n_inactive, Jrates, t
                 argvec = [nmat_llsp[:, ialt, ihoriz];
                           fill(1.0, length(GV.active_longlived));
                           nmat_llsp[:, ialt-1, ihoriz];
+                          ihoriz == 1 ? fill(1.0, length(GV.active_longlived)) : nmat_llsp[:, ialt, ihoriz-1];
+                          ihoriz == n_horiz ? fill(1.0, length(GV.active_longlived)) : nmat_llsp[:, ialt, ihoriz+1];
                           nmat_slsp[:, ialt, ihoriz];
                           nmat_inactive[:, ialt, ihoriz];
                           Jrates[:, ihoriz, ialt];                         # COLUMN-SPECIFIC Jrates
@@ -269,7 +278,7 @@ function chemJmat(n_active_longlived, n_active_shortlived, n_inactive, Jrates, t
                           M[ialt, ihoriz]; E[ihoriz][ialt];
                           tupper[ihoriz][:,1]; tdown[ihoriz, ialt, :];
                           tupper[ihoriz][:,2]; tup[ihoriz, ialt-1, :];
-                          tforwards[ihoriz, ialt, :]; 
+                          tforwards[ihoriz, ialt, :];
                           ihoriz == 1 ? tbackedge[ialt][:,1] : tforwards[ihoriz-1, ialt, :];
                           ihoriz == n_horiz ? tbackedge[ialt][:,2] : tbackwards[ihoriz+1, ialt, :];
                           tbackwards[ihoriz, ialt, :]]
@@ -277,6 +286,8 @@ function chemJmat(n_active_longlived, n_active_shortlived, n_inactive, Jrates, t
                 argvec = [nmat_llsp[:, ialt, ihoriz];
                           nmat_llsp[:, ialt+1, ihoriz];
                           nmat_llsp[:, ialt-1, ihoriz];
+                          ihoriz == 1 ? fill(1.0, length(GV.active_longlived)) : nmat_llsp[:, ialt, ihoriz-1];
+                          ihoriz == n_horiz ? fill(1.0, length(GV.active_longlived)) : nmat_llsp[:, ialt, ihoriz+1];
                           nmat_slsp[:, ialt, ihoriz];
                           nmat_inactive[:, ialt, ihoriz];
                           Jrates[:, ihoriz, ialt];                         # COLUMN-SPECIFIC Jrates
@@ -356,6 +367,8 @@ function ratefn(n_active_longlived, n_active_shortlived, n_inactive, Jrates, tup
         argvec = [nmat_llsp[:, ialt, ihoriz];                      # densities for active_longlived;
                   nmat_llsp[:, ialt+1, ihoriz];                    # active_longlived_above;
                   fill(1.0, length(GV.active_longlived));          # active_longlived_below;
+                  ihoriz == 1 ? fill(1.0, length(GV.active_longlived)) : nmat_llsp[:, ialt, ihoriz-1];
+                  ihoriz == n_horiz ? fill(1.0, length(GV.active_longlived)) : nmat_llsp[:, ialt, ihoriz+1];
                   nmat_slsp[:, ialt, ihoriz];                      # active_shortlived;
                   nmat_inactive[:, ialt, ihoriz];                  # inactive_species;
                   Jrates[:, ihoriz, ialt];                         # Jratelist (column-specific);
@@ -375,6 +388,8 @@ function ratefn(n_active_longlived, n_active_shortlived, n_inactive, Jrates, tup
             argvec = [nmat_llsp[:, ialt, ihoriz];
                       nmat_llsp[:, ialt+1, ihoriz];
                       nmat_llsp[:, ialt-1, ihoriz];
+                      ihoriz == 1 ? fill(1.0, length(GV.active_longlived)) : nmat_llsp[:, ialt, ihoriz-1];
+                      ihoriz == n_horiz ? fill(1.0, length(GV.active_longlived)) : nmat_llsp[:, ialt, ihoriz+1];
                       nmat_slsp[:, ialt, ihoriz];
                       nmat_inactive[:, ialt, ihoriz];
                       Jrates[:, ihoriz, ialt];                     # Jratelist (column-specific);
@@ -398,6 +413,8 @@ function ratefn(n_active_longlived, n_active_shortlived, n_inactive, Jrates, tup
         argvec = [nmat_llsp[:, ialt, ihoriz];
                   fill(1.0, length(GV.active_longlived));
                   nmat_llsp[:, ialt-1, ihoriz];
+                  ihoriz == 1 ? fill(1.0, length(GV.active_longlived)) : nmat_llsp[:, ialt, ihoriz-1];
+                  ihoriz == n_horiz ? fill(1.0, length(GV.active_longlived)) : nmat_llsp[:, ialt, ihoriz+1];
                   nmat_slsp[:, ialt, ihoriz];
                   nmat_inactive[:, ialt, ihoriz];
                   Jrates[:, ihoriz, ialt];                           # Jratelist (column-specific);
@@ -1299,9 +1316,12 @@ const chemJ_behind = chemical_jacobian(active_longlived, active_longlived_behind
 #                     Photochemical equilibrium setup                           #
 #===============================================================================#
 
-const active_longlived_species_rates, short_lived_density_eqn, 
-      shortlived_density_inputs, equilibrium_eqn_terms = setup_photochemical_equilibrium(; active_longlived, active_shortlived, short_lived_species, reaction_network, 
-                                                                                           transportnet, chem_species, transport_species)
+# const active_longlived_species_rates, short_lived_density_eqn, 
+#       shortlived_density_inputs, equilibrium_eqn_terms = setup_photochemical_equilibrium(; active_longlived, active_shortlived, short_lived_species, reaction_network, 
+#                                                                                            transportnet, chem_species, transport_species)
+const active_longlived_species_rates, short_lived_density_eqn,
+      shortlived_density_inputs, equilibrium_eqn_terms = setup_photochemical_equilibrium(; active_longlived, active_shortlived, short_lived_species, reaction_network,
+          transportnet, transportnet_horiz, chem_species, transport_species)
 
 # **************************************************************************** #
 #                                                                              #
@@ -1311,10 +1331,20 @@ const active_longlived_species_rates, short_lived_density_eqn,
 
 #          Arguments and expressions for metaprogramming functions              #
 #===============================================================================#
-const ratefn_arglist = [active_longlived; active_longlived_above; active_longlived_below; active_shortlived; inactive_species; Jratelist; 
-                        :Tn; :Ti; :Te; :M; :E; local_transport_rates; local_transport_rates_horiz]; # E FIX ATTEMPT
+# const ratefn_arglist = [active_longlived; active_longlived_above; active_longlived_below; active_shortlived; inactive_species; Jratelist; 
+#                         :Tn; :Ti; :Te; :M; :E; local_transport_rates; local_transport_rates_horiz]; # E FIX ATTEMPT
+const ratefn_arglist = [active_longlived;
+                        active_longlived_above;
+                        active_longlived_below;
+                        active_longlived_behind;
+                        active_longlived_infront;
+                        active_shortlived;
+                        inactive_species; Jratelist;
+                        :Tn; :Ti; :Te; :M; :E;
+                        local_transport_rates; local_transport_rates_horiz];
 const ratefn_arglist_typed = [:($s::ftype_chem) for s in ratefn_arglist];
-const set_concentration_arglist = [active_shortlived; active_longlived; inactive_species; Jratelist; :Tn; :Ti; :Te; :M; :E]; # E FIX ATTEMPT
+# const set_concentration_arglist = [active_shortlived; active_longlived; inactive_species; Jratelist; :Tn; :Ti; :Te; :M; :E]; # E FIX ATTEMPT
+const set_concentration_arglist = [active_shortlived; active_longlived; inactive_species; Jratelist; :Tn; :Ti; :Te; :M; :E];
 const set_concentration_arglist_typed = [:($s::ftype_chem) for s in set_concentration_arglist];
 
 # This can be used if you want to calculate M, E at computation
