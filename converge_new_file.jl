@@ -136,9 +136,12 @@ function evolve_atmosphere(atm_init::Dict{Symbol, Vector{Array{ftype_ncur}}}, lo
     # MULTICOL UPDATE: calculate total atmospheric density for each horizontal column separately
     M = zeros(GV.num_layers, n_horiz)
     for ihoriz in 1:n_horiz
-        M[:, ihoriz] = n_tot(n_current, ihoriz; GV.all_species)
+        # M[:, ihoriz] = n_tot(n_current, ihoriz; GV.all_species)
+        M[:, ihoriz] = n_tot(atm_init, ihoriz; GV.all_species)
     end
-    E = electron_density(n_current; GV.e_profile_type, GV.non_bdy_layers, GV.ion_species)
+    # E = electron_density(n_current; GV.e_profile_type, GV.non_bdy_layers, GV.ion_species)
+    E = electron_density(atm_init; GV.e_profile_type, GV.non_bdy_layers, GV.ion_species)
+
     params_Gear = [GV.Dcoef_arr_template, M, E]
     params_J = [globvars, GV.Dcoef_arr_template, M, E] # kwargs can't be passed to the julia ODE solver functions 
     params_exjac = deepcopy(params_Gear)  # make sure not to have a pointer problem
@@ -1226,8 +1229,8 @@ if update_water_profile
         end
 
         # Make the plot
-        plot_water_profile(n_current, results_dir*sim_folder_name; prev_profs=[prevh2o, prevhdo], plot_grid, all_species, non_bdy_layers, speciescolor, speciesstyle,
-                                                                   monospace_choice, sansserif_choice) 
+        plot_water_profile(n_current, results_dir*sim_folder_name; ihoriz=1, prev_profs=[prevh2o, prevhdo], plot_grid, all_species, non_bdy_layers, speciescolor, speciesstyle,
+                                                                   monospace_choice, sansserif_choice)
     else
         # Recalculate the initialization fraction for H2O 
         # H2Oinitfrac, H2Osatfrac = set_h2oinitfrac_bySVP(n_current, hygropause_alt; all_species, alt, num_layers, n_alt_index, H2Osat, water_mixing_ratio)
@@ -1248,8 +1251,8 @@ if update_water_profile
         end
 
         # Now plot it
-        plot_water_profile(n_current, results_dir*sim_folder_name; prev_profs=[prevh2o, prevhdo], plot_grid, all_species, non_bdy_layers, speciescolor, speciesstyle,
-                                                                   monospace_choice, sansserif_choice) 
+        plot_water_profile(n_current, results_dir*sim_folder_name; ihoriz=1, prev_profs=[prevh2o, prevhdo], plot_grid, all_species, non_bdy_layers, speciescolor, speciesstyle,
+                                                                   monospace_choice, sansserif_choice)
         println("I have reset the water profile to the standard initial mixing fraction $(modified_water_alts)")
     end
 end
@@ -1560,7 +1563,6 @@ end
 # **************************************************************************** #
 println("$(Dates.format(now(), "(HH:MM:SS)")) Populating cross section dictionary...")
 
-# const crosssection = populate_xsect_dict(photochem_data_files, xsecfolder; ion_xsects=ions_included, Tn=Tn_arr, n_all_layers)
 const crosssection = populate_xsect_dict(photochem_data_files, xsecfolder; ion_xsects=ions_included, Tn=Tn_arr, n_all_layers, n_horiz)
 
 # **************************************************************************** #
@@ -1572,9 +1574,6 @@ solarflux = readdlm(code_dir*solarfile,'\t', Float64, comments=true, comment_cha
 solarflux[:,2] = solarflux[:,2] * cosd(SZA)  # Adjust the flux according to specified SZA
 
 lambdas = Float64[]
-# for j in Jratelist, ialt in 1:length(alt)
-#     global lambdas = union(lambdas, crosssection[j][ialt][:,1]) # MULTICOL WARNING expand crosssection to include values for all vertical columns
-# end
 for j in Jratelist, ihoriz in 1:n_horiz, ialt in 1:length(alt)
     global lambdas = union(lambdas, crosssection[j][ihoriz][ialt][:,1])
 end
@@ -1584,9 +1583,6 @@ if !(setdiff(solarflux[:,1],lambdas)==[])
 end
 
 # pad all cross-sections to solar
-# for j in Jratelist, ialt in 1:length(alt)
-#     crosssection[j][ialt] = padtosolar(solarflux, crosssection[j][ialt])
-# end
 for j in Jratelist, ihoriz in 1:n_horiz, ialt in 1:length(alt)
     crosssection[j][ihoriz][ialt] = padtosolar(solarflux, crosssection[j][ihoriz][ialt])
 end

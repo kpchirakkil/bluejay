@@ -742,7 +742,8 @@ function limiting_flux(sp, atmdict, T_arr; treat_H_as_rare=false, full_equation=
     end
 end
 
-function limiting_flow_velocity(sp, atmdict, T_arr; globvars...)
+# function limiting_flow_velocity(sp, atmdict, T_arr; globvars...)
+function limiting_flow_velocity(sp, atmdict, T_arr; ihoriz::Int=1, globvars...)
     #=
     Calculate the limiting upward flux (Hunten, 1973; Zahnle, 2008). 
     Inputs:
@@ -760,12 +761,13 @@ function limiting_flow_velocity(sp, atmdict, T_arr; globvars...)
     Ha = scaleH(atmdict, T_arr[2:end-1]; ignore=[sp], globvars..., alt=GV.non_bdy_layers)
     Hi = scaleH(GV.non_bdy_layers, sp, T_arr[2:end-1]; GV.molmass)
     bi = binary_dcoeff_inCO2(sp, T_arr[2:end-1]) # AT^s
-    na = n_tot(atmdict, 1; ignore=[sp], GV.all_species) # MULTICOL WARNING - ihoriz hardcoded as 1 in n_tot arguments for now -- change this
+    na = n_tot(atmdict, ihoriz; ignore=[sp], GV.all_species)
 
     return @. (bi / na) * (1/Ha - 1/Hi)
 end
 
-function limiting_flux_molef(sp, atmdict, T_arr; globvars...)
+# function limiting_flux_molef(sp, atmdict, T_arr; globvars...)
+function limiting_flux_molef(sp, atmdict, T_arr; ihoriz::Int=1, globvars...)
     #=
     Roger requested the limiting flux in in mole fraction. This is actually the same result as above. But this way we're sure
     =#
@@ -775,7 +777,7 @@ function limiting_flux_molef(sp, atmdict, T_arr; globvars...)
 
     avogadro = 6.022e23
 
-    X = (atmdict[sp] ./ avogadro) ./ (n_tot(atmdict, 1; globvars...) ./ avogadro) # MULTICOL WARNING - ihoriz hardcoded as 1 in n_tot arguments for now -- change this
+    X = (atmdict[sp] ./ avogadro) ./ (n_tot(atmdict, ihoriz; globvars...) ./ avogadro)
     # Calculate some common things: mixing ratio, scale height, binary diffusion coefficient AT^s
 
     Ha = scaleH(atmdict, T_arr, n_horiz; globvars..., alt=GV.non_bdy_layers)

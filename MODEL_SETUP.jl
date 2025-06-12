@@ -260,15 +260,15 @@ end
 
 # Modify the settings if doing a special isothermal atmosphere.
 if temp_scenario=="isothermal"
-    const controltemps = [225., 225., 225.]
-    const meantemps = [225., 225., 225.] # Used for saturation vapor pressure. DON'T CHANGE!
+    controltemps .= [225., 225., 225.]
+    meantemps .= [225., 225., 225.] # Used for saturation vapor pressure. DON'T CHANGE!
 else # Set the exobase temp according to the temp scenario.
-    const controltemps[3] =  Texo_opts[planet][temp_scenario]
+    controltemps[3] =  Texo_opts[planet][temp_scenario]
 end
 
 # Modify the array for the special case where multiple parameters are changed for the seasonal model
-if special_seasonal_case!=nothing 
-    const controltemps = [Tsurf[planet], Tmeso[planet], Texo_inclusive_opts[special_seasonal_case]]
+if special_seasonal_case!=nothing
+    controltemps .= [Tsurf[planet], Tmeso[planet], Texo_inclusive_opts[special_seasonal_case]]
 end
 
 # MULTICOL ADDED: allocate 2D arrays for Tn, Ti, Te
@@ -422,12 +422,18 @@ const Hs_dict = Dict{Symbol, Vector{Vector{Float64}}}([sp => [scaleH(alt, sp, Tp
 # "see boundaryconditions()" -- nonthermal escape depends on the dynamic density of the
 # atmosphere, so it can't be imposed as a constant here and is calculated on the fly.
 if planet=="Mars"
-    const speciesbclist=Dict(:CO2=>Dict("n"=>[[2.1e17, NaN] for ihoriz in 1:n_horiz], "f"=>[[NaN, 0.] for ihoriz in 1:n_horiz]),  # MULTICOL WARNING check multiple sets of BCs work in new multi-column setup for Mars
-                        :Ar=>Dict("n"=>[[2.0e-2*2.1e17, NaN] for ihoriz in 1:n_horiz], "f"=>[[NaN, 0.] for ihoriz in 1:n_horiz]),
-                        :N2=>Dict("n"=>[[1.9e-2*2.1e17, NaN] for ihoriz in 1:n_horiz], "f"=>[[NaN, 0.] for ihoriz in 1:n_horiz]),
+    co2_lower = fill(2.1e17, n_horiz)
+    ar_lower  = fill(2.0e-2*2.1e17, n_horiz)
+    n2_lower  = fill(1.9e-2*2.1e17, n_horiz)
+    h2o_lower = fill(H2Osat[1], n_horiz)
+    hdo_lower = fill(HDOsat[1], n_horiz)
+    const speciesbclist = Dict(
+                        :CO2=>Dict("n"=>[[co2_lower[i], NaN] for i in 1:n_horiz], "f"=>[[NaN, 0.] for _ in 1:n_horiz]),
+                        :Ar=>Dict("n"=>[[ar_lower[i], NaN] for i in 1:n_horiz], "f"=>[[NaN, 0.] for _ in 1:n_horiz]),
+                        :N2=>Dict("n"=>[[n2_lower[i], NaN] for i in 1:n_horiz], "f"=>[[NaN, 0.] for _ in 1:n_horiz]),
                         #:C=>Dict("f"=>[NaN, 4e5]), # NEW: Based on Lo 2021
-                        :H2O=>Dict("n"=>[[H2Osat[1], NaN] for ihoriz in 1:n_horiz], "f"=>[[NaN, 0.] for ihoriz in 1:n_horiz]), # bc doesnt matter if H2O fixed # MULTICOL WARNING to do: allow use of different values for different columns
-                        :HDO=>Dict("n"=>[[HDOsat[1], NaN] for ihoriz in 1:n_horiz], "f"=>[[NaN, 0.] for ihoriz in 1:n_horiz]), # MULTICOL WARNING to do: allow use of different values for different columns
+                        :H2O=>Dict("n"=>[[h2o_lower[i], NaN] for i in 1:n_horiz], "f"=>[[NaN, 0.] for _ in 1:n_horiz]),
+                        :HDO=>Dict("n"=>[[hdo_lower[i], NaN] for i in 1:n_horiz], "f"=>[[NaN, 0.] for _ in 1:n_horiz]),
                         :O=> Dict("f"=>[[0., 1.2e8] for ihoriz in 1:n_horiz]),
                         :H2=>Dict("f"=>[[0., NaN] for ihoriz in 1:n_horiz], "v"=>[[NaN, effusion_velocity(Tn_arr[ihoriz, end], 2.0; M_P, R_P, zmax)] for ihoriz in 1:n_horiz], "ntf"=>[[NaN, "see boundaryconditions()"] for ihoriz in 1:n_horiz]),  # velocities are in cm/s # MULTICOL WARNING to do: allow use of different values for different columns
                         :HD=>Dict("f"=>[[0., NaN] for ihoriz in 1:n_horiz], "v"=>[[NaN, effusion_velocity(Tn_arr[ihoriz, end], 3.0; M_P, R_P, zmax)] for ihoriz in 1:n_horiz], "ntf"=>[[NaN, "see boundaryconditions()"] for ihoriz in 1:n_horiz]),  # MULTICOL WARNING to do: allow use of different values for different columns

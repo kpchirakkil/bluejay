@@ -56,6 +56,6 @@ Note that this is a simplified version with 4 species and 7 altitude bins.
 - Verification of Jacobian and Rate Functions: To verify that the multicolumn model keeps a consistent ordering of species, altitude, and horizontal columns when building transport matrices.
 - Horizontal boundary conditions are stored separately per altitude with bc_dict_horiz[sp][ialt][row, col] and populated consistently inside the loop over ialt
 - Make sure the horizontal transport coefficients are placed correctly in the transport matrices (chemical Jacobian and rate functions)
-- Focus on important model files (such as but not limited to): converge_new_file.jl, MODEL_SETUP.jl, INPUT_PARAMETERS.jl, ReactionNetwork.jl, Plotting.jl, Core.jl, AnalyzeChemAndTransport.jl
+- Focus on important model files (such as but not limited to): converge_new_file.jl, MODEL_SETUP.jl, INPUT_PARAMETERS.jl, ReactionNetwork.jl, Plotting.jl, Core.jl, AnalyzeChemAndTransport.jl, Crosssections.jl
 - Resolve any remaining "MULTICOL WARNING" or "MID-FIX" issues in the implementation of 2-D multicolumn model with horizontal transport
 - No need to do tests like "python3 -m py_compile simple_analytic_test.py scale_solar_spectrum.py" in every iteration

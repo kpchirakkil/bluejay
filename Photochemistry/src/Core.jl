@@ -297,7 +297,7 @@ function optical_depth(n_cur_densities; n_horiz::Int64, globvars...)
                 # ARG 5: Y, an array of length n
                 # ARG 6: increment of index values of Y, maybe?
 
-                # BLAS.axpy!(nlambda, jcolumn, GV.crosssection[jspecies][ialt+1], 1, solarabs[ihoriz][ialt], 1)
+                # updated optical_depth to read column-specific cross sections when computing extinction
                 BLAS.axpy!(nlambda, jcolumn, GV.crosssection[jspecies][ihoriz][ialt+1], 1, solarabs[ihoriz][ialt], 1)
             end
         end
@@ -758,7 +758,7 @@ function eval_rate_coef(
         atmdict: the atmospheric state dictionary
         krate: rate coefficient for a single reaction
 	ihoriz: Vertical column index
-        tn, _i, _e: temperature profiles for neutrals, ions, electrons  # MULTICOL WARNING hardcoded to use the same T values for all vertical columns
+        tn, _i, _e: temperature profiles for neutrals, ions, electrons
     Output:
         rate_coefficient: evaluated rate coefficient at all atmospheric layers
     =#
@@ -1097,8 +1097,7 @@ function update_Jrates!(n_cur_densities::Dict{Symbol, Vector{Array{ftype_ncur}}}
         for ihoriz in 1:n_horiz
             for ialt in 1:GV.num_layers
                 n_cur_densities[j][ihoriz][ialt] = ftype_ncur(
-                    # BLAS.dot(nlambda, solarabs[ihoriz][ialt], 1, GV.crosssection[j][ialt+1], 1)
-                    BLAS.dot(nlambda, solarabs[ihoriz][ialt], 1, GV.crosssection[j][ihoriz][ialt+1], 1)
+                    BLAS.dot(nlambda, solarabs[ihoriz][ialt], 1, GV.crosssection[j][ihoriz][ialt+1], 1) # updated update_Jrates! so Jrates integrate column-specific cross sections
                 )
             end
         end
@@ -1142,7 +1141,7 @@ end
 #         for ihoriz in 1:n_horiz
 #             for ialt in 1:GV.num_layers
 #                 n_cur_densities[j][ihoriz][ialt] = ftype_ncur(
-#                     BLAS.dot(nlambda, solarabs[ihoriz][ialt], 1, GV.crosssection[j][ialt+1], 1)
+#                     BLAS.dot(nlambda, solarabs[ihoriz][ialt], 1, GV.crosssection[j][ihoriz][ialt+1], 1) # updated update_Jrates! so Jrates integrate column-specific cross sections
 #                 )
 #             end
 #         end
@@ -1180,7 +1179,6 @@ function effusion_velocity(Texo, m; globvars...)
 end
 
 # Nonthermal escape functions: 
-# function escape_probability(sp, atmdict; globvars...)::Array       # MULTICOL WARNING change to use different values for each vertical column
 function escape_probability(sp, atmdict, ihoriz; globvars...)::Array
     #=
     Returns an exponential profile of escape probability by altitude that accounts for collisions with the background 
@@ -1202,7 +1200,6 @@ function escape_probability(sp, atmdict, ihoriz; globvars...)::Array
                   "Venus"=>[0.868, 0.058]
                  )[GV.planet]
 
-    # return params[1] .* exp.(-params[2] .* GV.collision_xsect[sp] .* column_density_above(n_tot(atmdict, 1; GV.all_species, GV.dz); globvars...) )  # MULTICOL WARNING hardcoded ihoriz as 1 in n_tot arguments -- change
     totdens = n_tot(atmdict, ihoriz; GV.all_species, GV.dz)
     return params[1] .* exp.(-params[2] .* GV.collision_xsect[sp] .* column_density_above(totdens; globvars...))
 end
@@ -1230,12 +1227,9 @@ function escaping_hot_atom_production(sp, source_rxns, source_rxn_rc_funcs, atmd
     produced_hot = volume_rate_wrapper(sp, source_rxns, source_rxn_rc_funcs, atmdict, Mtot, ihoriz; returntype="array", zmax=GV.alt[end], globvars...) 
 
     # Returns an array where rows represent altitudes and columns are reactions. Multiplies each vertical profile (each column) by escape_probability. 
-    # if returntype=="array" # Used within the code to easily calculate the total flux later on. 
-    #     return produced_hot .* escape_probability(sp, atmdict; globvars...)    # MULTICOL WARNING change to use different values for each vertical column
     if returntype=="array" # Used within the code to easily calculate the total flux later on.
         return produced_hot .* escape_probability(sp, atmdict, ihoriz; globvars...)
     elseif returntype=="df" # Useful if you want to look at the arrays yourself.
-        # return DataFrame(produced_hot .* escape_probability(sp, atmdict; globvars...), vec([format_chemistry_string(r[1], r[2]) for r in source_rxns]))      # MULTICOL WARNING change to use different values for each vertical column
         return DataFrame(produced_hot .* escape_probability(sp, atmdict, ihoriz; globvars...),
                          vec([format_chemistry_string(r[1], r[2]) for r in source_rxns]))
     end
@@ -1848,46 +1842,6 @@ function boundaryconditions_horiz(
     )
 
     for sp in keys(GV.speciesbclist_horiz)
-        # try 
-        #     global these_bcs_horiz = GV.speciesbclist_horiz[sp]
-        # catch KeyError
-        #     println("No entry $(sp) in bcdict")
-        #     continue
-        # end
- 
-        # # FLUX
-        # for ialt in [1:GV.num_layers;]
-            # try 
-            #     # back edge boundary...
-            #     if GV.planet=="Mars"
-            #         f_backedge = [0, -these_bcs_horiz["f"][1][ialt]/GV.dx]
-            #     elseif GV.planet=="Venus"
-            #         f_backedge = [0, these_bcs_horiz["f"][1][ialt]/GV.dx]
-            #         #             ^ no (-) sign, negative flux at lower boundary represents loss to surface
-            #     end
-            #     try        
-            #         @assert all(x->!isnan(x), f_backedge)
-            #         bc_dict_horiz[sp][ialt][1, :] .+= f_backedge
-            #     catch y
-            #         if !isa(y, AssertionError)
-            #             throw("Unhandled exception in back edge flux bc: $(y)")
-            #         end
-            #     end
-            #     try 
-            #         # front edge boundary...
-            #         f_frontedge = [0, -these_bcs_horiz["f"][2][ialt]/GV.dx]
-            #         #             ^ (-) sign needed so that positive flux at upper boundary represents loss across front edge boundary
-            #         #             (see "Sign convention" note above)
-            #         @assert all(x->!isnan(x), f_frontedge)
-            #         bc_dict_horiz[sp][ialt][2, :] .+= f_frontedge
-            #     catch y
-            #         if !isa(y, AssertionError)
-            #             throw("Unhandled exception in front edge flux bc: $(y)")
-            #         end
-            #     end
-            # catch y
-            #     if !isa(y, KeyError)
-            #         throw("Unhandled exception in edge flux bcs for $(sp)")
         these_bcs_horiz = GV.speciesbclist_horiz[sp]
 
         for ialt in 1:GV.num_layers
@@ -1897,11 +1851,12 @@ function boundaryconditions_horiz(
             else
                 back_flux  = these_bcs_horiz["f"][1][ialt]
                 front_flux = these_bcs_horiz["f"][2][ialt]
-                if GV.planet == "Mars"
-                    f_backedge = [0, -back_flux / GV.dx]
-                elseif GV.planet == "Venus"
-                    f_backedge = [0, back_flux / GV.dx]
-                end
+                # if GV.planet == "Mars"
+                #     f_backedge = [0, -back_flux / GV.dx]
+                # elseif GV.planet == "Venus"
+                #     f_backedge = [0, back_flux / GV.dx]
+                # end
+                f_backedge  = [0, -back_flux / GV.dx]
                 f_frontedge = [0, -front_flux / GV.dx]
                 bc_dict_horiz[sp][ialt][1, :] .+= f_backedge
                 bc_dict_horiz[sp][ialt][2, :] .+= f_frontedge
@@ -2263,9 +2218,7 @@ function fluxcoefs(species_list::Vector, K, D, H0, n_horiz::Int64; globvars...)
     return fluxcoef_dict
 end
 
-# MULTICOL WARNING finish this function
 # function fluxcoefs_horiz(species_list::Vector, horiz_wind_v::Vector{Vector{Float64}}, n_horiz::Int64; globvars...) 
-#     #= # MULTICOL WARNING edit comment
 #     New optimized version of fluxcoefs that calls the lower level version of fluxcoefs,
 #     producing a dictionary that contains both up and down flux coefficients for each layer of
 #     the atmosphere including boundary layers. Created to optimize calls to this function
@@ -2294,7 +2247,7 @@ end
 """
 Compute horizontal transport coefficients for each species and column.
 
-Each entry ``fluxcoef_dict[s][i]`` contains a ``n_all_layers × 2`` matrix of
+Each entry ``fluxcoef_dict[s][i]`` contains a ``n_all_layers x 2`` matrix of
 coefficients linking column ``i`` to the column behind (column 1) and the column
 in front (column 2). Diffusion coefficients are averaged between neighbouring
 columns and scaled by ``dx²`` while advection uses an upwind scheme based on the
@@ -2311,7 +2264,6 @@ function fluxcoefs_horiz(
     globvars...
 )
     GV = values(globvars)
-    # required = [:Tn, :Tp, :n_all_layers, :dz] # MULTICOL WARNING edit -- probably don't need Tn, Tp
     required = [:dx, :n_all_layers]
     check_requirements(keys(GV), required)
     
@@ -2323,25 +2275,15 @@ function fluxcoefs_horiz(
     )
 
     for s in species_list
-        # for ihoriz in [1:n_horiz;]
-        #     column_behind_coefs, column_infront_coefs = fluxcoefs(s, K, D, H0, ihoriz; globvars...) # MULTICOL WARNING - START HERE
-        #     fluxcoef_horiz_dict[s][ihoriz][:, 1] .= column_behind_coefs
-        #     fluxcoef_horiz_dict[s][ihoriz][:, 2] .= column_infront_coefs
         for ihoriz in 1:n_horiz
             if cyclic
                 behind_idx  = ihoriz == 1        ? n_horiz : ihoriz - 1
                 infront_idx = ihoriz == n_horiz ? 1       : ihoriz + 1
             else
-                # behind_idx  = max(ihoriz - 1, 1)
-                # infront_idx = min(ihoriz + 1, n_horiz)
                 behind_idx  = ihoriz - 1
                 infront_idx = ihoriz + 1
             end
             for ialt in 1:GV.n_all_layers
-                # K_back  = (K[ihoriz][ialt] + K[behind_idx][ialt]) / 2
-                # K_front = (K[ihoriz][ialt] + K[infront_idx][ialt]) / 2
-                # D_back  = (D[s][ihoriz][ialt] + D[s][behind_idx][ialt]) / 2
-                # D_front = (D[s][ihoriz][ialt] + D[s][infront_idx][ialt]) / 2
                 diff_back = 0.0
                 diff_front = 0.0
 
@@ -2351,8 +2293,6 @@ function fluxcoefs_horiz(
                     diff_back = (K_back + D_back) / GV.dx^2
                 end
 
-                # diff_back  = (K_back + D_back) / GV.dx^2
-                # diff_front = (K_front + D_front) / GV.dx^2
                 if infront_idx <= n_horiz
                     K_front = (K[ihoriz][ialt] + K[infront_idx][ialt]) / 2
                     D_front = (D[s][ihoriz][ialt] + D[s][infront_idx][ialt]) / 2
@@ -2360,8 +2300,6 @@ function fluxcoefs_horiz(
                 end
 
                 v = horiz_wind_v[ihoriz][ialt]
-                # adv_front = max(v, 0) / GV.dx
-                # adv_back  = max(-v, 0) / GV.dx
                 adv_front = v > 0 ? v / GV.dx : 0.0
                 adv_back  = v < 0 ? -v / GV.dx : 0.0
 
@@ -2385,7 +2323,6 @@ function Keddy(z::Vector, nt; ihoriz=nothing, globvars...)
     Output:
         k: eddy diffusion coefficients at all altitudes (cm²/s).
 
-    MULTICOL WARNING: 
     If running multi-column, make sure to specify the column index (ihoriz).
     This version accommodates both single-column and multi-column simulations.
     =#
@@ -2624,8 +2561,6 @@ function update_transport_coefficients(
     return tlower, tup, tdown, tupper
 end
 
-# function update_horiz_transport_coefficients(species_list, atmdict::Dict{Symbol, Vector{Array{ftype_ncur}}}, D_coefs, M, n_horiz::Int64; 
-#                                        calc_nonthermal=true, globvars...) # MULTICOL WARNING don't need all these inputs here
 function update_horiz_transport_coefficients(species_list, atmdict::Dict{Symbol, Vector{Array{ftype_ncur}}}, D_coefs, M, n_horiz::Int64;
                                        calc_nonthermal=true, cyclic=true, globvars...)
     #= # MULTICOL WARNING  - change comments here
@@ -2664,7 +2599,6 @@ function update_horiz_transport_coefficients(species_list, atmdict::Dict{Symbol,
     check_requirements(keys(GV), required)
 
     # Get flux coefficients
-    # fluxcoefs_horiz_all = Dict{Symbol, Array{Float64}}(s=>zeros(9,2) for s in GV.all_species)   # MULTICOL WARNING Work out better way to define this when have numbers. Make fluxcoefs_horiz_all and fluxcoefs_all have the same dimensions, because there should be values for each vertical column and altitude bin. This needs to be a dictionary with n_horiz arrays for each species. This does not need values for the boundary layers, but keeping them in as zeros to maintain consistency with fluxcoefs_all.
     # Calculate diffusion coefficients and scale heights
     K_eddy_arr, H0_dict, Dcoef_dict = update_diffusion_and_scaleH(
         species_list,
@@ -2684,31 +2618,9 @@ function update_horiz_transport_coefficients(species_list, atmdict::Dict{Symbol,
         globvars...
     )
 
-    # Transport coefficients, non-boundary layers   # MULTICOL WARNING enter different values for different columns
-    # tforwards = fill(-999., n_horiz, GV.num_layers, length(species_list)) # MULTICOL WARNING add another dimension for different columns here. X X X X X X X; X X X X X X X; X X X X X X X; X X X X X X X
-    # tbackwards = fill(-999., n_horiz, GV.num_layers, length(species_list)) # MULTICOL WARNING add another dimension for different columns here
-    # tforwards = fill(0.0, n_horiz, GV.num_layers, length(species_list))
-    # tbackwards = fill(0.0, n_horiz, GV.num_layers, length(species_list))
-    # for (i, s) in enumerate(GV.transport_species)
-        # for ihoriz in [1:n_horiz;] # MULTICOL WARNING temporary for loop -- implement different vertical columns when fluxcoefs_all_horiz is built
-        #     tforwards[ihoriz, :, i] .= fluxcoefs_horiz_all[s][2:end-1, 2] # MULTICOL WARNING fluxcoefs_horiz_all does not yet provide values for each vertical column. Using all the same values for now.
-        #     tbackwards[ihoriz, :, i] .= fluxcoefs_horiz_all[s][2:end-1, 1] # MULTICOL WARNING to do: test this soon with  numbers
-        # end
-        # for ihoriz in 1:n_horiz
-        #     tforwards[ihoriz, :, i] .= fluxcoefs_horiz_all[s][ihoriz][2:end-1, 2]
-        #     tbackwards[ihoriz, :, i] .= fluxcoefs_horiz_all[s][ihoriz][2:end-1, 1]
-        # end
-        # Transport coefficients derived from horizontal winds
     tforwards  = fill(0.0, n_horiz, GV.num_layers, length(species_list))
     tbackwards = fill(0.0, n_horiz, GV.num_layers, length(species_list))
-    # for ihoriz in 1:n_horiz
-    #     for ialt in 1:GV.num_layers
-    #         vel = GV.horiz_wind_v[ihoriz][ialt] / GV.dx
-    #         if vel >= 0
-    #             tforwards[ihoriz, ialt, :] .= vel
-    #         else
-    #             tbackwards[ihoriz, ialt, :] .= -vel
-    #         end
+
     for (isp, sp) in enumerate(species_list)
         for ihoriz in 1:n_horiz
             tbackwards[ihoriz, :, isp] .= fluxcoefs_horiz_all[sp][ihoriz][2:end-1, 1]
@@ -2716,8 +2628,6 @@ function update_horiz_transport_coefficients(species_list, atmdict::Dict{Symbol,
         end
     end
 
-    # MULTICOL WARNING boundary conditions hardcoded here
-    # bc_dict_horiz = boundaryconditions_horiz(globvars)  # MULTICOL temporary comment - should be 7 2x2 arrays of 0s
     bc_dict_horiz = boundaryconditions_horiz(atmdict, GV.horiz_wind_v, n_horiz; cyclic=cyclic, globvars...)  # MULTICOL temporary comment - should be 7 2x2 arrays of 0s
 
     # transport coefficients for boundaries # MULTICOL WARNING should this be boundary layers like for the vertical transport?
@@ -2807,7 +2717,6 @@ function set_h2oinitfrac_bySVP(atmdict, h_alt; ihoriz=1, globvars...)
                :H2Osat, :water_mixing_ratio]
     check_requirements(keys(GV), required)
 
-    # H2Osatfrac = GV.H2Osat ./ map(z->n_tot(atmdict, z, 1; GV.all_species, GV.n_alt_index), GV.alt)  # get SVP as fraction of total atmo # MULTICOL WARNING - ihoriz hardcoded as 1 in n_tot arguments for now -- change this
     H2Osatfrac = GV.H2Osat ./ map(z->n_tot(atmdict, z, ihoriz; GV.all_species, GV.n_alt_index), GV.alt)  # get SVP as fraction of total atmo for this column
     # set H2O SVP fraction to minimum for all alts above first time min is reached
     H2Oinitfrac = H2Osatfrac[1:something(findfirst(isequal(minimum(H2Osatfrac)), H2Osatfrac), 0)]
@@ -2888,9 +2797,6 @@ function setup_water_profile!(atmdict; constfrac=1, dust_storm_on=false, make_sa
 
         # set the water profiles 
         # ===========================================================================================================
-        # atmdict[:H2O] = H2Oinitfrac.*n_tot(atmdict, 1; GV.n_alt_index, GV.all_species)  # MULTICOL WARNING - ihoriz hardcoded as 1 in n_tot arguments for now -- change this
-        # atmdict[:HDO] = 2 * GV.DH * atmdict[:H2O] 
-        # HDOinitfrac = atmdict[:HDO] ./ n_tot(atmdict, 1; GV.n_alt_index, GV.all_species)  # Needed to make water plots. # MULTICOL WARNING - ihoriz hardcoded as 1 in n_tot arguments for now -- change this
         for ihoriz in 1:n_horiz
             atmdict[:H2O][ihoriz] = H2Oinitfrac_all[ihoriz] .* n_tot(atmdict, ihoriz; GV.n_alt_index, GV.all_species)
             atmdict[:HDO][ihoriz] = 2 * GV.DH * atmdict[:H2O][ihoriz]
@@ -2904,17 +2810,12 @@ function setup_water_profile!(atmdict; constfrac=1, dust_storm_on=false, make_sa
             # H2Oppm = 1e-6*map(z->GV.H2O_excess .* exp(-((z-GV.ealt)/sigma)^2), GV.non_bdy_layers/1e5) + H2Oinitfrac 
             H2Oppm = 1e-6*map(z->GV.H2O_excess .* exp(-((z-GV.ealt)/sigma)^2), GV.non_bdy_layers/1e5) + H2Oinitfrac_all[1]
             HDOppm = 1e-6*map(z->GV.HDO_excess .* exp(-((z-GV.ealt)/sigma)^2), GV.non_bdy_layers/1e5) + HDOinitfrac
-            # atmdict[:H2O][1:GV.upper_lower_bdy_i] = (H2Oppm .* n_tot(atmdict, 1; GV.n_alt_index, GV.all_species))[1:GV.upper_lower_bdy_i] # MULTICOL WARNING - ihoriz hardcoded as 1 in n_tot arguments for now -- change this
-            # atmdict[:HDO][1:GV.upper_lower_bdy_i] = (HDOppm .* n_tot(atmdict, 1; GV.all_species))[1:GV.upper_lower_bdy_i] # MULTICOL WARNING - ihoriz hardcoded as 1 in n_tot arguments for now -- change this
             for ihoriz in 1:n_horiz
                 atmdict[:H2O][ihoriz][1:GV.upper_lower_bdy_i] = (H2Oppm .* n_tot(atmdict, ihoriz; GV.n_alt_index, GV.all_species))[1:GV.upper_lower_bdy_i]
                 atmdict[:HDO][ihoriz][1:GV.upper_lower_bdy_i] = (HDOppm .* n_tot(atmdict, ihoriz; GV.all_species))[1:GV.upper_lower_bdy_i]
             end
         end
     elseif GV.planet=="Venus"
-        # TODO: Add a more interesting implementation as needed.
-        # atmdict[:H2O] = constfrac .* n_tot(atmdict, 1; GV.n_alt_index, GV.all_species) # MULTICOL WARNING - ihoriz hardcoded as 1 in n_tot arguments for now -- change this
-        # atmdict[:HDO] = 2 * GV.DH * atmdict[:H2O] 
         for ihoriz in 1:n_horiz
             atmdict[:H2O][ihoriz] = constfrac .* n_tot(atmdict, ihoriz; GV.n_alt_index, GV.all_species)
             atmdict[:HDO][ihoriz] = 2 * GV.DH * atmdict[:H2O][ihoriz]
@@ -2930,7 +2831,6 @@ function setup_water_profile!(atmdict; constfrac=1, dust_storm_on=false, make_sa
         satarray = nothing 
     end
 
-    # plot_water_profile(atmdict, GV.results_dir*GV.sim_folder_name; watersat=satarray, H2Oinitf=H2Oinitfrac, plot_grid=GV.plot_grid, showonly=showonly, globvars...)
     plot_water_profile(atmdict, GV.results_dir*GV.sim_folder_name; watersat=satarray, H2Oinitf=H2Oinitfrac_all[1], plot_grid=GV.plot_grid, showonly=showonly, globvars...)
 end 
 

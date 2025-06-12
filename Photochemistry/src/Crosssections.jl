@@ -296,16 +296,6 @@ function populate_xsect_dict(pd_dataf, xsecfolder; ion_xsects=true, globvars...)
         end
     end
 
-    # nhoriz = size(GV.Tn, 1)
-    # for j in keys(xsect_dict)
-    #     arr = xsect_dict[j]
-    #     if ndims(arr) == 2 && size(arr, 1) == nhoriz
-    #         xsect_dict[j] = [ [arr[ih, ia] for ia in 1:size(arr, 2)] for ih in 1:nhoriz ]
-    #     else
-    #         xsect_dict[j] = [ deepcopy(arr) for _ in 1:nhoriz ]
-    #     end
-    # end
-
     return xsect_dict
 end
 
