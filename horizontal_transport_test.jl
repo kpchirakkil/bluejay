@@ -11,8 +11,8 @@
 # using LinearAlgebra
 
 # # Grid setup ---------------------------------------------------------------
-# num_alt = 2      # two altitude bins
-# num_horiz = 2    # two horizontal columns
+# num_layers = 2      # two altitude bins
+# n_horiz = 2    # two horizontal columns
 # Δx = 1.0         # cm, horizontal cell width
 
 # # Constant wind blowing from column 1 toward column 2 at all altitudes
@@ -26,7 +26,7 @@
 #       adv_rate -adv_rate]
 
 # # Build full 4×4 matrix for two independent altitude layers
-# A = kron(Matrix(I, num_alt, num_alt), T)
+# A = kron(Matrix(I, num_layers, num_layers), T)
 
 # # Example initial state: higher density in column 1
 # n₀ = [1.0, 0.0, 1.0, 0.0]
@@ -60,8 +60,8 @@
 # using LinearAlgebra
 
 # # Grid setup ---------------------------------------------------------------
-# num_alt = 2      # two altitude bins
-# num_horiz = 2    # two horizontal columns
+# num_layers = 2      # two altitude bins
+# n_horiz = 2    # two horizontal columns
 # Δx = 1.0         # cm, horizontal cell width
 
 # # Constant wind blowing from column 1 toward column 2 at all altitudes
@@ -71,15 +71,15 @@
 # adv_rate = v / Δx
 
 # # Build transport matrix using the same indexing scheme as chemJmat
-# function build_matrix(num_alt, num_horiz, adv)
-#     n = num_alt * num_horiz
+# function build_matrix(num_layers, n_horiz, adv)
+#     n = num_layers * n_horiz
 #     A = zeros(n, n)
 #     entries = Tuple{Int,Int,Float64}[]
-#     for ih in 1:num_horiz
-#         for ia in 1:num_alt
-#             idx = (ih - 1) * num_alt + ia
-#             if ih != num_horiz
-#                 j = ih * num_alt + ia
+#     for ihoriz in 1:n_horiz
+#         for ialt in 1:num_layers
+#             idx = (ihoriz - 1) * num_layers + ialt
+#             if ihoriz != n_horiz
+#                 j = ihoriz * num_layers + ialt
 #                 A[idx, idx] -= adv
 #                 A[idx, j] += adv
 #                 push!(entries, (idx, idx, -adv))
@@ -90,7 +90,7 @@
 #     return A, entries
 # end
 
-# A, entries = build_matrix(num_alt, num_horiz, adv_rate)
+# A, entries = build_matrix(num_layers, n_horiz, adv_rate)
 
 # # Analytic matrix expected from the Mathematica solution
 # A_expected = [-adv_rate 0 adv_rate 0;
@@ -136,8 +136,8 @@
 using LinearAlgebra
 
 # Grid setup ---------------------------------------------------------------
-num_alt = 2      # two altitude bins
-num_horiz = 2    # two horizontal columns
+num_layers = 2      # two altitude bins
+n_horiz = 2    # two horizontal columns
 Δx = 1.0         # cm, horizontal cell width
 
 # Constant wind blowing from column 1 toward column 2 at all altitudes
@@ -148,17 +148,17 @@ adv_rate = v / Δx
 
 # Build transport matrix using the same indexing scheme as chemJmat
 # In bluejay, altitude varies more slowly than the horizontal index when
-# densities are flattened. The index for altitude `ia` and column `ih` is
-# `(ia - 1) * num_horiz + ih`.
-function build_matrix(num_alt, num_horiz, adv)
-    n = num_alt * num_horiz
+# densities are flattened. The index for altitude `ialt` and column `ihoriz` is
+# `(ialt - 1) * n_horiz + ihoriz`.
+function build_matrix(num_layers, n_horiz, adv)
+    n = num_layers * n_horiz
     A = zeros(n, n)
     entries = Tuple{Int,Int,Float64}[]
 
-    for ia in 1:num_alt           # loop altitude first
-        for ih in 1:num_horiz     # columns vary fastest
-            idx = (ia - 1) * num_horiz + ih
-            if ih < num_horiz
+    for ialt in 1:num_layers           # loop altitude first
+        for ihoriz in 1:n_horiz     # columns vary fastest
+            idx = (ialt - 1) * n_horiz + ihoriz
+            if ihoriz < n_horiz
                 idx_right = idx + 1
                 A[idx, idx] -= adv
                 A[idx, idx_right] += adv
@@ -177,7 +177,7 @@ function build_matrix(num_alt, num_horiz, adv)
     return A, entries
 end
 
-A, entries = build_matrix(num_alt, num_horiz, adv_rate)
+A, entries = build_matrix(num_layers, n_horiz, adv_rate)
 
 # Analytic matrix expected from the Mathematica solution
 A_expected = [-adv_rate 0 adv_rate 0;

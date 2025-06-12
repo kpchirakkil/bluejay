@@ -98,8 +98,8 @@ function plot_atm(atmdict::Dict{Symbol, Vector{Array{ftype_ncur}}}, savepath::St
         end
         # ntot = n_tot(atmdict, 1; all_species=allsp) # get the total atmosphere # MULTICOL WARNING - ihoriz hardcoded as 1 in n_tot arguments for now -- change this
         # atmdict_MR = Dict([s=>(atmdict[s]./ntot) for s in allsp])
-        ntot = [n_tot(atmdict, ih; all_species=allsp) for ih in 1:n_horiz]
-        atmdict_MR = Dict([s => [atmdict[s][ih]./ntot[ih] for ih in 1:n_horiz] for s in allsp])
+        ntot = [n_tot(atmdict, ihoriz; all_species=allsp) for ihoriz in 1:n_horiz]
+        atmdict_MR = Dict([s => [atmdict[s][ihoriz]./ntot[ihoriz] for ihoriz in 1:n_horiz] for s in allsp])
 
         # xlim_1 = [xlim_1[1]/ntot[1], 1]
         # xlim_2 = [xlim_2[1]/ntot[1], 1]
@@ -109,7 +109,7 @@ function plot_atm(atmdict::Dict{Symbol, Vector{Array{ftype_ncur}}}, savepath::St
         xlab = L"Species mixing ratio (ppm)"
 
         # E_prof = E_prof ./ ntot
-        E_prof = [E_prof[ih] ./ ntot[ih] for ih in 1:n_horiz]
+        E_prof = [E_prof[ihoriz] ./ ntot[ihoriz] for ihoriz in 1:n_horiz]
 
         atmdict = atmdict_MR
     end
