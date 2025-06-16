@@ -245,12 +245,10 @@ function n_tot(atmdict::Dict{Symbol, Vector{Array{ftype_ncur}}}, ihoriz::Int64; 
     check_requirements(keys(GV), required)
 
     counted_species = setdiff(GV.all_species, ignore)
-    # ndensities = zeros(length(counted_species), length(atmdict[collect(keys(atmdict))[1]][ihoriz])) # MULTICOL WARNING hardcoded to the first vertical column; will need changing if want different values for each column. Mid-fix.
     # allocate an array to gather density profiles for this vertical column
     ndensities = zeros(length(counted_species), length(atmdict[collect(keys(atmdict))[1]][ihoriz]))
 
     for i in 1:length(counted_species)
-        # ndensities[i, :] = atmdict[counted_species[i]][ihoriz] # MULTICOL WARNING hardcoded to the first vertical column; will need changing if want different values for each column. Mid-fix
         # copy the density profile for each species at this column
         ndensities[i, :] = atmdict[counted_species[i]][ihoriz]
     end
@@ -324,7 +322,7 @@ function reduced_mass(mA, mB)
     return ((1/(mA*mH)) + (1/(mB*mH)))^(-1)
 end
 
-function scaleH(z, sp::Symbol, T; globvars...) # MULTICOL WARNING might need to include flexibility for different vertical columns at some point
+function scaleH(z, sp::Symbol, T; globvars...)
     #=
     Input:
         z: Altitudes in cm
@@ -616,7 +614,7 @@ function check_jacobian_eigenvalues(J, path)
     end
 end
 
-function chemical_jacobian(specieslist, dspecieslist; diff_wrt_e=true, diff_wrt_m=true, transportnet_horiz, globvars...) # MULTICOL WARNING consider where transportnet_horiz should be
+function chemical_jacobian(specieslist, dspecieslist; diff_wrt_e=true, diff_wrt_m=true, transportnet_horiz, globvars...)
     #= 
     Compute the symbolic chemical jacobian of a supplied chemnet and transportnet
     for the specified specieslist. 
@@ -638,7 +636,7 @@ function chemical_jacobian(specieslist, dspecieslist; diff_wrt_e=true, diff_wrt_
     =#
 
     GV = values(globvars)
-    required = [:chem_species, :transport_species, :chemnet, :transportnet] # MULTICOL WARNING work out whether to put :transportnet_horiz here
+    required = [:chem_species, :transport_species, :chemnet, :transportnet]
     check_requirements(keys(GV), required)
 
     # set up output vectors: indices and values
@@ -666,7 +664,7 @@ function chemical_jacobian(specieslist, dspecieslist; diff_wrt_e=true, diff_wrt_
             peqn = [peqn; production_equations(ispecies, GV.chemnet)] 
             leqn = [leqn; loss_equations(ispecies, GV.chemnet)]
         end
-        if issubset([ispecies],GV.transport_species) #MULTICOL WARNING consider making transport_species_horiz too in case flexibility is required
+        if issubset([ispecies],GV.transport_species)
             peqn = [peqn; production_equations(ispecies, GV.transportnet)]
             leqn = [leqn; loss_equations(ispecies, GV.transportnet)]
 	    peqn = [peqn; production_equations(ispecies, transportnet_horiz)]
@@ -1499,8 +1497,10 @@ function T_Venus(Tsurf::Float64, Tmeso::Float64, Texo::Float64, file_for_interp;
     i_upper = findall(z->z > z_meso_top, GV.alt)
     # i_meso_top = findfirst(z->z==z_meso_top, GV.alt)
 
-    # For interpolating upper atmo temperatures from Fox & Sung 2001
-    new_a = collect(90e5:2e5:106e5) # TODO: Remove hard coded values
+    # For interpolating upper-atmosphere temperatures from Fox & Sung 2001
+    # use the global altitude grid for the upper atmosphere instead of a
+    # fixed numeric range.
+    new_a = GV.alt[i_upper]
 
     return Dict("neutrals"=>NEUTRALS(), "ions"=>IONS(), "electrons"=>ELECTRONS())
 end
@@ -1559,7 +1559,7 @@ function binary_dcoeff_inCO2(sp, T)
 end
 
 function boundaryconditions(fluxcoef_dict, atmdict, M, n_horiz::Int64; nonthermal=true, globvars...)
-    #=  # MULTICOL WARNING edit comment
+    #=
     Inputs:
         fluxcoef_dict: a dictionary containing the K and D flux coefficients for every species throughout
                        the atmosphere. Format species=>Array(length(all_species), length(alt)).
@@ -1752,7 +1752,7 @@ function boundaryconditions(fluxcoef_dict, atmdict, M, n_horiz::Int64; nontherma
                     :hot_H2_network, :hot_H2_rc_funcs, :hot_HD_network, :hot_HD_rc_funcs, :Jratedict]
         check_requirements(keys(GV), required)
 
-        for ihoriz in [1:n_horiz;] # MULTICOL WARNING -- make sure that these values can vary with vertical column
+        for ihoriz in 1:n_horiz
 	    if :H in keys(atmdict) && :D in keys(atmdict) && :H2 in keys(atmdict) && :HD in keys(atmdict) 
                prod_hotH = escaping_hot_atom_production(:H, GV.hot_H_network, GV.hot_H_rc_funcs, atmdict, M, ihoriz; globvars...)
                prod_hotD = escaping_hot_atom_production(:D, GV.hot_D_network, GV.hot_D_rc_funcs, atmdict, M, ihoriz; globvars...)
@@ -1820,9 +1820,9 @@ function boundaryconditions_horiz(
         change recorded in other functions is always #/cm³/s. 
 
         FROM VENUS VERSION, MIKE:
-        Sign convention: The density-dependent terms (bc_dict[sp][ialt][:, 1]) are multiplied by -1 when the  
-                         transport rates are computed in get_transport_PandL_rate. Density independent 
-                         terms (bc_dict[sp][ialt][:, 2]) are not. # MULTICOL WARNING - to do
+        Sign convention: The density-dependent terms (bc_dict[sp][ialt][:, 1]) are multiplied by -1 when the 
+                         transport rates are computed in get_transport_PandL_rate. Density independent
+                         terms (bc_dict[sp][ialt][:, 2]) are not.
 
         However, please note that the model is currently set up to use zero flux edge boundary conditions only. The above comments have been left for future development and flexibility.
         By default the dictionary ``speciesbclist_horiz`` in ``MODEL_SETUP.jl`` supplies
@@ -1892,9 +1892,8 @@ function Dcoef_neutrals(z, sp::Symbol, b, atmdict::Dict{Symbol, Vector{ftype_ncu
     end
 end
 
-function Dcoef!(D_arr, T_arr_2D, sp::Symbol, atmdict::Dict{Symbol, Vector{Array{ftype_ncur}}}, n_horiz::Int64; globvars...) 
+function Dcoef!(D_arr, T_arr_2D, sp::Symbol, atmdict::Dict{Symbol, Vector{Array{ftype_ncur}}}, n_horiz::Int64; globvars...)
     #=
-    # MULTICOL WARNING -- this function was acting differently when it was called n_horiz separate times rather than once (with the loop through vertical columns inside the function). In the former, the first value within D_arr for each column and neutral species was changed -- I think due to the updating of atmdict (and therefore n_tot) each time. Haven't quite got to the bottom of why that was happening, but this version (the latter) reproduces what was calculated with just one column in the original.
     Calculates the molecular diffusion coefficient for an atmospheric layer.
     For neutrals, returns D = AT^s/n, from Banks and Kockarts Aeronomy, part B, pg 41, eqn 
     15.30 and table 15.2 footnote.
@@ -2182,7 +2181,7 @@ function fluxcoefs(species_list::Vector, K, D, H0, n_horiz::Int64; globvars...)
     Here, D and Hs depend on the current atmospheric densities, and need to be pre-calculated
     within the upper level function which calls this one.
     The parameters below which vary by species are dictionaries, and those that are arrays
-    don't depend on the species. All profiles are by altitude. All lengths are the same   # MULTICOL WARNING edit comment
+    don't depend on the species. All profiles are by altitude. All lengths are the same
     as for the alt variable (full altitude grid including boundary layers).
     
     Inputs:
@@ -2208,8 +2207,8 @@ function fluxcoefs(species_list::Vector, K, D, H0, n_horiz::Int64; globvars...)
     fluxcoef_dict = Dict{Symbol, Vector{Array{ftype_ncur}}}([s=>[fill(0., GV.n_all_layers, 2) for ihoriz in 1:n_horiz] for s in species_list])
 
     for s in species_list
-        for ihoriz in [1:n_horiz;]
-            layer_below_coefs, layer_above_coefs = fluxcoefs(s, K, D, H0, ihoriz; globvars...) # MULTICOL WARNING to do -- allow for use of different values here 
+        for ihoriz in 1:n_horiz
+            layer_below_coefs, layer_above_coefs = fluxcoefs(s, K, D, H0, ihoriz; globvars...)
             fluxcoef_dict[s][ihoriz][:, 1] .= layer_below_coefs
             fluxcoef_dict[s][ihoriz][:, 2] .= layer_above_coefs
         end
@@ -2563,13 +2562,13 @@ end
 
 function update_horiz_transport_coefficients(species_list, atmdict::Dict{Symbol, Vector{Array{ftype_ncur}}}, D_coefs, M, n_horiz::Int64;
                                        calc_nonthermal=true, cyclic=true, globvars...)
-    #= # MULTICOL WARNING  - change comments here
+    #=
     Input:
         species_list: Species which will have transport coefficients updated
         atmdict: Atmospheric state dictionary for bulk layers
         tspecies: species which need transport coefficients calculated. May vary depending on sim parameters.
         Tn, Tp: Neutrals and plasma temperatures
-        D_coefs: placeholder for molecular diffusion coefficients # MULTICOL WARNING - remove
+        D_coefs: placeholder for molecular diffusion coefficients
         bcdict: Dictionary of boundary conditions, needed for pretty much everything.
         species_list: Species for which to generate molecular diffusion coefficients. This allows the code to only do it for
                  transport species during the main simulation run, and for all species when trying to plot 
@@ -2628,11 +2627,11 @@ function update_horiz_transport_coefficients(species_list, atmdict::Dict{Symbol,
         end
     end
 
-    bc_dict_horiz = boundaryconditions_horiz(atmdict, GV.horiz_wind_v, n_horiz; cyclic=cyclic, globvars...)  # MULTICOL temporary comment - should be 7 2x2 arrays of 0s
+    bc_dict_horiz = boundaryconditions_horiz(atmdict, GV.horiz_wind_v, n_horiz; cyclic=cyclic, globvars...)
 
-    # transport coefficients for boundaries # MULTICOL WARNING should this be boundary layers like for the vertical transport?
-    tbackedge = Vector{Array{Float64}}(undef, GV.num_layers) # MULTICOL temporary comment - ends up being 7 2x4 (XX;XX;XX;XX) arrays
-    tfrontedge = Vector{Array{Float64}}(undef, GV.num_layers) # MULTICOL temporary comment - ends up being 7 2x4 (XX;XX;XX;XX) arrays
+    # transport coefficients for boundaries
+    tbackedge = Vector{Array{Float64}}(undef, GV.num_layers)
+    tfrontedge = Vector{Array{Float64}}(undef, GV.num_layers)
     for ialt in [1:GV.num_layers;]
     	tbackedge[ialt] = permutedims(reduce(hcat, [bc_dict_horiz[sp][ialt][1,:] for sp in GV.transport_species]))
     	tfrontedge[ialt] = permutedims(reduce(hcat, [bc_dict_horiz[sp][ialt][2,:] for sp in GV.transport_species]))

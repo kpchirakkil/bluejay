@@ -50,8 +50,8 @@ function make_jacobian(n, p, t)
 
     # MULTICOL WARNING the below returns zero values, for now
     # MULTICOL WARNING tbackedge and tfrontedge will eventually need another dimension
-    tbackedge, tforwards, tbackwards, tfrontedge =  update_horiz_transport_coefficients(GV.transport_species, updated_ncur_all, D_arr, M, n_horiz; 
-                                                               calc_nonthermal=nontherm, results_dir, sim_folder_name, 
+    tbackedge, tforwards, tbackwards, tfrontedge =  update_horiz_transport_coefficients(GV.transport_species, n_cur_all, D_arr, M, n_horiz;
+                                                               calc_nonthermal=nontherm, results_dir, sim_folder_name,
                                                                Jratedict=Dict([j=>n_cur_all[j] for j in GV.Jratelist]), # Needed for nonthermal BCs
                                                                globvars...) # MULTICOL WARNING cull the arguments passed here
     

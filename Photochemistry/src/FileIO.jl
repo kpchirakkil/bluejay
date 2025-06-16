@@ -75,7 +75,7 @@ function get_ncurrent(readfile::String, n_horiz::Int64)
     n_current = Dict{Symbol, Vector{Array{ftype_ncur}}}()
 
     for ispecies in [1:length(n_current_tag_list);]
-        n_current[n_current_tag_list[ispecies]] = fill(reshape(n_current_mat[1:7,ispecies], length(n_current_mat[1:7, ispecies])),n_horiz) # MULTICOL WARNING hardcoded to use same values for each vertical column
+        n_current[n_current_tag_list[ispecies]] = fill(reshape(n_current_mat[1:7,ispecies], length(n_current_mat[1:7, ispecies])), n_horiz)
     end
     return n_current
 end
@@ -276,9 +276,6 @@ function load_from_paramlog(folder; quiet=true, globvars...)
     ## Temperatures first
     if "TemperatureArrays" in XLSX.sheetnames(paramlog_wb)
         df_temps = DataFrame(XLSX.readtable("$(folder)PARAMETERS.xlsx", "TemperatureArrays"));
-        # Tn_arr = df_temps.Neutrals
-        # Ti_arr = df_temps.Ions
-        # Te_arr = df_temps.Electrons
         Tn_arr = reshape(df_temps.Neutrals, GV.n_horiz, GV.num_layers+2)
         Ti_arr = reshape(df_temps.Ions, GV.n_horiz, GV.num_layers+2)
         Te_arr = reshape(df_temps.Electrons, GV.n_horiz, GV.num_layers+2)

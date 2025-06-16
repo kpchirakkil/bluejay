@@ -388,7 +388,7 @@ function ratefn(n_active_longlived, n_active_shortlived, n_inactive, Jrates, tup
                   nmat_inactive[:, ialt, ihoriz];                  # inactive_species;
                   Jrates[:, ihoriz, ialt];                         # Jratelist (column-specific);
                   GV.Tn[ihoriz, ialt]; GV.Ti[ihoriz, ialt]; GV.Te[ihoriz, ialt];   # :Tn; :Ti; :Te;
-                  M[ialt, ihoriz]; E[ihoriz][ialt];                # total density and electrons, # MULTICOL WARNING will need to allow for different values for different vertical columns
+                  M[ialt, ihoriz]; E[ihoriz][ialt];                # total density and electrons
                   tup[ihoriz, ialt, :]; tlower[ihoriz][:, ialt]; tdown[ihoriz, ialt+1, :]; tlower[ihoriz][:, ialt+1]; # local transport coefficients
                 #   tforwards[ihoriz, ialt, :];
                 #   (ihoriz == 1 ? tbackedge[ialt][:,1] : tforwards[ihoriz-1, ialt, :]);
@@ -413,7 +413,7 @@ function ratefn(n_active_longlived, n_active_shortlived, n_inactive, Jrates, tup
                       nmat_inactive[:, ialt, ihoriz];
                       Jrates[:, ihoriz, ialt];                     # Jratelist (column-specific);
                       GV.Tn[ihoriz, ialt]; GV.Ti[ihoriz, ialt]; GV.Te[ihoriz, ialt];
-                      M[ialt, ihoriz]; E[ihoriz][ialt];            # MULTICOL WARNING will need to allow for different values for different vertical columns
+                      M[ialt, ihoriz]; E[ihoriz][ialt];
                       tup[ihoriz, ialt, :];
                       tdown[ihoriz, ialt, :];
                       tdown[ihoriz, ialt+1, :];
@@ -442,7 +442,7 @@ function ratefn(n_active_longlived, n_active_shortlived, n_inactive, Jrates, tup
                   nmat_inactive[:, ialt, ihoriz];
                   Jrates[:, ihoriz, ialt];                           # Jratelist (column-specific);
                   GV.Tn[ihoriz, ialt]; GV.Ti[ihoriz, ialt]; GV.Te[ihoriz, ialt];
-                  M[ialt, ihoriz]; E[ihoriz][ialt];                  # MULTICOL WARNING will need to allow for different values for different vertical columns
+                  M[ialt, ihoriz]; E[ihoriz][ialt];
                   tupper[ihoriz][:,1];
                   tdown[ihoriz, ialt, :];
                   tupper[ihoriz][:,2];
@@ -461,7 +461,7 @@ function ratefn(n_active_longlived, n_active_shortlived, n_inactive, Jrates, tup
 
         # Overwrite water entries if required
         if remove_rates_flag && planet != "Venus"
-            if in(:H2O, GV.active_longlived) && in(:HDO, GV.active_longlived) # MULTICOL WARNING need to deal with this if loop for Mars
+            if in(:H2O, GV.active_longlived) && in(:HDO, GV.active_longlived)
                 returnrates[GV.H2Oi, 1:GV.upper_lower_bdy_i, ihoriz] .= 0
                 returnrates[GV.HDOi, 1:GV.upper_lower_bdy_i, ihoriz] .= 0
             end
@@ -730,15 +730,13 @@ function get_rates_and_jacobian(n, p, t; globvars...)
                                                                Jratedict=Dict([j=>n_cur_all[j] for j in GV.Jratelist]), # Needed for nonthermal BCs
                                                                globvars...)
 
-    # MULTICOL WARNING note that the below returns zero values, for now
     tbackedge, tforwards, tbackwards, tfrontedge = update_horiz_transport_coefficients(GV.transport_species, updated_ncur_all, D_arr, M, n_horiz; 
                                                                calc_nonthermal=nontherm, results_dir, sim_folder_name, 
                                                                Jratedict=Dict([j=>n_cur_all[j] for j in GV.Jratelist]), # Needed for nonthermal BCs
-                                                               globvars...) # MULTICOL WARNING cull the arguments passed here
+                                                               globvars...)
 
-    # MULTICOL WARNING Jrates now passed explicitly with correct dimensions to ratefn and chemJmat
-    return (ratefn(n, n_short_updated, GV.n_inactive, Jrates, tup, tdown, tlower, tupper, tforwards, tbackwards, tfrontedge, tbackedge, M, E; globvars...), 
-            chemJmat(n, n_short, GV.n_inactive, Jrates, tup, tdown, tlower, tupper, tforwards, tbackwards, tfrontedge, tbackedge, M, E; globvars...) ) 
+    return (ratefn(n, n_short_updated, GV.n_inactive, Jrates, tup, tdown, tlower, tupper, tforwards, tbackwards, tfrontedge, tbackedge, M, E; globvars...),
+            chemJmat(n, n_short, GV.n_inactive, Jrates, tup, tdown, tlower, tupper, tforwards, tbackwards, tfrontedge, tbackedge, M, E; globvars...) )
 end
 
 function next_timestep(nstart, params, t, dt; reltol=1e-2, abstol=1e-12, verbose=false, globvars...)
@@ -1202,15 +1200,20 @@ if update_water_profile
     if water_case!="standard"
         if water_loc=="loweratmo"
 
-            # Recalculate the initialization fraction for H2O 
-            # H2Oinitfrac = set_h2oinitfrac_bySVP(n_current, hygropause_alt; all_species, alt, num_layers, n_alt_index, H2Osat, water_mixing_ratio)
-            H2Oinitfrac = set_h2oinitfrac_bySVP(n_current, hygropause_alt; ihoriz=1, all_species, alt, num_layers, n_alt_index, H2Osat, water_mixing_ratio)
+            # Recalculate the initialization fraction for H2O in each column
+            H2Oinitfrac = [set_h2oinitfrac_bySVP(n_current, hygropause_alt;
+                                                ihoriz=ih, all_species, alt, num_layers,
+                                                n_alt_index, H2Osat, water_mixing_ratio)[1]
+                           for ih in 1:n_horiz]
             
             prevh2o = deepcopy(n_current[:H2O])
             prevhdo = deepcopy(n_current[:HDO])
 
-            n_current[:H2O][1:upper_lower_bdy_i] = H2Oinitfrac[1:upper_lower_bdy_i] .* n_tot(n_current, 1; n_alt_index, all_species)[1:upper_lower_bdy_i] # MULTICOL WARNING - ihoriz hardcoded as 1 in n_tot arguments for now -- change this
-            n_current[:HDO][1:upper_lower_bdy_i] = 2 * DH * n_current[:H2O][1:upper_lower_bdy_i]
+            for ih in 1:n_horiz
+                ntot_col = n_tot(n_current, ih; n_alt_index, all_species)
+                n_current[:H2O][ih][1:upper_lower_bdy_i] .= H2Oinitfrac[ih][1:upper_lower_bdy_i] .* ntot_col[1:upper_lower_bdy_i]
+                n_current[:HDO][ih][1:upper_lower_bdy_i] .= 2 * DH * n_current[:H2O][ih][1:upper_lower_bdy_i]
+            end
         else 
             # Create the new multipliers to change the profiles
             multiplier = water_tanh_prof(non_bdy_layers./1e5; f=f_fac_opts[water_case], z0=add_water_alt_opts[water_case])
@@ -1232,9 +1235,15 @@ if update_water_profile
         plot_water_profile(n_current, results_dir*sim_folder_name; ihoriz=1, prev_profs=[prevh2o, prevhdo], plot_grid, all_species, non_bdy_layers, speciescolor, speciesstyle,
                                                                    monospace_choice, sansserif_choice)
     else
-        # Recalculate the initialization fraction for H2O 
-        # H2Oinitfrac, H2Osatfrac = set_h2oinitfrac_bySVP(n_current, hygropause_alt; all_species, alt, num_layers, n_alt_index, H2Osat, water_mixing_ratio)
-        H2Oinitfrac, H2Osatfrac = set_h2oinitfrac_bySVP(n_current, hygropause_alt; ihoriz=1, all_species, alt, num_layers, n_alt_index, H2Osat, water_mixing_ratio)
+        # Recalculate the initialization fraction for H2O for each column
+        H2Oinitfrac = Vector{Vector{ftype_ncur}}(undef, n_horiz)
+        H2Osatfrac = Vector{Vector{ftype_ncur}}(undef, n_horiz)
+        for ih in 1:n_horiz
+            H2Oinitfrac[ih], H2Osatfrac[ih] = set_h2oinitfrac_bySVP(n_current, hygropause_alt;
+                                                                    ihoriz=ih, all_species, alt,
+                                                                    num_layers, n_alt_index,
+                                                                    H2Osat, water_mixing_ratio)
+        end
         
         prevh2o = deepcopy(n_current[:H2O])
         prevhdo = deepcopy(n_current[:HDO])
@@ -1242,12 +1251,18 @@ if update_water_profile
         if modified_water_alts == "below fixed point"
             # in this case, we are going to re-set the lower atmosphere directly
             # but not change the upper atmosphere from whatever it previously was.
-            n_current[:H2O][1:upper_lower_bdy_i] = H2Oinitfrac[1:upper_lower_bdy_i] .* n_tot(n_current, 1; n_alt_index, all_species)[1:upper_lower_bdy_i] # MULTICOL WARNING - ihoriz hardcoded as 1 in n_tot arguments for now -- change this
-            n_current[:HDO][1:upper_lower_bdy_i] = 2 * DH * n_current[:H2O][1:upper_lower_bdy_i]
+            for ih in 1:n_horiz
+                ntot_col = n_tot(n_current, ih; n_alt_index, all_species)
+                n_current[:H2O][ih][1:upper_lower_bdy_i] .= H2Oinitfrac[ih][1:upper_lower_bdy_i] .* ntot_col[1:upper_lower_bdy_i]
+                n_current[:HDO][ih][1:upper_lower_bdy_i] .= 2 * DH * n_current[:H2O][ih][1:upper_lower_bdy_i]
+            end
         elseif modified_water_alts == "above fixed point"
             # in this case, we modify the upper atmosphere. For some reason. Probably never do this.
-            n_current[:H2O][upper_lower_bdy_i+1:end] = H2Oinitfrac[upper_lower_bdy_i+1:end] .* n_tot(n_current, 1; n_alt_index, all_species)[upper_lower_bdy_i+1:end] # MULTICOL WARNING - ihoriz hardcoded as 1 in n_tot arguments for now -- change this
-            n_current[:HDO][upper_lower_bdy_i+1:end] = 2 * DH * n_current[:H2O][upper_lower_bdy_i+1:end]
+            for ih in 1:n_horiz
+                ntot_col = n_tot(n_current, ih; n_alt_index, all_species)
+                n_current[:H2O][ih][upper_lower_bdy_i+1:end] .= H2Oinitfrac[ih][upper_lower_bdy_i+1:end] .* ntot_col[upper_lower_bdy_i+1:end]
+                n_current[:HDO][ih][upper_lower_bdy_i+1:end] .= 2 * DH * n_current[:H2O][ih][upper_lower_bdy_i+1:end]
+            end
         end
 
         # Now plot it
@@ -1258,8 +1273,8 @@ if update_water_profile
 end
 
 # Calculate precipitable microns, including boundary layers (assumed same as nearest bulk layer)
-H2Oprum = precip_microns(:H2O, [n_current[:H2O][1][1]; n_current[:H2O][1]; n_current[:H2O][1][end]]; molmass, dz) # MULTICOL WARNING hardcoded to the first vertical column; will need changing if want different values for each column
-HDOprum = precip_microns(:HDO, [n_current[:HDO][1][1]; n_current[:HDO][1]; n_current[:HDO][1][end]]; molmass, dz) # MULTICOL WARNING hardcoded to the first vertical column; will need changing if want different values for each column
+H2Oprum = [precip_microns(:H2O, [n_current[:H2O][ih][1]; n_current[:H2O][ih]; n_current[:H2O][ih][end]]; molmass, dz) for ih in 1:n_horiz]
+HDOprum = [precip_microns(:HDO, [n_current[:HDO][ih][1]; n_current[:HDO][ih]; n_current[:HDO][ih][end]]; molmass, dz) for ih in 1:n_horiz]
 
 #           Define storage for species/Jrates not solved for actively           #
 #===============================================================================#
@@ -1331,14 +1346,13 @@ const active_longlived_infront = [Symbol(string(s)*"_infront") for s in active_l
 
 #                               Chemical jacobian                               #
 #===============================================================================#
-# Create symbolic expressions for the chemical jacobian at a local layer with influence from that same layer, 
-# the one above, and the one below # MULTICOL WARNING edit comment to include horizontal transport
-const chemJ_local = chemical_jacobian(active_longlived, active_longlived; diff_wrt_e=ediff, diff_wrt_m=mdiff, transportnet_horiz, ion_species, chem_species, transport_species, chemnet=reaction_network, transportnet); # MULTICOL WARNING eventually put transportnet_horiz into GV
-const chemJ_above = chemical_jacobian(active_longlived, active_longlived_above; diff_wrt_e=ediff, diff_wrt_m=mdiff, transportnet_horiz, ion_species, chem_species, transport_species, chemnet=reaction_network, transportnet); # MULTICOL WARNING eventually put transportnet_horiz into GV
-const chemJ_below = chemical_jacobian(active_longlived, active_longlived_below; diff_wrt_e=ediff, diff_wrt_m=mdiff, transportnet_horiz, ion_species, chem_species, transport_species, chemnet=reaction_network, transportnet); # MULTICOL WARNING eventually put transportnet_horiz into GV 
-const chemJ_infront = chemical_jacobian(active_longlived, active_longlived_infront; diff_wrt_e=ediff, diff_wrt_m=mdiff, transportnet_horiz, ion_species, chem_species, transport_species, chemnet=reaction_network, transportnet); # MULTICOL WARNING eventually put transportnet_horiz into GV
-const chemJ_behind = chemical_jacobian(active_longlived, active_longlived_behind; diff_wrt_e=ediff, diff_wrt_m=mdiff, transportnet_horiz, ion_species, chem_species, transport_species, chemnet=reaction_network, transportnet); # MULTICOL WARNING eventually put transportnet_horiz into GV
-
+# Create symbolic expressions for the chemical jacobian at a local layer with influence from that same layer,
+# the one above, and the one below, including horizontal transport terms
+const chemJ_local = chemical_jacobian(active_longlived, active_longlived; diff_wrt_e=ediff, diff_wrt_m=mdiff, transportnet_horiz, ion_species, chem_species, transport_species, chemnet=reaction_network, transportnet);
+const chemJ_above = chemical_jacobian(active_longlived, active_longlived_above; diff_wrt_e=ediff, diff_wrt_m=mdiff, transportnet_horiz, ion_species, chem_species, transport_species, chemnet=reaction_network, transportnet);
+const chemJ_below = chemical_jacobian(active_longlived, active_longlived_below; diff_wrt_e=ediff, diff_wrt_m=mdiff, transportnet_horiz, ion_species, chem_species, transport_species, chemnet=reaction_network, transportnet);
+const chemJ_infront = chemical_jacobian(active_longlived, active_longlived_infront; diff_wrt_e=ediff, diff_wrt_m=mdiff, transportnet_horiz, ion_species, chem_species, transport_species, chemnet=reaction_network, transportnet);
+const chemJ_behind = chemical_jacobian(active_longlived, active_longlived_behind; diff_wrt_e=ediff, diff_wrt_m=mdiff, transportnet_horiz, ion_species, chem_species, transport_species, chemnet=reaction_network, transportnet);
 
 #                     Photochemical equilibrium setup                           #
 #===============================================================================#
@@ -1520,7 +1534,7 @@ end
         #=
         Generates a matrix of I, J, and V values for a sparse matrix, for the 
         local layer, for influences from the layer above, and influences 
-        from the layer below.  # MULTICOL WARNING edit this comment
+        from the layer below as well as adjacent columns.
         =#
 
         # M = $Mexpr 
@@ -1540,12 +1554,12 @@ end
 
         # Here, 'behind' refers to vertical column ihoriz-1 and 'infront' refers to vertical column ihoriz+1, where ihoriz is the index of the current column
         behindchemJi = $(chemJ_behind[1])
-	behindchemJj = $(chemJ_behind[2])
-	behindchemJval = convert(Array{ftype_ncur}, $(Expr(:vcat, chemJ_behind[3]...))) # MULTICOL WARNING may need to edit
+	    behindchemJj = $(chemJ_behind[2])
+        behindchemJval = convert(Array{ftype_ncur}, $(Expr(:vcat, chemJ_behind[3]...)))
 
-	infrontchemJi = $(chemJ_infront[1])
-	infrontchemJj = $(chemJ_infront[2])
-	infrontchemJval = convert(Array{ftype_ncur}, $(Expr(:vcat, chemJ_infront[3]...))) # MULTICOL WARNING may need to edit
+        infrontchemJi = $(chemJ_infront[1])
+        infrontchemJj = $(chemJ_infront[2])
+        infrontchemJval = convert(Array{ftype_ncur}, $(Expr(:vcat, chemJ_infront[3]...)))
 
         # return the actual values of I, J, and V (indices and numerical value):
         return ((localchemJi, localchemJj, localchemJval),
@@ -1657,11 +1671,11 @@ plot_temp_prof(Tn_arr; savepath=results_dir*sim_folder_name, Tprof_2=Ti_arr, Tpr
 # Absolute tolerance
 if problem_type == "Gear"
     const atol = 1e-12 # absolute tolerance in ppm, used by Gear solver # NOTE: I think this is actually #/cm³ not ppm, because n_i+1 - n_i is compared against it.--Eryn
-    const abs_tol_for_plot = fill(atol, length(n_tot(n_current, 1; all_species))) # MULTICOL WARNING - ihoriz hardcoded as 1 in n_tot arguments for now -- change this 
+    const abs_tol_for_plot = fill(atol, length(n_tot(n_current, 1; all_species)))
 else
     # absolute tolerance relative to total atmosphere density, used by DifferentialEquations.jl solvers
-    const atol = 1e-12 .* [[n_tot(n_current, a, 1; n_alt_index, all_species) for sp in active_longlived, a in non_bdy_layers]...]  # MULTICOL WARNING - ihoriz hardcoded as 1 in n_tot arguments for now -- change this
-    const abs_tol_for_plot = 1e-12 .* n_tot(n_current, 1; n_alt_index, all_species) # calculates 1 ppt of the total density at each altitude. # MULTICOL WARNING - ihoriz hardcoded as 1 in n_tot arguments for now -- change this
+    const atol = 1e-12 .* [[n_tot(n_current, a, 1; n_alt_index, all_species) for sp in active_longlived, a in non_bdy_layers]...]
+    const abs_tol_for_plot = 1e-12 .* n_tot(n_current, 1; n_alt_index, all_species) # calculates 1 ppt of the total density at each altitude.
 end
     
 # Plot initial atmosphere condition  ===========================================
@@ -1707,7 +1721,7 @@ if ftype_ncur==Double64
     write_to_log(logfile, "$(Dates.format(now(), "(HH:MM:SS)")) Started first chemical jacobian compile")
 
     # Set up the initial state and check for any problems 
-    M = n_tot(n_current, 1; all_species) # MULTICOL WARNING - ihoriz hardcoded as 1 in n_tot arguments for now -- change this
+    M = [n_tot(n_current, ih; all_species) for ih in 1:n_horiz]
     E = electron_density(n_current; e_profile_type, non_bdy_layers, ion_species)
 
     nstart = flatten_atm(n_current, active_longlived; num_layers)
@@ -1715,7 +1729,6 @@ if ftype_ncur==Double64
 
     # Set up parameters
     Dcoef_arr_template = [zeros(size(Tn_arr)) for ihoriz in 1:n_horiz] # For making diffusion coefficient calculation go faster
-    #Dcoef_arr_template = [zeros(size(Tn_arr)) for ihoriz in 1:n_horiz]  # For making diffusion coefficient calculation go faster. # MULTICOL WARNING new version
     params = [#inactive, inactive_species, active_species, active_longlived, active_shortlived, Tn_arr, Ti_arr, Te_arr, Tplasma_arr, 
               Dcoef_arr_template, M, E] # E FIX ATTEMPT
     params_exjac = deepcopy(params)  # I think this is so the Dcoef doesn't get filled in with the wrong info?
@@ -1745,7 +1758,6 @@ ti = time()
 println("$(Dates.format(now(), "(HH:MM:SS)")) Beginning convergence")
 
 Dcoef_arr_template = [zeros(size(Tn_arr)) for ihoriz in 1:n_horiz] # initialize diffusion coefficient array
-#Dcoef_arr_template = [zeros(size(Tn_arr)) for ihoriz in 1:n_horiz] # initialize diffusion coefficient array # MULTICOL WARNING new version
 
 atm_soln = Dict()
 

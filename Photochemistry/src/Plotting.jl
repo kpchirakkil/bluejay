@@ -96,8 +96,6 @@ function plot_atm(atmdict::Dict{Symbol, Vector{Array{ftype_ncur}}}, savepath::St
         else
             allsp = GV.neutral_species
         end
-        # ntot = n_tot(atmdict, 1; all_species=allsp) # get the total atmosphere # MULTICOL WARNING - ihoriz hardcoded as 1 in n_tot arguments for now -- change this
-        # atmdict_MR = Dict([s=>(atmdict[s]./ntot) for s in allsp])
         ntot = [n_tot(atmdict, ihoriz; all_species=allsp) for ihoriz in 1:n_horiz]
         atmdict_MR = Dict([s => [atmdict[s][ihoriz]./ntot[ihoriz] for ihoriz in 1:n_horiz] for s in allsp])
 
@@ -715,9 +713,9 @@ function plot_rxns(sp::Symbol, atmdict::Dict{Symbol, Vector{Array{ftype_ncur}}},
 	    end
         end
         for kv in rate_coefs_prod
-	    for ihoriz in [1:n_horiz;]
-                total_chem_prod_ratecoef[ihoriz] += vec(kv[2][ihoriz]) # MULTICOL WARNING changed kv[2][ihoriz] to vector -- assess whether there is a better way of doing this
-	    end
+	        for ihoriz in 1:n_horiz
+                total_chem_prod_ratecoef[ihoriz] += vec(kv[2][ihoriz])
+            end
         end
 
         # Chemical loss 
@@ -791,11 +789,11 @@ function plot_rxns(sp::Symbol, atmdict::Dict{Symbol, Vector{Array{ftype_ncur}}},
     # Calculate the transport fluxes for the species
     plottitle_ext = "" # no extra info in the plot title if flux==false 
     if sp in GV.transport_species
-        transportPL = get_transport_PandL_rate(sp, atmdict, n_horiz; nonthermal=nonthermal, globvars...) # WARNING MULTICOL note that the first column is different from the others here and shouldn't be
+        transportPL = get_transport_PandL_rate(sp, atmdict, n_horiz; nonthermal=nonthermal, globvars...)
         # now separate into two different arrays for ease of addition.
         production_i = [transportPL[ihoriz] .>= 0 for ihoriz in 1:n_horiz]  # boolean array for where transport entries > 0 (production),
         loss_i = [transportPL[ihoriz] .< 0 for ihoriz in 1:n_horiz] # and for where transport entries < 0 (loss).
-        total_transport_prod = [production_i[ihoriz] .* transportPL[ihoriz] for ihoriz in 1:n_horiz] # MULTICOL WARNING note that the first column is different from the others here and shouldn't be
+        total_transport_prod = [production_i[ihoriz] .* transportPL[ihoriz] for ihoriz in 1:n_horiz]
         total_transport_loss = [loss_i[ihoriz] .* abs.(transportPL[ihoriz]) for ihoriz in 1:n_horiz]
 
         if sp in [:H2O, :HDO] # Water is turned off in the lower atmosphere, so we should represent that.
@@ -907,7 +905,7 @@ function plot_rxns(sp::Symbol, atmdict::Dict{Symbol, Vector{Array{ftype_ncur}}},
     end
 end
 
-function plot_reaction_on_demand(atmdict, reactants, n_horiz::Int64; print_col_total=false, products=nothing, ax=nothing, rxntype="all", lowerlim=nothing, upperlim=nothing, 
+function plot_reaction_on_demand(atmdict, reactants, n_horiz::Int64; ihoriz=1, print_col_total=false, products=nothing, ax=nothing, rxntype="all", lowerlim=nothing, upperlim=nothing,
                                  savepath=nothing, plottitle="", coltotal_loc=[0.5, 0.5], globvars...)
     #=
     A function to plot a single chemical reaction as it happens in atmdict on demand.
@@ -947,7 +945,7 @@ function plot_reaction_on_demand(atmdict, reactants, n_horiz::Int64; print_col_t
     rc_funcs = Dict([rxn => mk_function(:((Tn, Ti, Te, M) -> $(rxn[3]))) for rxn in relevant_reactions]);
     
     # Atmospheric density
-    Mtot = n_tot(atmdict, 1; GV.all_species) # MULTICOL WARNING - ihoriz hardcoded as 1 in n_tot arguments for now -- change this
+    Mtot = n_tot(atmdict, ihoriz; GV.all_species)
     
     # Reaction strings used for labeling dataframes
     rxn_strings = [format_chemistry_string(rr[1], rr[2]) for rr in relevant_reactions]
@@ -975,7 +973,7 @@ function plot_reaction_on_demand(atmdict, reactants, n_horiz::Int64; print_col_t
     ax.set_xlabel(L"Rate (cm$^{-3}$ s$^{-1}$)")
     ax.set_title(plottitle)
 
-    # Get volume rates by altitude  # MULTICOL WARNING this new for loop might need double checking
+    # Get volume rates by altitude
     for ihoriz in [1:n_horiz;]
     	by_alt = volume_rate_wrapper(reactants[1], relevant_reactions, rc_funcs, atmdict, Mtot, i_horiz; globvars...) # array format--by alt
     	by_alt_df = DataFrame(by_alt, rxn_strings)
@@ -1060,7 +1058,7 @@ function plot_species_on_demand(atmdict, spclist, filename; savepath=nothing, sh
         if mixing_ratio
             required =  [:all_species]
             check_requirements(keys(GV), required)
-            plot_me = plot_me ./ n_tot(atmdict, 1; GV.all_species) # MULTICOL WARNING - ihoriz hardcoded as 1 in n_tot arguments for now -- change this
+            plot_me = plot_me ./ n_tot(atmdict, 1; GV.all_species)
         end
         ax.plot(plot_me, GV.plot_grid, color=col, linewidth=lw, label=sp, linestyle=ls, zorder=10)
         
@@ -1411,7 +1409,7 @@ function top_mechanisms(x, sp, atmdict, p_or_r, n_horiz; savepath=nothing, filen
         end
     end
 
-    return by_alt_df, ihoriz # MULTICOL WARNING this might only return the values for the last vertical column
+    return by_alt_df, ihoriz
 end
 
 function turn_off_borders(ax)

@@ -57,7 +57,7 @@ Note that this is a simplified version with 4 species and 7 altitude bins.
 - Horizontal boundary conditions are stored separately per altitude with bc_dict_horiz[sp][ialt][row, col] and populated consistently inside the loop over ialt
 - Make sure the horizontal transport coefficients are placed correctly in the transport matrices (chemical Jacobian and rate functions)
 - Focus on important model files (such as but not limited to): converge_new_file.jl, MODEL_SETUP.jl, INPUT_PARAMETERS.jl, ReactionNetwork.jl, Plotting.jl, Core.jl, AnalyzeChemAndTransport.jl, Crosssections.jl
-- Resolve any remaining "MULTICOL WARNING" or "MID-FIX" or "HARD CODED" issues in the implementation of 2-D multicolumn model with horizontal transport
+- Resolve any remaining "MULTICOL WARNING" or "MID FIX" or "HARD CODED" issues in the implementation of 2-D multicolumn model with horizontal transport
 - Ignore JuliaODEsolver.jl (an optional submodule with functions to utilize the Julia ODE solvers), since it is not presently used in this work as the Gear solver (included in the converge_new_file.jl script) works better.
-- No need to do tests like "python3 simple_analytic_test.py" in every iteration
+- No need to do tests like "python3 simple_analytic_test.py" or "julia horizontal_transport_test.jl" in every iteration
 - No need to run Julia scripts, since Julia is not installed in the environment

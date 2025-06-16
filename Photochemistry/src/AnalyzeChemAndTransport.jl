@@ -371,7 +371,7 @@ end
 #                   Transport and escape functions                              #
 #===============================================================================#
 
-function diffusion_timescale(s::Symbol, T_arr::Array, atmdict; globvars...) # MULTICOL WARNING need to edit this for multiple column flexibility in case it is called, as currently Dcoef! won't work as it is
+function diffusion_timescale(s::Symbol, T_arr::Array, atmdict; globvars...)
     #=
     Inputs:
         s: species symbol
@@ -389,20 +389,20 @@ function diffusion_timescale(s::Symbol, T_arr::Array, atmdict; globvars...) # MU
     Dcoef_template = zeros(size(T_arr)) 
 
     # Other stuff
-    Hs = scaleH(GV.alt, s, T_arr; GV.molmass) # MULTICOL WARNING might need to add infrastructure for different vertical columns
+    Hs = scaleH(GV.alt, s, T_arr; GV.molmass)
     ncur_with_bdys =  ncur_with_boundary_layers(atmdict, n_horiz; GV.all_species, GV.n_alt_index)
     
     # Molecular diffusion timescale: H_s^2 / D, scale height over diffusion constant
-    D = Dcoef!(Dcoef_template, T_arr, s, ncur_with_bdys; globvars...) # MULTICOL WARNING need to edit this so that the arguments for Dcoef! are correct. Needs additional argument n_horiz
+    D = Dcoef!(Dcoef_template, T_arr, s, ncur_with_bdys; globvars...)
     molec_or_ambi_timescale = (Hs .^ 2) ./ D
    
     # Eddy timescale... this was in here only as scale H... 
     K = [Keddy(alt, n_tot(ncur_with_bdys, ihoriz; GV.all_species, GV.molmass); GV.planet) for ihoriz in 1:n_horiz]
     #eddy_timescale = (Hs .^ 2) ./ K # original
-    eddy_timescale = ([Hs for ihoriz in 1:n_horiz] .^ 2) ./ K # MULTICOL WARNING change when Hs is multidimensional
+    eddy_timescale = ([Hs for ihoriz in 1:n_horiz] .^ 2) ./ K
 
     # Combined timescale?!??
-    combined_timescale = ([Hs for ihoriz in 1:n_horiz] .^ 2) ./ (K .+ D) # MULTICOL WARNING change when Hs is multidimensional
+    combined_timescale = ([Hs for ihoriz in 1:n_horiz] .^ 2) ./ (K .+ D)
 
     return molec_or_ambi_timescale, eddy_timescale, combined_timescale
 end
@@ -492,7 +492,7 @@ function get_transport_PandL_rate(sp::Symbol, atmdict::Dict{Symbol, Vector{Array
         nonthermal: whether to consider nonthermal escape
 	n_horiz: Number of vertical columns in simulation
     Output
-        Array of production and loss (#/cm³/s) at each atmospheric layer boundary.  # MULTICOL WARNING update comment
+        Array of production and loss (#/cm³/s) at each atmospheric layer boundary.
         i = 1 in the net_bulk_flow array corresponds to the boundary at 1 km,
         and the end of the array is the boundary at 249 km.
     =#
@@ -518,7 +518,7 @@ function get_transport_PandL_rate(sp::Symbol, atmdict::Dict{Symbol, Vector{Array
 
     bc_dict = boundaryconditions(fluxcoefs_all, atmdict, sum([atmdict[sp] for sp in GV.all_species]), n_horiz; nonthermal=nonthermal, globvars...)
 
-    # each element in thesebcs has the format [downward, upward]    # MULTICOL WARNING update comment
+    # each element in thesebcs has the format [downward, upward]
     thesebcs = bc_dict[sp]
 
     # Fill array 
@@ -546,8 +546,8 @@ function get_transport_PandL_rate(sp::Symbol, atmdict::Dict{Symbol, Vector{Array
     # println("Activity in the top layer for sp $(sp) AS FLUX:")
     # println("Flux calculated from flux bc. for H and D, this should be the nonthermal flux: $([thesebcs[ihoriz][2, 2]*GV.dz for ihoriz in 1:n_horiz])")
     # println("Calculated flux from velocity bc. For H and D this should be thermal escape: $([atmdict[sp][ihoriz][end]*thesebcs[ihoriz][2, 1]*GV.dz for ihoriz in 1:n_horiz])")
-    # println("Down to layer below: $(-atmdict[sp][end]*fluxcoefs_all[sp][end, 1]*GV.dz)")                                               # MULTICOL WARNING update comment
-    # println("In from layer below: $(atmdict[sp][end-1]*fluxcoefs_all[sp][end-1, 2]*GV.dz)")                                            # MULTICOL WARNING update comment
+    # println("Down to layer below: $(-atmdict[sp][end]*fluxcoefs_all[sp][end, 1]*GV.dz)")
+    # println("In from layer below: $(atmdict[sp][end-1]*fluxcoefs_all[sp][end-1, 2]*GV.dz)")
     if returnfluxes
         tflux = zeros(0)
         if nonthermal
@@ -565,9 +565,9 @@ function get_transport_PandL_rate(sp::Symbol, atmdict::Dict{Symbol, Vector{Array
             end
         end
         if nonthermal
-            return ntflux, tflux # MULTICOL WARNING these are now vectors of length n_horiz, rather than single numbers, so won't be in the format expected by whatever is calling this function
+            return ntflux, tflux
         else 
-            return tflux # MULTICOL WARNING this is now a vector of length n_horiz, rather than a single number, it so won't be in the format expected by whatever is calling this function
+            return tflux
         end
     else 
         return transport_PL
@@ -732,7 +732,7 @@ function limiting_flux(sp, atmdict, T_arr; treat_H_as_rare=false, full_equation=
         dTdz = zeros(GV.n_all_layers)
         dTdz = dTdz[2:end] = @. (T_arr[2:end] - T_arr[1:end-1]) / GV.dz # make the temp gradient
         print(dTdz)
-        fi = thedensity ./ n_tot(atmdict, 1; ignore=[sp], globvars...) # MULTICOL WARNING - ihoriz hardcoded as 1 in n_tot arguments for now -- change this
+        fi = thedensity ./ n_tot(atmdict, 1; ignore=[sp], globvars...)
         ma = meanmass(atmdict, n_horiz; ignore=[sp], globvars...) 
 
         return @. ((bi*fi)/(1+fi)) * ( mH*(ma - GV.molmass[sp]) * (g/(kB*T_arr)) - (thermaldiff(sp)/T_arr) * dTdz[1:end-1])
