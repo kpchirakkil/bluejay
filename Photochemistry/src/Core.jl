@@ -2747,17 +2747,18 @@ function setup_water_profile!(atmdict; constfrac=1, dust_storm_on=false, make_sa
     =#
 
     GV = values(globvars)
-    check_requirements(keys(GV), [:all_species, :DH, :n_alt_index, :planet, :plot_grid, :results_dir, :sim_folder_name])
+    check_requirements(keys(GV), [:all_species, :DH, :n_alt_index, :n_horiz, :planet, :plot_grid, :results_dir, :sim_folder_name])
 
     # Set the initial fraction of the atmosphere for water to take up, plus the saturation fraction
     # ================================================================================================================
     # Currently this doesn't change behavior based on planet. 5/15/24
     # H2Oinitfrac, H2Osatfrac = set_h2oinitfrac_bySVP(atmdict, hygropause_alt; globvars...)
     # H2Oinitfrac, H2Osatfrac = set_h2oinitfrac_bySVP(atmdict, hygropause_alt; ihoriz=1, globvars...)
-    H2Oinitfrac_all = Vector{Vector{ftype_ncur}}(undef, n_horiz)
-    H2Osatfrac_all = Vector{Vector{ftype_ncur}}(undef, n_horiz)
+    ncols = GV.n_horiz
+    H2Oinitfrac_all = Vector{Vector{ftype_ncur}}(undef, ncols)
+    H2Osatfrac_all = Vector{Vector{ftype_ncur}}(undef, ncols)
 
-    for ihoriz in 1:n_horiz
+    for ihoriz in 1:ncols
         H2Oinitfrac_all[ihoriz], H2Osatfrac_all[ihoriz] =
             set_h2oinitfrac_bySVP(atmdict, hygropause_alt; ihoriz=ihoriz, globvars...)
     end
@@ -2777,16 +2778,16 @@ function setup_water_profile!(atmdict; constfrac=1, dust_storm_on=false, make_sa
             a = 1
             b = toplim_dict[excess_water_in]
             # H2Oinitfrac[a:b] = H2Oinitfrac[a:b] .* water_tanh_prof(GV.non_bdy_layers./1e5; z0=GV.ealt, f=GV.ffac)[a:b]
-            for ihoriz in 1:n_horiz
-                prof = H2Oinitfrac_all[ihoriz]
-                prof[a:b] .= prof[a:b] .* water_tanh_prof(GV.non_bdy_layers./1e5; z0=GV.ealt, f=GV.ffac)[a:b]
-                H2Oinitfrac_all[ihoriz] = prof
-            end
+    for ihoriz in 1:ncols
+        prof = H2Oinitfrac_all[ihoriz]
+        prof[a:b] .= prof[a:b] .* water_tanh_prof(GV.non_bdy_layers./1e5; z0=GV.ealt, f=GV.ffac)[a:b]
+        H2Oinitfrac_all[ihoriz] = prof
+    end
 
             # Set the upper atmo to be a constant mixing ratio, wherever the disturbance ends
             if excess_water_in=="everywhere"
                 # H2Oinitfrac[GV.upper_lower_bdy_i:end] .= H2Oinitfrac[GV.upper_lower_bdy_i]
-                for ihoriz in 1:n_horiz
+                for ihoriz in 1:ncols
                     prof = H2Oinitfrac_all[ihoriz]
                     prof[GV.upper_lower_bdy_i:end] .= prof[GV.upper_lower_bdy_i]
                     H2Oinitfrac_all[ihoriz] = prof
@@ -2796,7 +2797,7 @@ function setup_water_profile!(atmdict; constfrac=1, dust_storm_on=false, make_sa
 
         # set the water profiles 
         # ===========================================================================================================
-        for ihoriz in 1:n_horiz
+        for ihoriz in 1:ncols
             atmdict[:H2O][ihoriz] = H2Oinitfrac_all[ihoriz] .* n_tot(atmdict, ihoriz; GV.n_alt_index, GV.all_species)
             atmdict[:HDO][ihoriz] = 2 * GV.DH * atmdict[:H2O][ihoriz]
         end
@@ -2809,13 +2810,13 @@ function setup_water_profile!(atmdict; constfrac=1, dust_storm_on=false, make_sa
             # H2Oppm = 1e-6*map(z->GV.H2O_excess .* exp(-((z-GV.ealt)/sigma)^2), GV.non_bdy_layers/1e5) + H2Oinitfrac 
             H2Oppm = 1e-6*map(z->GV.H2O_excess .* exp(-((z-GV.ealt)/sigma)^2), GV.non_bdy_layers/1e5) + H2Oinitfrac_all[1]
             HDOppm = 1e-6*map(z->GV.HDO_excess .* exp(-((z-GV.ealt)/sigma)^2), GV.non_bdy_layers/1e5) + HDOinitfrac
-            for ihoriz in 1:n_horiz
+            for ihoriz in 1:ncols
                 atmdict[:H2O][ihoriz][1:GV.upper_lower_bdy_i] = (H2Oppm .* n_tot(atmdict, ihoriz; GV.n_alt_index, GV.all_species))[1:GV.upper_lower_bdy_i]
                 atmdict[:HDO][ihoriz][1:GV.upper_lower_bdy_i] = (HDOppm .* n_tot(atmdict, ihoriz; GV.all_species))[1:GV.upper_lower_bdy_i]
             end
         end
     elseif GV.planet=="Venus"
-        for ihoriz in 1:n_horiz
+        for ihoriz in 1:ncols
             atmdict[:H2O][ihoriz] = constfrac .* n_tot(atmdict, ihoriz; GV.n_alt_index, GV.all_species)
             atmdict[:HDO][ihoriz] = 2 * GV.DH * atmdict[:H2O][ihoriz]
         end

@@ -61,32 +61,13 @@ ignored_species = [:CNpl,:HCNpl,:HCNHpl,:HN2Opl,:NH2pl,:NH3pl,:N2Opl,:NO2pl,:CH,
 
 #                                        Neutrals
 # =======================================================================================================
-const orig_neutrals = [:O,
-                    #   :HO2, :HOCO, 
-                        :O2, :O3,
-                    #   :D, :DO2, :DOCO, :HD, :HDO, :HDO2, :OD,
-
-                       # Turn these off for minimal ionosphere:
-                     #  :C, :HCN, :HCO, :N, :NO, 
-                       ]; 
-const conv_neutrals = remove_ignored_species==true ? setdiff(orig_neutrals, ignored_species) : orig_neutrals
-const new_neutrals = [];
-const neutral_species = [conv_neutrals..., new_neutrals...];
+const neutral_species = [conv_neutrals[planet]..., new_neutrals...];
 
 #                                          Ions
 # =======================================================================================================
-const orig_ions = [:Opl] #, :Opl, :O2pl, :COpl];# Nair minimal ionosphere 
-               #    :Arpl, :ArHpl, :ArDpl, 
-               #    :Cpl, :CHpl,  :COpl, 
-               #    :Hpl, :Dpl, :H2pl, :HDpl, :H3pl, :H2Dpl, :HD2pl, 
-               #    :H2Opl,  :HDOpl, :H3Opl, :H2DOpl, 
-               #    :HO2pl, :HCOpl, :DCOpl, :HOCpl, :DOCpl, :DCO2pl, 
-               #    :HNOpl,   
-               #    :Npl, :NHpl, :N2pl, :N2Hpl, :N2Dpl, :NOpl,
-               #    :OHpl, :ODpl];
-const new_ions = [];
-const ion_species = remove_ignored_species==true ? setdiff([orig_ions..., new_ions...], ignored_species) : [orig_ions..., new_ions...]
-const nontherm = ions_included==true ? true : false   # whether to do non-thermal escape; this has to be here because it's needed in short order to do Jrates.
+const ion_species = [conv_ions[planet]..., new_ions...]
+const new_species = [new_neutrals..., new_ions...]  # Needed later to be excluded from n_tot() if adding new species
+const nontherm = ions_included==true ? true : false   # whether to do non-thermal escape. Must be here, used in call to format Jrates
  
 #                                     Full species list
 # =======================================================================================================
@@ -153,11 +134,11 @@ end
 # Chemistry and transport participants
 # -------------------------------------------------------------------
 if converge_which == "neutrals"
-    append!(no_chem_species, union(conv_ions, N_neutrals)) # This is because the N chemistry is intimiately tied up with the ions.
-    append!(no_transport_species, union(conv_ions, N_neutrals, short_lived_species))
+    append!(no_chem_species, union(conv_ions[planet], N_neutrals)) # This is because the N chemistry is intimiately tied up with the ions.
+    append!(no_transport_species, union(conv_ions[planet], N_neutrals, short_lived_species))
 elseif converge_which == "ions"
-    append!(no_chem_species, setdiff(conv_neutrals, N_neutrals))
-    append!(no_transport_species, setdiff(conv_neutrals, N_neutrals))
+    append!(no_chem_species, setdiff(conv_neutrals[planet], N_neutrals))
+    append!(no_transport_species, setdiff(conv_neutrals[planet], N_neutrals))
 elseif converge_which == "both"
     append!(no_transport_species, short_lived_species)
 end
@@ -223,7 +204,7 @@ const e_profile_type = ions_included==true ? "quasineutral" : "none"
 const zmin = Dict("Venus"=>90e5, "Mars"=>0.)[planet]
 const dz = 2e5  # Discretized layer thickness
 const dx = 2e5  # Width of one vertical column -- could be used to calculate horizontal transport flux boundary condition (if it wasn't 0)
-const zmax = 106e5  # Top altitude (cm)
+const zmax = 250e5  # Top altitude (cm)
 const alt = convert(Array, (zmin:dz:zmax)) # These are the layer centers.
 const n_all_layers = length(alt)
 const intaltgrid = round.(Int64, alt/1e5)[2:end-1]; # the altitude grid CELLS but in integers.

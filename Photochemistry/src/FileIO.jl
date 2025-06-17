@@ -22,14 +22,20 @@ end
 
 function create_folder(foldername::String, parentdir::String)
     #=
-    Checks to see if foldername exists within parentdir. If not, creates it.
+    Ensure that parentdir and foldername exist. Creates them if necessary.
+    This prevents readdir errors when parentdir does not already exist.
     =#
-    # println("Checking for existence of $(foldername) folder in $(parentdir)")
-    dircontents = readdir(parentdir)
-    if foldername in dircontents
+    # Create the parent directory path if it does not exist
+    if !isdir(parentdir)
+        mkpath(parentdir)
+    end
+
+    target = joinpath(parentdir, foldername)
+
+    if isdir(target)
         println("Folder $(foldername) already exists")
     else
-        mkdir(parentdir*foldername)
+        mkpath(target)
         println("Created folder ", foldername)
     end
 end
@@ -74,8 +80,9 @@ function get_ncurrent(readfile::String, n_horiz::Int64)
     
     n_current = Dict{Symbol, Vector{Array{ftype_ncur}}}()
 
-    for ispecies in [1:length(n_current_tag_list);]
-        n_current[n_current_tag_list[ispecies]] = fill(reshape(n_current_mat[1:7,ispecies], length(n_current_mat[1:7, ispecies])), n_horiz)
+    for ispecies in eachindex(n_current_tag_list)
+        profile = convert(Vector{ftype_ncur}, n_current_mat[:, ispecies])
+        n_current[n_current_tag_list[ispecies]] = fill(profile, n_horiz)
     end
     return n_current
 end

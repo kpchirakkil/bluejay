@@ -1228,8 +1228,8 @@ function plot_water_profile(atmdict, savepath::String; ihoriz::Int=1, showonly=f
         ax[1].semilogx(prev_profs[1] ./ n_tot(atmdict, ihoriz; globvars...), GV.plot_grid, color=prevcol)
         ax[1].semilogx(prev_profs[2] ./ n_tot(atmdict, ihoriz; globvars...), GV.plot_grid, color=prevcol)
     end
-    ax[1].semilogx(atmdict[:H2O] ./ n_tot(atmdict, ihoriz; globvars...), GV.plot_grid, color=GV.speciescolor[:H2O], linewidth=2)
-    ax[1].semilogx(atmdict[:HDO] ./ n_tot(atmdict, ihoriz; globvars...), GV.plot_grid, color=GV.speciescolor[:HDO], linestyle=GV.speciesstyle[:HDO], linewidth=2)is
+    ax[1].semilogx(atmdict[:H2O][ihoriz] ./ n_tot(atmdict, ihoriz; globvars...), GV.plot_grid, color=GV.speciescolor[:H2O], linewidth=2)
+    ax[1].semilogx(atmdict[:HDO][ihoriz] ./ n_tot(atmdict, ihoriz; globvars...), GV.plot_grid, color=GV.speciescolor[:HDO], linestyle=GV.speciesstyle[:HDO], linewidth=2)
     ax[1].set_xlabel("Mixing Ratio")
     ax[1].set_ylabel("Altitude (km)")
     ax[1].set_xticks(collect(logrange(1e-12, 1e-2, 6)))
@@ -1239,8 +1239,8 @@ function plot_water_profile(atmdict, savepath::String; ihoriz::Int=1, showonly=f
         ax[2].semilogx(prev_profs[1], GV.plot_grid, color=prevcol)
         ax[2].semilogx(prev_profs[2], GV.plot_grid, color=prevcol, linestyle=GV.speciesstyle[:HDO])
     end
-    ax[2].semilogx(atmdict[:H2O], GV.plot_grid, color=GV.speciescolor[:H2O], linewidth=2, label=string_to_latexstr("H2O"))
-    ax[2].semilogx(atmdict[:HDO], GV.plot_grid, color=GV.speciescolor[:HDO], linestyle=GV.speciesstyle[:HDO], linewidth=2, label="HDO")
+    ax[2].semilogx(atmdict[:H2O][ihoriz], GV.plot_grid, color=GV.speciescolor[:H2O], linewidth=2, label=string_to_latexstr("H2O"))
+    ax[2].semilogx(atmdict[:HDO][ihoriz], GV.plot_grid, color=GV.speciescolor[:HDO], linestyle=GV.speciesstyle[:HDO], linewidth=2, label="HDO")
     ax[2].set_xlabel(L"Number density (cm$^{-3}$)")
     ax[2].set_xticks(collect(logrange(1e-4, 1e16, 6)))
 
@@ -1249,8 +1249,8 @@ function plot_water_profile(atmdict, savepath::String; ihoriz::Int=1, showonly=f
         ax[3].semilogx((prev_profs[1] ./ n_tot(atmdict, ihoriz; globvars...)) ./ 1e-6, GV.plot_grid, color=prevcol)
         ax[3].semilogx((prev_profs[2] ./ n_tot(atmdict, ihoriz; globvars...)) ./ 1e-6, GV.plot_grid, color=prevcol, linestyle=GV.speciesstyle[:HDO])
     end
-    ax[3].semilogx((atmdict[:H2O] ./ n_tot(atmdict, ihoriz; globvars...)) ./ 1e-6, GV.plot_grid, color=GV.speciescolor[:H2O], linewidth=2)
-    ax[3].semilogx((atmdict[:HDO] ./ n_tot(atmdict, ihoriz; globvars...)) ./ 1e-6, GV.plot_grid, color=GV.speciescolor[:HDO], linestyle=GV.speciesstyle[:HDO], linewidth=2)
+    ax[3].semilogx((atmdict[:H2O][ihoriz] ./ n_tot(atmdict, ihoriz; globvars...)) ./ 1e-6, GV.plot_grid, color=GV.speciescolor[:H2O], linewidth=2)
+    ax[3].semilogx((atmdict[:HDO][ihoriz] ./ n_tot(atmdict, ihoriz; globvars...)) ./ 1e-6, GV.plot_grid, color=GV.speciescolor[:HDO], linestyle=GV.speciesstyle[:HDO], linewidth=2)
     ax[3].set_xlabel("ppmv")
     ax[3].set_xticks([1e-5, 1e-4, 1e-3, 1e-2, 1e-1, 1e0, 1e1, 1e2, 1e3])
     ax[3].set_xlim(1e-5, 1e3)
