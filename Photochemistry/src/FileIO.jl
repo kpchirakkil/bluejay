@@ -224,14 +224,18 @@ function load_from_paramlog(folder; quiet=true, globvars...)
     =#
 
     GV = values(globvars)
-    required = [:molmass] # :alt
+    required = [:molmass] 
     check_requirements(keys(GV), required)
 
     # Load the workbook
     paramlog_wb = XLSX.readxlsx("$(folder)PARAMETERS.xlsx")
 
-    # Basic variables
+    # Read as many of the parameter sheets as we can right now
     df_gen = DataFrame(XLSX.readtable("$(folder)PARAMETERS.xlsx", "General"));
+    df_atmcond = DataFrame(XLSX.readtable("$(folder)PARAMETERS.xlsx", "AtmosphericConditions"));
+    df_bcs = DataFrame(XLSX.readtable("$(folder)PARAMETERS.xlsx", "BoundaryConditions"));
+
+    # Planet, M_P, R_P, and altitude, which were not logged in older runs.
     if ~(:M_P in keys(GV)) | ~(:R_P in keys(GV))
         try
             global planet = get_param("PLANET", df_gen)
@@ -239,28 +243,59 @@ function load_from_paramlog(folder; quiet=true, globvars...)
             global R_P = get_param("R_P", df_gen)
         catch y
             println("WARNING: Exception: $(y) - you are trying to load parameters which aren't logged. File probably made before module updates.")
-            println("Please load the following parameters manually: M_P, R_P, and pass them in as globvars, and re-run this command.")
+            println("Please pass in the following global variables: planet, M_P, R_P, then re-run this command.")
             println()
         end
     end
-    ions_included = get_param("IONS", df_gen)
-    hrshortcode = get_param("RSHORTCODE", df_gen)
-    rshortcode = get_param("HRSHORTCODE", df_gen)
-    rxn_spreadsheet = get_param("RXN_SOURCE", df_gen)
-    DH = get_param("DH", df_gen)
-
 
     if ~(:alt in keys(GV))
         try 
-            df_alt = DataFrame(XLSX.readtable("$(folder)PARAMETERS.xlsx", "AltGrid"));
-            global alt = df_alt.Alt
+            global df_alt = DataFrame(XLSX.readtable("$(folder)PARAMETERS.xlsx", "AltGrid"));
+            global df_altinfo = DataFrame(XLSX.readtable("$(folder)PARAMETERS.xlsx", "AltInfo"));
         catch y
             println("WARNING: Exception: $(y) - you tried to load the altitude grid but it's not logged. File probably made before module updates. Please pass in alt manually")
             println()
         end
+    else
+        global alt = GV.alt # This seems stupid but has to be done because apparently the if/else blocks can't access the keyword arg alt??
     end
+
+    # AltInfo
+    if (@isdefined df_altinfo) & (@isdefined df_alt)
+        global alt = df_alt.Alt
+        global non_bdy_layers = [parse(Float64, f) for f in collect(skipmissing(df_alt.non_bdy_layers))]
+        global zmin = get_param("zmin", df_altinfo)
+        global dz = get_param("dz", df_altinfo)
+        global zmax = get_param("zmax", df_altinfo)
+        global n_all_layers = get_param("n_all_layers", df_altinfo)
+        global num_layers = get_param("num_layers", df_altinfo)
+        global upper_lower_bdy = get_param("upper_lower_bdy", df_altinfo)
+        global upper_lower_bdy_i = get_param("upper_lower_bdy_i", df_altinfo)
+    else 
+        # In this case, alt should have been passed in manually.
+        global non_bdy_layers = alt[2:end-1]
+        global zmin = alt[1]
+        global dz = alt[2] - alt[1]
+        global zmax = alt[end]
+        global n_all_layers = length(alt)
+        global num_layers = length(non_bdy_layers)
+        # In older versions of the parameter logging, this variable was named "WATER_BDY".
+        global upper_lower_bdy = get_param("WATER_BDY", df_atmcond) * 1e5
+        # Ideally we would not repeat the code for n_alt_index here, but oh well.
+        global upper_lower_bdy_i = Dict([z=>clamp((i-1),1, num_layers) for (i, z) in enumerate(alt)])[upper_lower_bdy]
+
+    end
+
+    # Codes
+    hrshortcode = get_param("RSHORTCODE", df_gen)
+    rshortcode = get_param("HRSHORTCODE", df_gen)
+
+    # Basics - more
+    rxn_spreadsheet = get_param("RXN_SOURCE", df_gen)
+    DH = get_param("DH", df_gen)
     
     # Species lists
+    ions_included = get_param("IONS", df_gen)
     df_splists = DataFrame(XLSX.readtable("$(folder)PARAMETERS.xlsx", "SpeciesLists"));
     neutral_species = [Symbol(x) for x in filter(x->typeof(x)==String, df_splists.Neutrals)]
     ion_species = [Symbol(x) for x in filter(x->typeof(x)==String, df_splists.Ions)]
@@ -269,11 +304,9 @@ function load_from_paramlog(folder; quiet=true, globvars...)
     no_chem_species = [Symbol(x) for x in [filter(x->typeof(x)==String, df_splists.NoChem)]...];
     transport_species = setdiff(all_species, no_transport_species);
     chem_species = setdiff(all_species, no_chem_species);
+    Jratelist = [Symbol(x) for x in filter(x->typeof(x)==String, df_splists.Jratelist)]
 
-    # Atmospheric conditions
-    df_atmcond = DataFrame(XLSX.readtable("$(folder)PARAMETERS.xlsx", "AtmosphericConditions"));
-
-    ## Temperatures first
+    ## Temperatures
     if "TemperatureArrays" in XLSX.sheetnames(paramlog_wb)
         df_temps = DataFrame(XLSX.readtable("$(folder)PARAMETERS.xlsx", "TemperatureArrays"));
         Tn_arr = reshape(df_temps.Neutrals, GV.n_horiz, GV.num_layers+2)
@@ -283,7 +316,14 @@ function load_from_paramlog(folder; quiet=true, globvars...)
         if quiet==false
             println("WARNING: Reconstructing temperature profiles with default options based on logged control temperatures. It is POSSIBLE the reconstruction could be wrong if the temp function changed.")
         end
-        T_dict = T(get_param("TSURF", df_atmcond), get_param("TMESO", df_atmcond), get_param("TEXO", df_atmcond); GV.alt)
+        # Need to have some logic for constructing the temperature profile from the logged control parameters, and it's 
+        # different by planet. 
+        if planet=="Venus"
+            T_dict = T_Venus(get_param("TSURF", df_atmcond), get_param("TMESO", df_atmcond), get_param("TEXO", df_atmcond), 
+                             "Venus-Inputs/FoxandSung2001_temps_mike.txt"; GV.alt)
+        elseif planet=="Mars"
+            T_dict = T_Mars(get_param("TSURF", df_atmcond), get_param("TMESO", df_atmcond), get_param("TEXO", df_atmcond); GV.alt)
+        end
         Tn_arr = T_dict["neutrals"]
         Ti_arr = T_dict["ions"]
         Te_arr = T_dict["electrons"]
@@ -299,10 +339,8 @@ function load_from_paramlog(folder; quiet=true, globvars...)
         # hope the user has passed it in
         global Hs_dict = Dict{Symbol, Vector{Float64}}([sp=>scaleH(GV.alt, sp, Tprof_for_Hs[charge_type(sp)]; GV.M_P, GV.R_P, globvars...) for sp in all_species]); 
     end
-    water_bdy = get_param("WATER_BDY", df_atmcond) * 1e5 # It's stored in km but we want it in cm
-
+   
     # Boundary conditions
-    df_bcs = DataFrame(XLSX.readtable("$(folder)PARAMETERS.xlsx", "BoundaryConditions"));
     speciesbclist = load_bcdict_from_paramdf(df_bcs);
     
     vardict = Dict("DH"=>DH, 
@@ -323,7 +361,17 @@ function load_from_paramlog(folder; quiet=true, globvars...)
                    "Hs_dict"=>Hs_dict,
                    "speciesbclist"=>speciesbclist,
                    "rxn_spreadsheet"=>rxn_spreadsheet,
-                   "water_bdy"=>water_bdy)
+                   "upper_lower_bdy"=>upper_lower_bdy,
+                   "Jratelist"=>Jratelist,
+                   "non_bdy_layers"=>non_bdy_layers,
+                   "zmin"=>zmin,
+                   "zmax"=>zmax,
+                   "dz"=>dz,
+                   "n_all_layers"=>n_all_layers,
+                   "num_layers"=>num_layers,
+                   "upper_lower_bdy"=>upper_lower_bdy,
+                   "upper_lower_bdy_i"=>upper_lower_bdy_i
+                   )
 
     try
         vardict["alt"] = alt

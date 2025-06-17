@@ -17,7 +17,7 @@ using PyCall
 using Random
 using SparseArrays
 using XLSX
-
+using Latexify
 
 export 
 
@@ -183,6 +183,7 @@ plot_reaction_on_demand,
 plot_rxns,
 plot_species_on_demand,
 plot_temp_prof, 
+plot_tophot_lineandbar,
 plot_water_profile, 
 set_rc_params,
 top_mechanisms,    
@@ -191,11 +192,13 @@ turn_off_borders,
 # ReactionNetwork.jl
     ## Load and manipulate
     calculate_and_write_column_rates,
+    enthalpy_of_reaction,
     filter_network, 
     find_duplicates,
     load_network_and_make_functions,
     load_reaction_network, 
     log_reactions, 
+    make_k_expr,
     rxns_where_species_is_observer, 
 
     ## Formatting the reaction network object
@@ -211,7 +214,8 @@ GEL_to_molecule,
 molec_to_GEL, 
 total_escape_to_GEL,
 total_escape_to_area_escape,
-prum_to_ppm
+prum_to_ppm,
+rayleigh_fractionation
 
 
 # ~*~*~*~*~*~*~*~~*~*~*~*~*~*~*~*~*~*~*~*~*~*~*~*~*~*~*~*~*~*~*~*~        

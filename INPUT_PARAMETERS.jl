@@ -1,34 +1,40 @@
 ################################################################################
 # INPUT_PARAMETERS.jl
-# DESCRIPTION: Variables to be modified by the user for each simulation run. 
+# DESCRIPTION: Controls key variables that set up the model, usually modified at 
+# each run by the user. Planet to model, logging notes, filenames, whether it's 
+# a seasonal cycle or equilibrium run, which atmospheric parameter to vary, 
+# solar input, water parameters, species modeled, algorithm tolerances, and stuff
+# to control which species densities are updated due to chemistry or transport.
 # 
 # Eryn Cangi
 # Created April 2024
-# Last edited: May 2024
+# Last edited: August 2024
 # Currently tested for Julia: 1.8.5
 ################################################################################
 
 # Set the planet 
 # =======================================================================================================
-const planet = "Venus"
+const planet = "Mars"
     # OPTIONS: "Mars", "Venus"
 
 # Input and output files, directory
 # =======================================================================================================
 const results_dir = code_dir*"../Results_$(planet)/"
-const initial_atm_file = "$(planet)-Inputs/venus_H2O1e-6_converged_vGFd5b0a.h5"  # File to use to initialize the atmosphere. 
+const initial_atm_file = "$(planet)-Inputs/INITIAL_GUESS_MARS_bxz4YnHk.h5"  # File to use to initialize the atmosphere.
     # OPTIONS: 
-    # INITIAL_GUESS.h5 --> Basic Mars starting file.
-    # venus_H2O1e-6_converged_c1JKkl1M.h5 --> Best Venus initial atmosphere 
-    # venus_H2O1e-6_converged_vGFd5b0a.h5 ??? this was the one we use for the paper
+    # INITIAL_GUESS_MARS.h5 --> Basic Mars starting file.
+    # INITIAL_GUESS_MARS_bxz4YnHk.h5 --> A Mars atmosphere that includes N2O, NO2, and their ions;
+    #                                    not particularly motivated by any present-day data.                                         
+    # INITIAL_GUESS_VENUS_vGFd5b0a.h5 --> Best Venus initial atmosphere  without sulfur/chlorine
+    # INITIAL_GUESS_VENUS_oUT0ZbGN.h5 --> Venus initial atmosphere with basic chlorine and sulfur species included.
 const final_atm_file = "final_atmosphere.h5"
 const reaction_network_spreadsheet = code_dir*"$(planet)-Inputs/REACTION_NETWORK_$(uppercase(planet)).xlsx"
     # OPTIONS: "REACTION_NETWORK_MIN_IONOSPHERE.xlsx", code_dir*"REACTION_NETWORK_$(uppercase(planet)).xlsx"
 
 # Descriptive attributes of this model run
 # =======================================================================================================
-const optional_logging_note = "Run after introducing Mike's sign convention and calculation changes in boundaryconditions and fluxcoefs" # Brief summary of simulation goal
-const results_version = "v1"  # Helps keep track of attempts if you need to keep changing things
+const optional_logging_note = "Enter a logging note here" # Brief summary of simulation goal
+const results_version = "v0"  # Helps keep track of attempts if you need to keep changing things
 
 # Set the modifiable atmospheric parameters
 # =======================================================================================================
@@ -81,6 +87,8 @@ const water_case = "standard" # Amount of water in the atmosphere
 const water_loc = "mesosphere" # Location to modify water abundance, if selecting "low" or "high" water case 
     # OPTIONS: "loweratmo", "everywhere", "mesosphere"
 
+# VENUS OPTIONS:
+const venus_special_water = false# true
 # MARS DUST OPTIONS:
 const dust_storm_on = false  # This adds a parcel of water at some altitude, sort of like if there was a dust storm. Haven't published on this.
     # OPTIONS: True, false
@@ -89,12 +97,73 @@ const H2O_excess = 250  # excess H2O in ppm
 const HDO_excess = 0.350 # excess HDO in ppm (divide by 1000 to get ppb)
     # OPTIONS: 0.350 is reasonable
 
-# Settings to control species in the model
-# -------------------------------------------------------------------
+
+# Control which species (atoms, molecules) are modeled 
+# =======================================================================================================
+
 const ions_included = true
 const converge_which = "both"
     # OPTIONS: "ions", "neutrals", "both"
-const dont_compute_chemistry = [:Ar]
+
+# Species lists
+# -------------------------------------------------------------------
+# Convention: Alphabetized, except D-bearing species should be mixed in after their H-bearing isotopologue. 
+# this makes it easier to see which species have isotopologues.
+# 
+# WHAT DO THESE LISTS MEAN? 
+# 
+# new_[neutrals, ions]: These are species you want to add to the modeled atmosphere on THIS RUN.
+#                       They should not have a density vector in the initial guess file.
+#                       Their initial density guess will be either all 0, or loaded from a file 
+#                       depending on what you specify for the use_nonzero_initial_profiles variable.
+#                       Note that after you complete a successful run with new species,
+#                       you must modify this file manually and enter those species into the 
+#                       conv_[neutrals,ions] variable. No way around it!
+#
+# conv_[neutrals,ions]: These are species which have already been incorporated into the model atmosphere.
+#                       They should already have a density vector in your initial guess file. 
+#                       Typically you won't need to change these at each run, UNLESS you added new species 
+#                       on the previous run.
+const new_neutrals = [];
+const new_ions = [];
+
+const conv_neutrals = Dict("Mars"=>[:Ar, :C, :CO, :CO2, # Argon and carbon species
+                                    :H, :D, :H2, :HD, :H2O, :HDO,  # H and D species
+                                    :HCO, :DCO, :HO2, :DO2,        
+                                    :H2O2, :HDO2, :HOCO, :DOCO, 
+                                    :N, :N2, :NO, :Nup2D, :N2O, :NO2, # Nitrogen species
+                                    :O, :O1D, :O2, :O3, :OH, :OD], # Oxygen species
+                           "Venus"=>[:Ar, :C, :CO, :CO2, 
+                                     :Cl, :ClO, :ClCO, :HCl, :DCl,  # Chlorine species
+                                     :H, :D, :H2, :HD, :H2O, :HDO,  # H and D species
+                                     :HCO, :DCO, :HO2, :DO2,        
+                                     :H2O2, :HDO2, :HOCO, :DOCO, 
+                                     :N, :N2, :NO, :Nup2D, :N2O, :NO2,
+                                     :O, :O1D, :O2, :O3, :OH, :OD,
+                                     :S, :SO, :SO2, :SO3, :H2SO4, :HDSO4] # Sulfur species
+                           ); 
+
+const conv_ions = Dict("Mars"=>[:Arpl, :ArHpl, :ArDpl, 
+                                :Cpl, :CHpl, :COpl, :CO2pl, 
+                                :Dpl, :DCOpl, :DOCpl, :DCO2pl, 
+                                :Hpl,  :H2pl, :HDpl, :H3pl, :H2Dpl, 
+                                :H2Opl, :HDOpl, :H3Opl, :H2DOpl, 
+                                :HO2pl, :HCOpl, :HCO2pl, :HOCpl, :HNOpl,   
+                                :Npl, :NHpl, :N2pl, :N2Hpl, :N2Dpl, :NOpl, :N2Opl, :NO2pl,
+                                :Opl, :O2pl, :OHpl, :ODpl],
+                       "Venus"=>[:Arpl, :ArHpl, :ArDpl, 
+                                :Cpl, :CHpl, :COpl, :CO2pl, 
+                                :Dpl, :DCOpl, :DOCpl, :DCO2pl, 
+                                :Hpl,  :H2pl, :HDpl, :H3pl, :H2Dpl, 
+                                :H2Opl, :HDOpl, :H3Opl, :H2DOpl, 
+                                :HO2pl, :HCOpl, :HCO2pl, :HOCpl, :HNOpl,   
+                                :Npl, :NHpl, :N2pl, :N2Hpl, :N2Dpl, :NOpl, :N2Opl, :NO2pl,
+                                :Opl, :O2pl, :OHpl, :ODpl]
+                      );
+
+# More specific settings for controling the modeling of species
+# -------------------------------------------------------------------
+const dont_compute_chemistry = [] #  :Ar for Venus has been used historically
 const dont_compute_transport = []
 const dont_compute_either_chem_or_transport = []  # Chemical species which should never update their densities, but may participate in chem+transport.
     # OPTIONS: Any species included in the model. 
@@ -102,7 +171,9 @@ const assume_photochem_eq = false # whether to turn on photochemical equilibrium
 
 # Turn plots off and on
 # =======================================================================================================
-const make_P_and_L_plots = true  # Turn off to save several minutes of runtime if you don't need to check for equilibrium.
+const make_P_and_L_plots = true  # Makes a 3-panel plot showing production and loss due to 1) chemistry, 
+                                 # 2) transport, 3) sum of both. Turn off to save several minutes of 
+                                 # runtime if you don't need to check for equilibrium.
     # OPTIONS: True, false
 
 # Algorithm tolerances

@@ -176,6 +176,7 @@ function populate_xsect_dict(pd_dataf, xsecfolder; ion_xsects=true, globvars...)
     # xsect_dict[get_Jrate_symb("O3", ["O", "O", "O"])] =  fill(quantumyield(o3xdata,((x->true, 0.),)),GV.n_all_layers)
     xsect_dict[get_Jrate_symb("O3", ["O", "O", "O"])] =  [fill(quantumyield(o3xdata,((x->true, 0.),)),GV.n_all_layers) for ihoriz in 1:GV.n_horiz]
 
+    # TODO: These are sort of redundant with the loop on line 254. This could be tidied up. 
     # H2 and HD photodissociation --------------------------------------------------
     # H2+hv->H+H
     # xsect_dict[get_Jrate_symb("H2", ["H", "H"])] = fill(h2xdata, GV.n_all_layers)
@@ -270,6 +271,7 @@ function populate_xsect_dict(pd_dataf, xsecfolder; ion_xsects=true, globvars...)
     xsect_dict[get_Jrate_symb("HDO2", ["HDO", "O1D"])] = compute_by_T(t->quantumyield(hdo2xsect(hdo2xdata, t), ((x->true, 0),)))
 
     # The following reactions have associated files listing cross sections.
+    # TODO: Ideally this should not be hard coded in; ought to be passed in based on the reaction spreadsheet.
     reactant_product_sets = Dict("CO2"=>[["CO2pl"], ["CO2plpl"], ["Cplpl", "O2"], ["Cpl", "O2"], ["COpl", "Opl"], ["COpl", "O"], ["Opl", "CO"], ["Opl", "Cpl", "O"], ["C", "O", "O"], ["C", "O2"]],
                                  "CO"=>[["COpl"],  ["C", "Opl"],  ["O", "Cpl"], ["C", "O"]],
                                  "H2O"=>[["H2Opl"], ["Opl", "H2"], ["Hpl", "OH"], ["OHpl", "H"]],
@@ -277,7 +279,7 @@ function populate_xsect_dict(pd_dataf, xsecfolder; ion_xsects=true, globvars...)
                                  "N2"=>[["N2pl"], ["Npl", "N"]],
                                  "NO2"=>[["NO2pl"], ["NO", "O"]],
                                  "NO"=>[["NOpl"], ["N", "O"]],
-                                 "N2O"=>[["N2Opl"], ["N2", "O1D"], ["N2", "O1D"]],
+                                 "N2O"=>[["N2Opl"], ["N2", "O1D"]],
                                  "H"=>[["Hpl"]],
                                  "D"=>[["Dpl"]],
                                  "H2"=>[["H2pl"], ["Hpl", "H"]],
@@ -286,7 +288,18 @@ function populate_xsect_dict(pd_dataf, xsecfolder; ion_xsects=true, globvars...)
                                  "HDO2"=>[["HDO2pl"]],
                                  "O"=>[["Opl"]],
                                  "O2"=>[["O2pl"]],
-                                 "O3"=>[["O3pl"]])
+                                 "O3"=>[["O3pl"]],
+
+                                # Cl containing species
+                                "HCl"=>[["H","Cl"]],
+                                "DCl"=>[["D","Cl"]],
+                                #S containing species
+                                "SO2"=>[["SO","O"], ["S","O2"]],
+                                "SO3"=>[["SO2","O"]], #there may be more possible products than what I have listed, but JPL didn't give a recomended quantum yield
+                                "H2SO4"=>[["SO3","H2O"]], # same issue as SO3, JPL did not give a recomended quantum yield
+                                "HDSO4"=>[["SO3","HDO"]]) # uses mass scaeling of H2SO4
+    
+        
 
     for r in keys(reactant_product_sets)
         for ps in reactant_product_sets[r]
