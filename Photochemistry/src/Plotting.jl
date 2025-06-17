@@ -190,20 +190,26 @@ function plot_atm(atmdict::Dict{Symbol, Vector{Array{ftype_ncur}}}, savepath::St
 
             # plot the neutrals according to logical groups --------------------------------------
             for sp in GV.neutral_species
-                atm_ax[axes_by_sp[sp], 1].plot(
-                    convert(Array{Float64}, atmdict[sp][ihoriz]), GV.plot_grid, 
-                    color=get(GV.speciescolor, sp, "black"), linewidth=2, 
-                    label=string_to_latexstr(string(sp)), linestyle=get(GV.speciesstyle, sp, "-"), zorder=2
-                )
+                if haskey(atmdict, sp)
+                    ax_idx = get(axes_by_sp, sp, 1)
+                    atm_ax[ax_idx, 1].plot(
+                        convert(Array{Float64}, atmdict[sp][ihoriz]), GV.plot_grid,
+                        color=get(GV.speciescolor, sp, "black"), linewidth=2,
+                        label=string_to_latexstr(string(sp)), linestyle=get(GV.speciesstyle, sp, "-"), zorder=2
+                    ) # added haskey checks in plot_atm so that only species present in the atmosphere dictionary are plotted, preventing KeyError exceptions
+                end
             end
 
             # plot the ions according to logical groups ------------------------------------------
             for sp in GV.ion_species
-                atm_ax[axes_by_sp[sp], 2].plot(
-                    convert(Array{Float64}, atmdict[sp][ihoriz]), GV.plot_grid, 
-                    color=get(GV.speciescolor, sp, "black"), linewidth=2, 
-                    label=string_to_latexstr(string(sp)), linestyle=get(GV.speciesstyle, sp, "-"), zorder=2
-                )
+                if haskey(atmdict, sp)
+                    ax_idx = get(axes_by_sp, sp, 1)
+                    atm_ax[ax_idx, 2].plot(
+                        convert(Array{Float64}, atmdict[sp][ihoriz]), GV.plot_grid,
+                        color=get(GV.speciescolor, sp, "black"), linewidth=2,
+                        label=string_to_latexstr(string(sp)), linestyle=get(GV.speciesstyle, sp, "-"), zorder=2
+                    )
+                end
             end
 
             # plot electron profile --------------------------------------------------------------
@@ -242,11 +248,13 @@ function plot_atm(atmdict::Dict{Symbol, Vector{Array{ftype_ncur}}}, savepath::St
             atm_fig, atm_ax = subplots(figsize=(16,6))
             tight_layout()
             for sp in GV.neutral_species
-                atm_ax.plot(convert(Array{Float64}, atmdict[sp][ihoriz]), GV.plot_grid, 
-                            color=get(GV.speciescolor, sp, "black"),
-                            linewidth=2, label=sp, linestyle=get(GV.speciesstyle, sp, "-"), zorder=1)
-                atm_ax.set_xlim(xlim_1[1], xlim_1[2])
-                atm_ax.set_ylabel("Altitude [km]")
+                if haskey(atmdict, sp)
+                    atm_ax.plot(convert(Array{Float64}, atmdict[sp][ihoriz]), GV.plot_grid,
+                                color=get(GV.speciescolor, sp, "black"),
+                                linewidth=2, label=sp, linestyle=get(GV.speciesstyle, sp, "-"), zorder=1)
+                    atm_ax.set_xlim(xlim_1[1], xlim_1[2])
+                    atm_ax.set_ylabel("Altitude [km]")
+                end
             end
             atm_ax.tick_params(which="both", labeltop=true, top=true)
             plot_bg(atm_ax)
@@ -1176,7 +1184,7 @@ function plot_temp_prof(Tprof_1; opt="", cols=[medgray, "xkcd:bright orange", "c
     ax.set_ylabel("Altitude [km]")
     ax.set_yticks(collect(0:50:Int64(GV.alt[end]/1e5)))
     ax.set_xlabel("Temperature [K]")
-    ax.set_xlim(95, 3e2) # 95, 2e3
+    ax.set_xlim(95, 2e3)
     ax.set_ylim(80, 120)
     ax.tick_params(which="both", axis="x", top=true, labeltop=true)
 

@@ -80,8 +80,21 @@ function get_ncurrent(readfile::String, n_horiz::Int64)
     
     n_current = Dict{Symbol, Vector{Array{ftype_ncur}}}()
 
+    # Determine desired number of altitude layers from the currently loaded
+    # parameters, if available. Fall back to the length of the profiles in the
+    # file.
+    target_layers = isdefined(Main, :num_layers) ? Main.num_layers : size(n_current_mat, 1)
+
+    # Slice or pad the profiles so that their length matches the altitude grid
     for ispecies in eachindex(n_current_tag_list)
         profile = convert(Vector{ftype_ncur}, n_current_mat[:, ispecies])
+
+        if length(profile) > target_layers
+            profile = profile[1:target_layers]
+        elseif length(profile) < target_layers
+            profile = vcat(profile, fill(last(profile), target_layers - length(profile)))
+        end
+
         n_current[n_current_tag_list[ispecies]] = fill(profile, n_horiz)
     end
     return n_current

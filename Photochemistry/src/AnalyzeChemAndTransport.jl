@@ -341,7 +341,9 @@ function volume_rate_wrapper(sp, source_rxns, source_rxn_rc_funcs, atmdict, Mtot
                 :n_alt_index, :Tn, :Ti, :Te, :dz, :zmax]
     check_requirements(keys(GV), required)
 
-    rates = Array{ftype_ncur}(undef, length(source_rxns), GV.num_layers)
+    # each column corresponds to a reaction and each row corresponds to an
+    # altitude. This orientation matches how we populate the array below.
+    rates = Array{ftype_ncur}(undef, GV.num_layers, length(source_rxns))
 
     # Extract the temperature for this horizontal column explicitly
     Tn_col = GV.Tn[ihoriz, :]

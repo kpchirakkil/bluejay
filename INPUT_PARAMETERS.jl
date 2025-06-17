@@ -21,6 +21,7 @@ const planet = "Mars"
 # =======================================================================================================
 const results_dir = code_dir*"../Results_$(planet)/"
 const initial_atm_file = "$(planet)-Inputs/INITIAL_GUESS_MARS_bxz4YnHk.h5"  # File to use to initialize the atmosphere.
+# const initial_atm_file = "$(planet)-Inputs/INITIAL_GUESS_VENUS_oUT0ZbGN.h5"  # File to use to initialize the atmosphere.
     # OPTIONS: 
     # INITIAL_GUESS_MARS.h5 --> Basic Mars starting file.
     # INITIAL_GUESS_MARS_bxz4YnHk.h5 --> A Mars atmosphere that includes N2O, NO2, and their ions;
@@ -188,7 +189,7 @@ const do_trans = true  # Often useful for troubleshooting or converging new atmo
 const adding_new_species = false
 const make_new_alt_grid = false  # Set to true if extending the altitude grid. TODO: Need to re-write that code.
 const use_nonzero_initial_profiles = true
-const n_horiz = 3 # number of vertical columns
+const n_horiz = 1 # number of vertical columns
     # OPTIONS: 
     # true -- uses initial guess densities for species based on previous model output.
     # false -- sets species to zero density and lets the chemistry and transport build them up.

@@ -29,7 +29,7 @@ Note that this is a simplified version with 4 species and 7 altitude bins.
 ## My next planned steps were:
 - I was about to expand MODEL_SETUP.jl to incorporate multiple temperature profiles for each vertical column.
 - Currently, horizontal transport is set to zero. The model is currently not set up for non-zero horizontal fluxes. Need to add the terms for the horizontal transport to the ∂ni/∂t equation (see Mike’s summary sheet with equations). I had just added horiz_wind_v in MODEL_SETUP.jl to include some horizontal velocities (set to 0 currently).
-- All of the places that might need to be looked at/checked/adapted in the future are indicated with the comment “#MULTICOL WARNING”
+- All of the places that might need to be looked at/checked/adapted in the future are indicated with the comment "#MULTICOL WARNING"
 
 ## My medium-term planned steps were (not necessarily in a linear order):
 - Test that the model is doing the right thing.
@@ -42,11 +42,11 @@ Note that this is a simplified version with 4 species and 7 altitude bins.
 
 ## Small things to note:
 - Some further edits will need to be made to function diffusion_timescale in AnalyzeChemAndTransport if this is ever called (it isn’t set to be called in the current set-up).
-- In some places where function n_tot is called, I have hardcoded the argument ihoriz as 1 for the time being, which will need to be changed for flexibility going forward. There is a ‘#MULTICOL WARNING’ comment in each instance of this.
+- In some places where function n_tot is called, I have hardcoded the argument ihoriz as 1 for the time being, which will need to be changed for flexibility going forward. There is a '#MULTICOL WARNING' comment in each instance of this.
 
 # Bluejay expansion from 1-D to 2-D: NEW UPDATES
 
-- Continuing working on a simplified version with 4 species (O, O2, O3, and O+) and 7 altitude bins (90 to 106 km, dz = 2 km) and 3 horizontal columns
+- Continuing working on a simplified version with 4 species (O, O2, O3, and Opl) and 7 altitude bins (90 to 106 km, dz = 2 km) and 3 horizontal columns
 - Two-dimensional temperature arrays are defined with horizontal index first and altitude second. MODEL_SETUP.jl initializes Tn_temp, Ti_temp, and Te_temp with shape (n_horiz, num_layers+2) and fills them using Tn_temp[ihoriz, :] etc., then stores them as global constants Tn_arr, Ti_arr, and Te_arr
 - Dcoef! operates column-by-column by extracting T_arr_2D[ihoriz, :]; the indexing matches the (n_horiz, num_layers+2) layout used throughout the codebase
 - Solar absorption arrays from optical_depth are built as a vector over horizontal columns containing altitude arrays (solarabs[ihoriz][ialt]), explicitly documented as “structured as [n_horiz, num_layers]” and accessed with that ordering when computing Jrates
@@ -61,3 +61,7 @@ Note that this is a simplified version with 4 species and 7 altitude bins.
 - Ignore JuliaODEsolver.jl (an optional submodule with functions to utilize the Julia ODE solvers), since it is not presently used in this work as the Gear solver (included in the converge_new_file.jl script) works better.
 - No need to do tests like "python3 simple_analytic_test.py" or "julia horizontal_transport_test.jl" in every iteration
 - No need to run Julia scripts, since Julia is not installed in the environment
+
+## In the process of putting all the species and altitudes back in
+
+- Make sure the 2-D multicolumn framework is wroking in full set-up with horizontal transport implemented.
