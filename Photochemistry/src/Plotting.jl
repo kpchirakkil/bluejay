@@ -1121,7 +1121,11 @@ end
 
 function plot_temp_prof(Tprof_1; opt="", cols=[medgray, "xkcd:bright orange", "cornflowerblue"], styles=["-", "-", "-"], lbls=["Neutrals", "Ions", "Electrons"], Tprof_2=nothing, Tprof_3=nothing, savepath=nothing, showonly=false, globvars...)
     #=
-    Creates a .png image of the tepmeratures plotted by altitude in the atmosphere
+    Creates a .png image of the temperatures plotted by altitude in the atmosphere.
+
+    `Tprof_1`, `Tprof_2`, and `Tprof_3` are expected to be two-dimensional
+    arrays with size `(n_horiz, num_layers+2)` so that each horizontal column can
+    be plotted separately.
 
     Inputs:
         Tprof_1: an array of neutral temperature by altitude
@@ -1184,8 +1188,8 @@ function plot_temp_prof(Tprof_1; opt="", cols=[medgray, "xkcd:bright orange", "c
     ax.set_ylabel("Altitude [km]")
     ax.set_yticks(collect(0:50:Int64(GV.alt[end]/1e5)))
     ax.set_xlabel("Temperature [K]")
-    ax.set_xlim(95, 2e3)
-    ax.set_ylim(80, 120)
+    # ax.set_xlim(95, 2e3)
+    # ax.set_ylim(80, 120)
     ax.tick_params(which="both", axis="x", top=true, labeltop=true)
 
     if showonly==true

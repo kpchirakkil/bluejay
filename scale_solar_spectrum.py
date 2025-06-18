@@ -139,5 +139,13 @@ descriptive_tag = input()
 solarspec = np.loadtxt(solarfile, skiprows=numheader)
 
 solarspec_df = pd.DataFrame(solarspec, columns=["λ (nm)", "irradiance (W/m^2/nm)"])
-solarspec_df_tidy = interpolate_solar_spectrum(solarspec_df, theAU, show_plots=True, scale_above=189.51, desctag=descriptive_tag)
-solarspec_df_tidy.to_csv(f"marssolarphotonflux_{descriptive_tag}.dat", sep='\t', float_format="%.2f", columns=["λ (nm)", "photon flux (γ/s/cm^2/nm)"], index=False)
+solarspec_df_tidy = interpolate_solar_spectrum(
+    solarspec_df, theAU, show_plots=True, scale_above=189.51, desctag=descriptive_tag
+)
+solarspec_df_tidy.to_csv(
+    f"marssolarphotonflux_{descriptive_tag}.dat",
+    sep="\t",
+    float_format="%.2f",
+    columns=["λ (nm)", "photon flux (γ/s/cm^2/nm)"],
+    index=False,
+)

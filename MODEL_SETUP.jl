@@ -204,7 +204,7 @@ const e_profile_type = ions_included==true ? "quasineutral" : "none"
 const zmin = Dict("Venus"=>90e5, "Mars"=>0.)[planet]
 const dz = 2e5  # Discretized layer thickness
 const dx = 2e5  # Width of one vertical column -- could be used to calculate horizontal transport flux boundary condition (if it wasn't 0)
-const zmax = 150e5  # Top altitude (cm)
+const zmax = 250e5  # Top altitude (cm)
 const alt = convert(Array, (zmin:dz:zmax)) # These are the layer centers.
 const n_all_layers = length(alt)
 const intaltgrid = round.(Int64, alt/1e5)[2:end-1]; # the altitude grid CELLS but in integers.

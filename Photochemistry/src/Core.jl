@@ -179,7 +179,8 @@ function meanmass(atmdict::Dict{Symbol, Vector{Array{ftype_ncur}}}, n_horiz::Int
     required = [:all_species, :molmass, :n_alt_index]
     check_requirements(keys(GV), required)
 
-    counted_species = setdiff(GV.all_species, ignore)
+    # counted_species = setdiff(GV.all_species, ignore)
+    counted_species = [s for s in GV.all_species if haskey(atmdict, s) && !(s in ignore)]
 
     # Delete ignored species from the dictionary since we have to transform it
     trimmed_atmdict = deepcopy(atmdict)
@@ -219,7 +220,8 @@ function n_tot(atmdict::Dict{Symbol, Vector{Array{ftype_ncur}}}, z, ihoriz::Int6
     required = [:n_alt_index, :all_species]
     check_requirements(keys(GV), required)
 
-    counted_species = setdiff(GV.all_species, ignore)
+    # counted_species = setdiff(GV.all_species, ignore)
+    counted_species = [s for s in GV.all_species if haskey(atmdict, s) && !(s in ignore)]
 
     thisaltindex = GV.n_alt_index[z]
     # Sum the densities of all counted species at the specified altitude and
@@ -243,9 +245,13 @@ function n_tot(atmdict::Dict{Symbol, Vector{Array{ftype_ncur}}}, ihoriz::Int64; 
     GV = values(globvars)
     required =  [:all_species]
     check_requirements(keys(GV), required)
-
-    counted_species = setdiff(GV.all_species, ignore)
+    
+    # counted_species = setdiff(GV.all_species, ignore)
+    counted_species = [s for s in GV.all_species if haskey(atmdict, s) && !(s in ignore)]
     # allocate an array to gather density profiles for this vertical column
+    if isempty(counted_species)
+        return zeros(length(atmdict[collect(keys(atmdict))[1]][ihoriz]))
+    end
     ndensities = zeros(length(counted_species), length(atmdict[collect(keys(atmdict))[1]][ihoriz]))
 
     for i in 1:length(counted_species)
@@ -276,6 +282,11 @@ function optical_depth(n_cur_densities; n_horiz::Int64, globvars...)
 
     for jspecies in GV.Jratelist
         species = GV.absorber[jspecies]
+
+        # Skip species absent from either the current atmosphere or the cross-section dictionary
+        if !(haskey(n_cur_densities, species) && haskey(GV.crosssection, jspecies))
+            continue
+        end
 
         for ihoriz in 1:n_horiz
             jcolumn = convert(Float64, 0.)
@@ -464,7 +475,11 @@ function flatten_atm(atmdict::Dict{Symbol, Vector{Array{ftype_ncur}}}, species_l
     required =  [:num_layers]
     check_requirements(keys(GV), required)
 
-    return deepcopy(ftype_ncur[[atmdict[sp][ihoriz][ialt] for sp in species_list, ialt in 1:GV.num_layers, ihoriz in 1:n_horiz]...])
+    # return deepcopy(ftype_ncur[[atmdict[sp][ihoriz][ialt] for sp in species_list, ialt in 1:GV.num_layers, ihoriz in 1:n_horiz]...])
+    return deepcopy(ftype_ncur[[haskey(atmdict, sp) ? atmdict[sp][ihoriz][ialt] : 0.0
+                               for sp in species_list,
+                               ialt in 1:GV.num_layers,
+                               ihoriz in 1:n_horiz]...])
 end
 
 function ncur_with_boundary_layers(atmdict_no_bdys::Dict{Symbol, Vector{Array{ftype_ncur}}}, n_horiz::Int64; globvars...)
@@ -1090,6 +1105,11 @@ function update_Jrates!(n_cur_densities::Dict{Symbol, Vector{Array{ftype_ncur}}}
 
     # Initialize and calculate Jrates independently for each horizontal column
     for j in GV.Jratelist
+        # Skip J-rates lacking cross sections or whose absorber species is absent
+        if !(haskey(GV.crosssection, j) && haskey(n_cur_densities, GV.absorber[j]))
+            continue
+        end
+
         n_cur_densities[j] = [zeros(Float64, GV.num_layers) for ihoriz in 1:n_horiz]
 
         for ihoriz in 1:n_horiz
@@ -1313,7 +1333,13 @@ function T_Mars(Tsurf, Tmeso, Texo; lapserate=-1.4e-5, z_meso_top=108e5, weird_T
     i_upper = findall(z->z > z_meso_top, GV.alt)
     i_meso_top = findfirst(z->z==z_meso_top, GV.alt)
     i_stitch_elec = findfirst(z->z==z_stitch_electrons, GV.alt)
+    if i_stitch_elec === nothing
+        i_stitch_elec = length(GV.alt)
+    end
     i_stitch_ions = findfirst(z->z==z_stitch_ions, GV.alt)
+    if i_stitch_ions === nothing
+        i_stitch_ions = length(GV.alt)
+    end
 
     function NEUTRALS()
         function upper_atmo_neutrals(z_arr)

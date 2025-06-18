@@ -21,7 +21,20 @@ def find_nearest(array, value):
     idx = (np.abs(array - value)).argmin()
     return idx
    
-def interpolate_solar_spectrum(spec, AU, planet, show_plots=True, extrap_tail=True, scale_below=0, scale_above=0, interp_start=0.5, interp_end=2389.51, dl=1, desctag=""):    """
+def interpolate_solar_spectrum(
+    spec,
+    AU,
+    planet,
+    show_plots=True,
+    extrap_tail=True,
+    scale_below=0,
+    scale_above=0,
+    interp_start=0.5,
+    interp_end=2389.51,
+    dl=1,
+    desctag="",
+):
+    """
     Input: 
         spec: Pandas dataframe
               Contains solar spectrum data from 0.1-2390 nm or so. The binning may be arbitrary.

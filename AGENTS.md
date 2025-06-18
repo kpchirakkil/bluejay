@@ -64,4 +64,4 @@ Note that this is a simplified version with 4 species and 7 altitude bins.
 
 ## In the process of putting all the species and altitudes back in
 
-- Make sure the 2-D multicolumn framework is wroking in full set-up with horizontal transport implemented.
+- Make sure the 2-D multicolumn framework is working in the full set-up with horizontal transport implemented.

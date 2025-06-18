@@ -1283,8 +1283,10 @@ HDOprum = [precip_microns(:HDO, [n_current[:HDO][ih][1]; n_current[:HDO][ih]; n_
 # outside of the primary ODE solver. Inactive species never change during simulation.
 # Jrates must be stored here because they have to be updated alongside evolution
 # of the atmospheric densities--the solver doesn't handle their values currently.
-const external_storage = Dict{Symbol, Vector{Array{Float64}}}([j=>n_current[j] for j in union(short_lived_species, inactive_species, Jratelist)])
-const n_inactive = flatten_atm(n_current, inactive_species, n_horiz; num_layers)
+
+# See SOLAR INPUT
+# const external_storage = Dict{Symbol, Vector{Array{Float64}}}([j=>n_current[j] for j in union(short_lived_species, inactive_species, Jratelist)])
+# const n_inactive = flatten_atm(n_current, inactive_species, n_horiz; num_layers)
 
 # **************************************************************************** #
 #                                                                              #
@@ -1604,6 +1606,19 @@ end
 
 # this is the unitialized array for storing values
 # solarabs = fill(fill(0.,size(solarflux, 1)), num_layers);
+
+update_Jrates!(n_current, n_horiz;
+               Jratelist=Jratelist,
+               crosssection=crosssection,
+               num_layers=num_layers,
+               absorber=absorber,
+               dz=dz,
+               solarflux=solarflux)
+const external_storage = Dict{Symbol, Vector{Array{Float64}}}(
+    [j => n_current[j] for j in union(short_lived_species, inactive_species, Jratelist)
+     if haskey(n_current, j)]
+)
+const n_inactive = flatten_atm(n_current, inactive_species, n_horiz; num_layers)
 
 # **************************************************************************** #
 #                                                                              #
