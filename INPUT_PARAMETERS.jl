@@ -195,3 +195,7 @@ const n_horiz = 1 # number of vertical columns
     # false -- sets species to zero density and lets the chemistry and transport build them up.
 const use_ambipolar = true # Toggle ambipolar diffusion for ions.
 const use_molec_diff = true # Toggle molecular diffusion. If turned off, eddy diffusion remains active.
+
+# Default horizontal wind speed in cm/s used to initialize wind profiles in
+# `MODEL_SETUP.jl`. Set to zero for no horizontal transport.
+const horiz_wind_speed = 10.0

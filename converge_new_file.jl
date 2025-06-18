@@ -1203,17 +1203,17 @@ if update_water_profile
 
             # Recalculate the initialization fraction for H2O in each column
             H2Oinitfrac = [set_h2oinitfrac_bySVP(n_current, hygropause_alt;
-                                                ihoriz=ih, all_species, alt, num_layers,
+                                                ihoriz=ihoriz, all_species, alt, num_layers,
                                                 n_alt_index, H2Osat, water_mixing_ratio)[1]
-                           for ih in 1:n_horiz]
+                           for ihoriz in 1:n_horiz]
             
             prevh2o = deepcopy(n_current[:H2O])
             prevhdo = deepcopy(n_current[:HDO])
 
-            for ih in 1:n_horiz
-                ntot_col = n_tot(n_current, ih; n_alt_index, all_species)
-                n_current[:H2O][ih][1:upper_lower_bdy_i] .= H2Oinitfrac[ih][1:upper_lower_bdy_i] .* ntot_col[1:upper_lower_bdy_i]
-                n_current[:HDO][ih][1:upper_lower_bdy_i] .= 2 * DH * n_current[:H2O][ih][1:upper_lower_bdy_i]
+            for ihoriz in 1:n_horiz
+                ntot_col = n_tot(n_current, ihoriz; n_alt_index, all_species)
+                n_current[:H2O][ihoriz][1:upper_lower_bdy_i] .= H2Oinitfrac[ihoriz][1:upper_lower_bdy_i] .* ntot_col[1:upper_lower_bdy_i]
+                n_current[:HDO][ihoriz][1:upper_lower_bdy_i] .= 2 * DH * n_current[:H2O][ihoriz][1:upper_lower_bdy_i]
             end
         else 
             # Create the new multipliers to change the profiles
@@ -1239,9 +1239,9 @@ if update_water_profile
         # Recalculate the initialization fraction for H2O for each column
         H2Oinitfrac = Vector{Vector{ftype_ncur}}(undef, n_horiz)
         H2Osatfrac = Vector{Vector{ftype_ncur}}(undef, n_horiz)
-        for ih in 1:n_horiz
-            H2Oinitfrac[ih], H2Osatfrac[ih] = set_h2oinitfrac_bySVP(n_current, hygropause_alt;
-                                                                    ihoriz=ih, all_species, alt,
+        for ihoriz in 1:n_horiz
+            H2Oinitfrac[ihoriz], H2Osatfrac[ihoriz] = set_h2oinitfrac_bySVP(n_current, hygropause_alt;
+                                                                    ihoriz=ihoriz, all_species, alt,
                                                                     num_layers, n_alt_index,
                                                                     H2Osat, water_mixing_ratio)
         end
@@ -1252,17 +1252,17 @@ if update_water_profile
         if modified_water_alts == "below fixed point"
             # in this case, we are going to re-set the lower atmosphere directly
             # but not change the upper atmosphere from whatever it previously was.
-            for ih in 1:n_horiz
-                ntot_col = n_tot(n_current, ih; n_alt_index, all_species)
-                n_current[:H2O][ih][1:upper_lower_bdy_i] .= H2Oinitfrac[ih][1:upper_lower_bdy_i] .* ntot_col[1:upper_lower_bdy_i]
-                n_current[:HDO][ih][1:upper_lower_bdy_i] .= 2 * DH * n_current[:H2O][ih][1:upper_lower_bdy_i]
+            for ihoriz in 1:n_horiz
+                ntot_col = n_tot(n_current, ihoriz; n_alt_index, all_species)
+                n_current[:H2O][ihoriz][1:upper_lower_bdy_i] .= H2Oinitfrac[ihoriz][1:upper_lower_bdy_i] .* ntot_col[1:upper_lower_bdy_i]
+                n_current[:HDO][ihoriz][1:upper_lower_bdy_i] .= 2 * DH * n_current[:H2O][ihoriz][1:upper_lower_bdy_i]
             end
         elseif modified_water_alts == "above fixed point"
             # in this case, we modify the upper atmosphere. For some reason. Probably never do this.
-            for ih in 1:n_horiz
-                ntot_col = n_tot(n_current, ih; n_alt_index, all_species)
-                n_current[:H2O][ih][upper_lower_bdy_i+1:end] .= H2Oinitfrac[ih][upper_lower_bdy_i+1:end] .* ntot_col[upper_lower_bdy_i+1:end]
-                n_current[:HDO][ih][upper_lower_bdy_i+1:end] .= 2 * DH * n_current[:H2O][ih][upper_lower_bdy_i+1:end]
+            for ihoriz in 1:n_horiz
+                ntot_col = n_tot(n_current, ihoriz; n_alt_index, all_species)
+                n_current[:H2O][ihoriz][upper_lower_bdy_i+1:end] .= H2Oinitfrac[ihoriz][upper_lower_bdy_i+1:end] .* ntot_col[upper_lower_bdy_i+1:end]
+                n_current[:HDO][ihoriz][upper_lower_bdy_i+1:end] .= 2 * DH * n_current[:H2O][ihoriz][upper_lower_bdy_i+1:end]
             end
         end
 
@@ -1274,8 +1274,8 @@ if update_water_profile
 end
 
 # Calculate precipitable microns, including boundary layers (assumed same as nearest bulk layer)
-H2Oprum = [precip_microns(:H2O, [n_current[:H2O][ih][1]; n_current[:H2O][ih]; n_current[:H2O][ih][end]]; molmass, dz) for ih in 1:n_horiz]
-HDOprum = [precip_microns(:HDO, [n_current[:HDO][ih][1]; n_current[:HDO][ih]; n_current[:HDO][ih][end]]; molmass, dz) for ih in 1:n_horiz]
+H2Oprum = [precip_microns(:H2O, [n_current[:H2O][ihoriz][1]; n_current[:H2O][ihoriz]; n_current[:H2O][ihoriz][end]]; molmass, dz) for ihoriz in 1:n_horiz]
+HDOprum = [precip_microns(:HDO, [n_current[:HDO][ihoriz][1]; n_current[:HDO][ihoriz]; n_current[:HDO][ihoriz][end]]; molmass, dz) for ihoriz in 1:n_horiz]
 
 #           Define storage for species/Jrates not solved for actively           #
 #===============================================================================#
@@ -1375,8 +1375,6 @@ const active_longlived_species_rates, short_lived_density_eqn,
 
 #          Arguments and expressions for metaprogramming functions              #
 #===============================================================================#
-# const ratefn_arglist = [active_longlived; active_longlived_above; active_longlived_below; active_shortlived; inactive_species; Jratelist; 
-#                         :Tn; :Ti; :Te; :M; :E; local_transport_rates; local_transport_rates_horiz]; # E FIX ATTEMPT
 const ratefn_arglist = [active_longlived;
                         active_longlived_above;
                         active_longlived_below;
@@ -1387,7 +1385,6 @@ const ratefn_arglist = [active_longlived;
                         :Tn; :Ti; :Te; :M; :E;
                         local_transport_rates; local_transport_rates_horiz];
 const ratefn_arglist_typed = [:($s::ftype_chem) for s in ratefn_arglist];
-# const set_concentration_arglist = [active_shortlived; active_longlived; inactive_species; Jratelist; :Tn; :Ti; :Te; :M; :E]; # E FIX ATTEMPT
 const set_concentration_arglist = [active_shortlived; active_longlived; inactive_species; Jratelist; :Tn; :Ti; :Te; :M; :E];
 const set_concentration_arglist_typed = [:($s::ftype_chem) for s in set_concentration_arglist];
 
@@ -1415,9 +1412,9 @@ const set_concentration_arglist_typed = [:($s::ftype_chem) for s in set_concentr
         =#
 
         # M and E are calculated here to ensure that the right number of ions/electrons
-        # is used. 
+        # is used.
         # M = $Mexpr
-        # E = $Eexpr # E FIX ATTEMPT
+        # E = $Eexpr
 
         # stack overflow - answer (Cite)
         # create a result array for evaluating the production and loss expressions
@@ -1478,8 +1475,8 @@ end
         =#
 
         # M = $Mexpr
-        # E = $Eexpr  # E FIX ATTEMPT
-         
+        # E = $Eexpr
+        
         # Make a result array in which to store evaluated expressions 
         density_result = map(_ -> 0., $short_lived_density_eqn)  # will hold evaluated expressions.
         evaluated_inputs = map(_ -> 0., $shortlived_density_inputs) 
@@ -1737,7 +1734,7 @@ if ftype_ncur==Double64
     write_to_log(logfile, "$(Dates.format(now(), "(HH:MM:SS)")) Started first chemical jacobian compile")
 
     # Set up the initial state and check for any problems 
-    M = [n_tot(n_current, ih; all_species) for ih in 1:n_horiz]
+    M = [n_tot(n_current, ihoriz; all_species) for ihoriz in 1:n_horiz]
     E = electron_density(n_current; e_profile_type, non_bdy_layers, ion_species)
 
     nstart = flatten_atm(n_current, active_longlived; num_layers)
@@ -1745,8 +1742,8 @@ if ftype_ncur==Double64
 
     # Set up parameters
     Dcoef_arr_template = [zeros(size(Tn_arr)) for ihoriz in 1:n_horiz] # For making diffusion coefficient calculation go faster
-    params = [#inactive, inactive_species, active_species, active_longlived, active_shortlived, Tn_arr, Ti_arr, Te_arr, Tplasma_arr, 
-              Dcoef_arr_template, M, E] # E FIX ATTEMPT
+    params = [#inactive, inactive_species, active_species, active_longlived, active_shortlived, Tn_arr, Ti_arr, Te_arr, Tplasma_arr,
+              Dcoef_arr_template, M, E]
     params_exjac = deepcopy(params)  # I think this is so the Dcoef doesn't get filled in with the wrong info?
 
     # Call the expensive rate function
