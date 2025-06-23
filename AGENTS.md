@@ -52,7 +52,9 @@ Note that this is a simplified version with 4 species and 7 altitude bins.
 - Solar absorption arrays from optical_depth are built as a vector over horizontal columns containing altitude arrays (solarabs[ihoriz][ialt]), explicitly documented as “structured as [n_horiz, num_layers]” and accessed with that ordering when computing Jrates
 - Vertical boundary conditions use a dictionary keyed by species and column: bc_dict[sp][ihoriz][row, col]
 - Horizontal winds and boundary conditions
-    - The variable horiz_wind_v in MODEL_SETUP.jl provides a horizontal wind profile for each column. A constant wind of 10 cm/s is applied at all altitudes so that horizontal transport is active. update_horiz_transport_coefficients uses these velocities to create forward and backward transport rates. Edge fluxes are set through the speciesbclist_horiz dictionary; specify altitude profiles for each species to impose non-zero flux at the back and front edges. Passing cyclic=true treats the domain as periodic so that flux leaving one edge enters from the opposite side and horizontal coefficients wrap between the first and last columns.
+    - The variable `horiz_wind_v` in `MODEL_SETUP.jl` provides a horizontal wind profile for each column. By default a constant wind speed (see `horiz_wind_speed` in `INPUT_PARAMETERS.jl`) in cm/s is applied at all altitudes so that horizontal transport is active (set to zero for no horizontal transport). `update_horiz_transport_coefficients` uses these velocities to create forward and backward transport rates. 
+    - Edge fluxes are set through the `speciesbclist_horiz` dictionary; specify altitude profiles for each species to impose non-zero flux at the back and front edges. Passing `cyclic=true` treats the domain as periodic so that flux leaving one edge enters from the opposite side and horizontal coefficients wrap between the first and last columns.
+    - Horizontal advection employs an upwind scheme that averages the local and neighbouring wind speeds so that flux leaving one column exactly enters the next.
 - Verification of Jacobian and Rate Functions: To verify that the multicolumn model keeps a consistent ordering of species, altitude, and horizontal columns when building transport matrices.
 - Horizontal boundary conditions are stored separately per altitude with bc_dict_horiz[sp][ialt][row, col] and populated consistently inside the loop over ialt
 - Make sure the horizontal transport coefficients are placed correctly in the transport matrices (chemical Jacobian and rate functions)
@@ -63,3 +65,5 @@ Note that this is a simplified version with 4 species and 7 altitude bins.
 ## In the process of putting all the species and altitudes back in
 
 - Make sure the 2-D multicolumn framework is working in the full set-up (all species and altitudes) with horizontal transport implemented.
+- Make sure the multicolumn branch is working for both Mars and Venus. Master branch (1-D single column) is working for both Mars and Venus.
+- Merge multicolumn branch with master branch.
