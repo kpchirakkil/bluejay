@@ -1883,7 +1883,7 @@ function boundaryconditions_horiz(
                 #     f_backedge = [0, back_flux / GV.dx]
                 # end
                 f_backedge  = [0, -back_flux / GV.dx]
-                f_frontedge = [0, -front_flux / GV.dx]
+                f_frontedge = [0,  front_flux / GV.dx]
                 bc_dict_horiz[sp][ialt][1, :] .+= f_backedge
                 bc_dict_horiz[sp][ialt][2, :] .+= f_frontedge
             end
@@ -2324,9 +2324,18 @@ function fluxcoefs_horiz(
                     diff_front = (K_front + D_front) / GV.dx^2
                 end
 
-                v = horiz_wind_v[ihoriz][ialt]
-                adv_front = v > 0 ? v / GV.dx : 0.0
-                adv_back  = v < 0 ? -v / GV.dx : 0.0
+                # v = horiz_wind_v[ihoriz][ialt]
+                # adv_front = v > 0 ? v / GV.dx : 0.0
+                # adv_back  = v < 0 ? -v / GV.dx : 0.0
+
+                v_local = horiz_wind_v[ihoriz][ialt]
+                v_front = infront_idx <= n_horiz ? horiz_wind_v[infront_idx][ialt] : 0.0
+                v_back  = behind_idx >= 1     ? horiz_wind_v[behind_idx][ialt]  : 0.0
+
+                adv_front = (v_local > 0 ? v_local : 0.0) / GV.dx +
+                            (v_front < 0 ? -v_front : 0.0) / GV.dx
+                adv_back  = (v_local < 0 ? -v_local : 0.0) / GV.dx +
+                            (v_back  > 0 ? v_back  : 0.0) / GV.dx
 
                 fluxcoef_dict[s][ihoriz][ialt, 1] = diff_back + adv_back
                 fluxcoef_dict[s][ihoriz][ialt, 2] = diff_front + adv_front

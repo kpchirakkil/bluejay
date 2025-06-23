@@ -95,7 +95,7 @@ The Photochemistry module contains several submodules:
 - Ensure that the root folder contains the `Photochemistry` folder, the `uvxsect` folder, and the following scripts and files:
   - `converge_new_file.jl`
   - `CONSTANTS.jl`: True physical constants. Should never need to be changed unless adding new constants.
- - `PLOT_STYLES.jl`: Styling choices for model plots.
+  - `PLOT_STYLES.jl`: Styling choices for model plots.
   - `INPUT_PARAMETERS.jl`: Parameters that the user can change before running the model. 
   - `MODEL_SETUP.jl`: Some basic model parameters that don't change much, but depend on information in INPUT_PARAMETERS.jl.
   - `{PlanetName}-Inputs/REACTION_NETWORK_{PlanetName}.jl`, reaction rate data for the chemical network. Although rate constants don't change, these files also include the enthalpy calculations for each reaction and the excess energy of that reaction above escape velocity - which DOES change per planet. These sheets must be recalculated once for any new planet used in the model.
@@ -131,12 +131,14 @@ This list may be incomplete. If you discover a necessary step that isn't written
 10. Converge a new atmosphere with the new species. Once successful:
   - Save the output `final_atmosphere.h5` as the new initial guess file for that planet
   - Set the newly introduced photodissociation/photoionization reactions to "Conv" in the "Status" column of the appropriate tabs within the reaction network spreadsheet
-  - Set `adding_new_species` variable in `INPUT_PARAMETERS`.jl to false.
+  - Set `adding_new_species` variable in `INPUT_PARAMETERS.jl` to false.
   - Move the new species' symbols to the "`conv`" lists in `MODEL_SETUP.jl`.
 
 ### Horizontal winds and boundary conditions
 
-The variable `horiz_wind_v` in `MODEL_SETUP.jl` provides a horizontal wind profile for each column. By default a small constant wind of 10&nbsp;cm/s is applied at all altitudes so that horizontal transport is active. `update_horiz_transport_coefficients` uses these velocities to create forward and backward transport rates. Edge fluxes are set through the `speciesbclist_horiz` dictionary; specify altitude profiles for each species to impose non-zero flux at the back and front edges. Passing `cyclic=true` treats the domain as periodic so that flux leaving one edge enters from the opposite side and horizontal coefficients wrap between the first and last columns.
+- The variable `horiz_wind_v` in `MODEL_SETUP.jl` provides a horizontal wind profile for each column. By default a constant wind speed (see `horiz_wind_speed` in `INPUT_PARAMETERS.jl`) in cm/s is applied at all altitudes so that horizontal transport is active (set to zero for no horizontal transport). `update_horiz_transport_coefficients` uses these velocities to create forward and backward transport rates. 
+- Edge fluxes are set through the `speciesbclist_horiz` dictionary; specify altitude profiles for each species to impose non-zero flux at the back and front edges. Passing `cyclic=true` treats the domain as periodic so that flux leaving one edge enters from the opposite side and horizontal coefficients wrap between the first and last columns.
+- Horizontal advection employs an upwind scheme that averages the local and neighbouring wind speeds so that flux leaving one column exactly enters the next.
 
 **Running the model**:
 1. Modify `INPUT_PARAMETERS.jl` to your chosen conditions for the simulation. 

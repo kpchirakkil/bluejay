@@ -640,18 +640,18 @@ function plot_limiting_flux(atm_states, atm_keys, Tn_all; savepath=nothing, simp
     # Limiting flux
     if all_carriers
         
-        limflux_H = [limiting_flux(:H, atm_states[atm_keys[i]], Tn_all[2:end-1, i]; globvars...) +
-                     limiting_flux(:H2, atm_states[atm_keys[i]], Tn_all[2:end-1, i]; globvars...) +
-                     2 * limiting_flux(:H2O, atm_states[atm_keys[i]], Tn_all[2:end-1, i]; globvars...) +
-                     limiting_flux(:HDO, atm_states[atm_keys[i]], Tn_all[2:end-1, i]; globvars...) +
-                     limiting_flux(:OH, atm_states[atm_keys[i]], Tn_all[2:end-1, i]; globvars...) for i in therange]
-        limflux_D = [limiting_flux(:D, atm_states[atm_keys[i]], Tn_all[2:end-1, i]; globvars...) +
-                     limiting_flux(:HD, atm_states[atm_keys[i]], Tn_all[2:end-1, i]; globvars...) +
-                     limiting_flux(:HDO, atm_states[atm_keys[i]], Tn_all[2:end-1, i]; globvars...) +
-                     limiting_flux(:OD, atm_states[atm_keys[i]], Tn_all[2:end-1, i]; globvars...) for i in therange]
+        limflux_H = [limiting_flux(:H, atm_states[atm_keys[i]], Tn_all[2:end-1, i]; ihoriz=i, globvars...) +
+                     limiting_flux(:H2, atm_states[atm_keys[i]], Tn_all[2:end-1, i]; ihoriz=i, globvars...) +
+                     2 * limiting_flux(:H2O, atm_states[atm_keys[i]], Tn_all[2:end-1, i]; ihoriz=i, globvars...) +
+                     limiting_flux(:HDO, atm_states[atm_keys[i]], Tn_all[2:end-1, i]; ihoriz=i, globvars...) +
+                     limiting_flux(:OH, atm_states[atm_keys[i]], Tn_all[2:end-1, i]; ihoriz=i, globvars...) for i in therange]
+        limflux_D = [limiting_flux(:D, atm_states[atm_keys[i]], Tn_all[2:end-1, i]; ihoriz=i, globvars...) +
+                     limiting_flux(:HD, atm_states[atm_keys[i]], Tn_all[2:end-1, i]; ihoriz=i, globvars...) +
+                     limiting_flux(:HDO, atm_states[atm_keys[i]], Tn_all[2:end-1, i]; ihoriz=i, globvars...) +
+                     limiting_flux(:OD, atm_states[atm_keys[i]], Tn_all[2:end-1, i]; ihoriz=i, globvars...) for i in therange]
     else
-        limflux_H = [limiting_flux(:H, atm_states[atm_keys[i]], Tn_all[2:end-1, i]; globvars...) for i in therange]
-        limflux_D = [limiting_flux(:D, atm_states[atm_keys[i]], Tn_all[2:end-1, i]; globvars...) for i in therange]
+        limflux_H = [limiting_flux(:H, atm_states[atm_keys[i]], Tn_all[2:end-1, i]; ihoriz=i, globvars...) for i in therange]
+        limflux_D = [limiting_flux(:D, atm_states[atm_keys[i]], Tn_all[2:end-1, i]; ihoriz=i, globvars...) for i in therange]
     end
 
     # Typical escape fluxes for these files:

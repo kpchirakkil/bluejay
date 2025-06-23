@@ -6,7 +6,7 @@
 # 
 # Eryn Cangi
 # Created April 2024
-# Last edited: May 2024
+# Last edited: August 2024
 # Currently tested for Julia: 1.8.5
 ################################################################################
 
@@ -35,8 +35,8 @@ const R_P = Dict( # Planetary radius in cm
                  "Venus"=>6050e5
                 )[planet] 
 const DH = Dict( # Atmospheric D/H ratio 
-                "Mars"=>5.5 * 1.6e-4, # Yung 1988
-                "Venus"=>240 * 1.6e-4,
+                "Mars"=>5.5 * SMOW, # Yung 1988
+                "Venus"=>240 * SMOW, # Fedorova 2008
                )[planet]
 const sol_in_sec = Dict(
                         "Mars"=>88775.2438,   # One Mars sol in seconds
@@ -55,22 +55,23 @@ const SA = 4*pi*(R_P)^2 # cm^2
 #              Model species, Jrate lists, and lists of chemistry/transport species                     #
 #                                                                                                       #
 # ***************************************************************************************************** #
-
+# Minor species that have reactions available in the network files, but aren't used. These are just for
+# reference: [:CNpl,:HCNpl,:HCNHpl,:HN2Opl,:NH2pl,:NH3pl,:CH,:CN,:HCN,:HNO,:NH,:NH2,:HD2pl]
 remove_ignored_species = true # Whether to use a slightly smaller list of species and reactions (removing minor species that Roger had in his model)
 ignored_species = [:CNpl,:HCNpl,:HCNHpl,:HN2Opl,:NH2pl,:NH3pl,:N2Opl,:NO2pl,:CH,:CN,:HCN,:HNO,:NH,:NH2,:HD2pl]#:N2O,:NO2
 
 #                                        Neutrals
-# =======================================================================================================
+# ==============================================================================
 const neutral_species = [conv_neutrals[planet]..., new_neutrals...];
 
 #                                          Ions
-# =======================================================================================================
+# ==============================================================================
 const ion_species = [conv_ions[planet]..., new_ions...]
 const new_species = [new_neutrals..., new_ions...]  # Needed later to be excluded from n_tot() if adding new species
 const nontherm = ions_included==true ? true : false   # whether to do non-thermal escape. Must be here, used in call to format Jrates
  
 #                                     Full species list
-# =======================================================================================================
+# ==============================================================================
 const all_species = [neutral_species..., ion_species...];
 
 
@@ -89,7 +90,7 @@ const absorber = Dict([x=>Symbol(match(r"(?<=J).+(?=to)", string(x)).match) for 
 const D_H_analogues = Dict(:ArDpl=>:ArHpl, :Dpl=>:Hpl, :DCOpl=>:HCOpl, :HDpl=>:H2pl, :HD2pl=>:H3pl, :H2Dpl=>:H3pl, :N2Dpl=>:N2Hpl,
                            :DCO2pl=>:HCO2pl, :DOCpl=>:HOCpl, :H2DOpl=>:H3Opl, :HDOpl=>:H2Opl, :ODpl=>:OHpl)  
 const D_bearing_species = get_deuterated(all_species)
-const D_ions = get_deuterated(ion_species) #[s for s in ion_species if occursin('D', string(s))];
+const D_ions = get_deuterated(ion_species)
 const N_neutrals = [s for s in neutral_species if occursin('N', string(s))];
 
 
@@ -115,6 +116,11 @@ no_transport_species = [];
 
 # Fixed species (Densities don't update)
 # -------------------------------------------------------------------
+for s in dont_compute_either_chem_or_transport
+    push!(no_chem_species, s)
+    push!(no_transport_species, s)
+end
+
 for s in dont_compute_chemistry
     if ~(s in no_chem_species)
         push!(no_chem_species, s)
@@ -124,11 +130,6 @@ for s in dont_compute_transport
     if ~(s in no_transport_species)
         push!(no_transport_species, s)
     end
-end
-
-for s in dont_compute_either_chem_or_transport
-    push!(no_chem_species, s)
-    push!(no_transport_species, s)
 end
 
 # Chemistry and transport participants
@@ -322,6 +323,17 @@ const Te_arr = Te_temp
 # @show size(Tn_arr), size(Ti_arr), size(Te_arr)
 
 const Tplasma_arr = Ti_arr .+ Te_arr;
+# A comment on the plasma temperature: It's more rightly defined as (Te + Ti)/2, and comes into play in the diffusion
+# equation for ions. Per Schunk & Nagy 2009, equations 5.55 and 5.56, the ambipolar diffusion coefficient is 
+# Da = 2kT_p / (m_i * ν_in). This is the same as our formulation here (see Core.jl, Dcoef!()), which is 
+# Da = k(T_e + T_i) / (m_i * ν_in). The diffusion equation in our model includes a term like 1/T * dT/dz (see also
+# Schunk and Nagy 2009, equation 5.54, third term in the bracket). Note that the factor of 2 in the official definition of
+# the plasma temperature cancels out here. If we defined plasma temperature as the average of T_e and T_i, we would have an 
+# extra factor of 1/2 in the scale height (Schunk & Nagy 2009 equation 5.59) as calculated for plasma, unless we wrote a 
+# special version of scaleH() (see Core.jl) to handle the plasma temperature. To avoid reformulating our scale height 
+# function, we define the plasma temperature for the purposes of the model as simply T_e + T_i.
+# It may be warranted in the future to change this so that the definition matches with the literature appropriately.
+# --Eryn, 5 September 2024
 const Tprof_for_diffusion = Dict("neutral"=>Tn_arr, "ion"=>Tplasma_arr)
 const Tprof_for_Hs = Dict("neutral"=>Tn_arr, "ion"=>Ti_arr)
 
@@ -343,16 +355,29 @@ end
 # Water mixing ratios to use
 if planet=="Mars"
     const water_MRs = Dict("loweratmo"=>Dict("standard"=>1.3e-4, "low"=>0.65e-4, "high"=>2.6e-4), 
-                       "mesosphere"=>Dict("standard"=>1.3e-4, "high"=>1.3e-4, "low"=>1.3e-4), 
-                       "everywhere"=>Dict("standard"=>1.3e-4, "high"=>1.3e-4, "low"=>1.3e-4))
+                           "mesosphere"=>Dict("standard"=>1.3e-4, "high"=>1.3e-4, "low"=>1.3e-4), 
+                           "everywhere"=>Dict("standard"=>1.3e-4, "high"=>1.3e-4, "low"=>1.3e-4))
     const water_mixing_ratio = water_MRs[water_loc][water_case]
 elseif planet=="Venus"
-    const water_mixing_ratio = Dict("standard"=>1e-6)[water_case]  # parse(Float64, water_case) 
+    const water_mixing_ratio = Dict("standard"=>1e-6)[water_case]
+
+    # SPECIAL: Crazy water Mahieux & Viscardy 2024
+    if venus_special_water
+        const h2o_vmr_low = 10^0.3 * 1e-6
+        const h2o_vmr_high = 10^0.7 * 1e-6
+        const hdo_vmr_low = 10^(-0.5)  * 1e-6
+        const hdo_vmr_high = 10^(0.5) * 1e-6
+    else
+        const h2o_vmr_low = water_mixing_ratio
+        const h2o_vmr_high = nothing
+        const hdo_vmr_low = 2*DH*water_mixing_ratio
+        const hdo_vmr_high = nothing
+    end
 end
 
 # Whether to install a whole new water profile or just use the initial guess with modifications (for seasonal model)
 if planet=="Venus"
-    const reinitialize_water_profile = false 
+    const reinitialize_water_profile = venus_special_water==true ? true : false
 elseif planet=="Mars"
     const reinitialize_water_profile = seasonal_cycle==true ? false : true # should be off if trying to run simulations for seasons
 end
@@ -379,11 +404,11 @@ initial_atm = get_ncurrent(initial_atm_file, n_horiz)
 H2Osatfrac = hcat([H2Osat ./ map(z -> n_tot(initial_atm, z, ihoriz; all_species, n_alt_index), alt) for ihoriz in 1:n_horiz]...)
 const upper_lower_bdy = alt[something(findfirst(isequal(minimum(H2Osatfrac[:, 1])), H2Osatfrac[:, 1]), 0)] # in cm
 const upper_lower_bdy_i = n_alt_index[upper_lower_bdy]  # the uppermost layer at which water will be fixed, in cm
-# Control whether the removal of rates etc at "Fixed altitudes" runs. If the boundary is 
+# Control whether the removal of rates etc at "Fixed altitudes" runs. If the boundary is
 # the bottom of the atmosphere, we shouldn't do it at all.
 const remove_rates_flag = true
 if upper_lower_bdy == zmin
-    const remove_rates_flag = false 
+    const remove_rates_flag = false
 end
 
 #                              Species-specific scale heights
@@ -426,6 +451,12 @@ elseif planet=="Venus"
                                     :O2=>Dict("n"=>[[3e-3*ntot_at_lowerbdy, NaN] for ihoriz in 1:n_horiz], "f"=>[[NaN, 0.] for ihoriz in 1:n_horiz]),
                                     # :O2 => Dict("n" => [[3e-3 * ntot_at_lowerbdy, NaN], [2.9e-3 * ntot_at_lowerbdy, NaN], [3.1e-3 * ntot_at_lowerbdy, NaN]], "f" => [[NaN, 0.] for ihoriz in 1:n_horiz]),
                                     :N2=>Dict("n"=>[[0.032*ntot_at_lowerbdy, NaN] for ihoriz in 1:n_horiz]),
+
+                                    #Krasnopolsky, 2010a: this was 400ppb at 74km in altitude, and the actual number is likely lower (is either 4.0E-7, or 4.8E-7 depending on the calculation); and according to Zhang 2012 it is 3.66e-7
+                                    :HCl=>Dict("n"=>[3.66e-7 * ntot_at_lowerbdy, NaN]),
+
+                                    #Denis A. Belyaev 2012: this was 0.1 ppmv at 165–170 K to 0.5–1 ppmv at 190–192 K; It said 0.1ppm was related to the most common temperature reading so I went with that (this is either 1E-7 or 6.79E-8 depending on the calculation)
+                                    :SO2=>Dict("n"=>[1.0e-7 * ntot_at_lowerbdy, NaN]),
 
                                     # water mixing ratio is fixed at lower boundary
                                     :H2O=>Dict("n"=>[[water_mixing_ratio*ntot_at_lowerbdy, NaN] for ihoriz in 1:n_horiz], "f"=>[[NaN, 0.] for ihoriz in 1:n_horiz]),
@@ -517,16 +548,16 @@ const speciesbclist_horiz = deepcopy(auto_speciesbclist_horiz)
 # Crosssection file sources
 # -------------------------------------------------------------------
 const photochem_data_files = Dict(:CO2=>Dict("main"=>"CO2.dat"), 
-                                   :H2O=>Dict("main"=>"h2oavgtbl.dat"), 
-                                   :HDO=>Dict("main"=>"HDO.dat"), 
-                                   :H2O2=>Dict("main"=>"H2O2.dat"), 
-                                   :HDO2=>Dict("main"=>"H2O2.dat"), 
-                                   :O3=>Dict("main"=>"O3.dat", "chapman"=>"O3Chap.dat"), 
-                                   :O2=>Dict("main"=>"O2.dat", "schr_short"=>"130-190.cf4", "schr_mid"=>"190-280.cf4", "schr_long"=>"280-500.cf4"), 
-                                   :H2=>Dict("main"=>"binnedH2.csv"), 
-                                   :HD=>Dict("main"=>"binnedH2.csv"), 
-                                   :OH=>Dict("main"=>"binnedOH.csv", "O1D+H"=>"binnedOHo1D.csv"), 
-                                   :OD=>Dict("main"=>"OD.csv"))
+                                  :H2O=>Dict("main"=>"h2oavgtbl.dat"), 
+                                  :HDO=>Dict("main"=>"HDO.dat"), 
+                                  :H2O2=>Dict("main"=>"H2O2.dat"), 
+                                  :HDO2=>Dict("main"=>"H2O2.dat"), 
+                                  :O3=>Dict("main"=>"O3.dat", "chapman"=>"O3Chap.dat"), 
+                                  :O2=>Dict("main"=>"O2.dat", "schr_short"=>"130-190.cf4", "schr_mid"=>"190-280.cf4", "schr_long"=>"280-500.cf4"), 
+                                  :H2=>Dict("main"=>"binnedH2.csv"), 
+                                  :HD=>Dict("main"=>"binnedH2.csv"), 
+                                  :OH=>Dict("main"=>"binnedOH.csv", "O1D+H"=>"binnedOHo1D.csv"), 
+                                  :OD=>Dict("main"=>"OD.csv"))
 
 # Filename tags and codes
 # -------------------------------------------------------------------
@@ -553,6 +584,7 @@ end
 # The shortcodes provide unique identifiers for a simulation. Necessary because you end up running the model many times...
 const hrshortcode, rshortcode = generate_code(ions_included, controltemps[1], controltemps[2], controltemps[3], water_case, solar_scenario)
 const sim_folder_name = "$(hrshortcode)_$(rshortcode)_$(tag)"
+const used_rxns_spreadsheet_name = "active_rxns.xlsx"
 
 
 # ***************************************************************************************************** #
@@ -627,12 +659,6 @@ const error_checking_scheme = "new"
 
 # ***************************************************************************************************** #
 #                                                                                                       #
-#                         Misc. things that depend on things defined above                              #
-#                                                                                                       #
-# ***************************************************************************************************** #
-
-# ***************************************************************************************************** #
-#                                                                                                       #
 #                          Create a parameter dataframe for logging ease                                #
 #                                                                                                       #
 # ***************************************************************************************************** #
@@ -646,7 +672,7 @@ push!(PARAMETERS_GEN, ("HRSHORTCODE", hrshortcode));
 push!(PARAMETERS_GEN, ("RSHORTCODE", rshortcode));
 push!(PARAMETERS_GEN, ("VARIED_PARAM", exp_type))
 push!(PARAMETERS_GEN, ("INITIAL_ATM", initial_atm_file));
-push!(PARAMETERS_GEN, ("RXN_SOURCE", reaction_network_spreadsheet));
+push!(PARAMETERS_GEN, ("RXN_SOURCE", results_dir*sim_folder_name*"/$(used_rxns_spreadsheet_name)"));
 push!(PARAMETERS_GEN, ("IONS", ions_included ));
 push!(PARAMETERS_GEN, ("CONVERGE", converge_which));
 push!(PARAMETERS_GEN, ("NONTHERMAL_ESC", nontherm));
@@ -660,8 +686,24 @@ push!(PARAMETERS_GEN, ("AMBIPOLAR_DIFFUSION_ON", use_ambipolar));
 push!(PARAMETERS_GEN, ("MOLEC_DIFFUSION_ON", use_molec_diff));
 
 # Log altitude grid so we can avoid loading this very file when doing later analysis.
-PARAMETERS_ALTGRID = DataFrame(Alt=alt)
+PARAMETERS_ALTGRID = DataFrame(Alt=alt, # grid
+                               # The following syntax is ugly, and required because the XLSX package won't write columns of different lengths,
+                               # so shorter lists must be padded with blank lines.
+                               # It appears again below where species lists are written out.
+                               non_bdy_layers=[[string(a) for a in non_bdy_layers]..., ["" for i in 1:length(alt)-length(non_bdy_layers)]...],
+                               ) 
 
+# Various descriptive things about the altitude grid that are single values, not vectors.
+PARAMETERS_ALT_INFO = DataFrame(Field=[], Value=[], Unit=[], Desc=[]);
+push!(PARAMETERS_ALT_INFO, ("zmin", zmin, "cm", "Min altitude (altitude of lower boundary)"));
+push!(PARAMETERS_ALT_INFO, ("dz", dz, "cm", "Height of a discretized altitude layer"));
+push!(PARAMETERS_ALT_INFO, ("zmax", zmax, "cm", "Max altitude (altitude of top boundary)"));
+push!(PARAMETERS_ALT_INFO, ("n_all_layers", n_all_layers, "", "Number of discretized altitude layers, including boundary layers (i.e. length(alt))"));
+push!(PARAMETERS_ALT_INFO, ("num_layers", num_layers, "", "Number of discretized altitude layers, excluding boundary layers (i.e. length(alt)-2)"));
+# push!(PARAMETERS_ALT_INFO, ("upper_lower_bdy", upper_lower_bdy, "cm", "Altitude at which water goes from being fixed to calculated"));
+# push!(PARAMETERS_ALT_INFO, ("upper_lower_bdy_i", upper_lower_bdy_i, "", "Index of the line above within the alt grid"));
+
+# Atmospheric conditions.
 PARAMETERS_CONDITIONS = DataFrame(Field=[], Value=[], Unit=[]);
 
 push!(PARAMETERS_CONDITIONS, ("SZA", SZA, "deg"));
@@ -671,12 +713,10 @@ push!(PARAMETERS_CONDITIONS, ("TEXO", controltemps[3], "K"));
 push!(PARAMETERS_CONDITIONS, ("MEAN_TEMPS", join(meantemps, " "), "K"));
 push!(PARAMETERS_CONDITIONS, ("WATER_MR", water_mixing_ratio, "mixing ratio"));
 push!(PARAMETERS_CONDITIONS, ("WATER_CASE", water_case, "whether running with 10x, 1/10th, or standard water in middle/upper atmo"));
-
 waterbdy = :H2O in inactive_species ? zmax : upper_lower_bdy/1e5
 push!(PARAMETERS_CONDITIONS, ("WATER_BDY", waterbdy, "km"))
-
 # This is so ugly because the XLSX package won't write columns of different lengths, so I have to pad all the shorter lists
-# with blanks up to the length of the longest list and also transform all the symbols into strings. 
+# with blanks up to the length of the longest list and also transform all the symbols into strings.
 L = max(length(all_species), length(neutral_species), length(ion_species), length(no_chem_species), length(no_transport_species), length(Jratelist))
 PARAMETERS_SPLISTS = DataFrame(AllSpecies=[[string(a) for a in all_species]..., ["" for i in 1:L-length(all_species)]...], 
                                Neutrals=[[string(n) for n in neutral_species]..., ["" for i in 1:L-length(neutral_species)]...], 

@@ -150,7 +150,7 @@ function get_volume_rates(sp::Symbol, atmdict::Dict{Symbol, Vector{Array{ftype_n
         which: "all", "Jrates", "krates"
         remove_sp_density: if set to true, remove sp from the reactants
     Output:
-        rxn_dat: dictionary reaction => Vector{Array{ftype_ncur}} 
+        rxn_dat: dictionary reaction => Vector{Array{ftype_ncur}}
                  where each entry is the alt-dependent rate for each column
         rate_coefs: dictionary of reaction => rate coefficient
     =#
@@ -170,17 +170,6 @@ function get_volume_rates(sp::Symbol, atmdict::Dict{Symbol, Vector{Array{ftype_n
         Tn_col = GV.Tn[ihoriz, :]
         Ti_col = GV.Ti[ihoriz, :]
         Te_col = GV.Te[ihoriz, :]
-
-        # Internally slice for bulk altitudes (length=num_layers)
-        # Tn_col = Tn_col_full[2:end-1]
-        # Ti_col = Ti_col_full[2:end-1]
-        # Te_col = Te_col_full[2:end-1]
-
-        # println("[DEBUG] Inside loop for ihoriz = ", ihoriz)
-        # println("length(Tn_col) = ", length(Tn_col))
-        # println("length(Ti_col) = ", length(Ti_col))
-        # println("length(Te_col) = ", length(Te_col))
-        # @assert length(Tn_col) == GV.num_layers + 2 "Tn_col length mismatch"
 
         # For each reaction in the filtered list:
         for rxn in filtered_rxn_list
@@ -220,8 +209,8 @@ function get_volume_rates(sp::Symbol, atmdict::Dict{Symbol, Vector{Array{ftype_n
 end
 
 
-function get_volume_rates(sp::Symbol, source_rxn::Vector{Any}, source_rxn_rc_func, 
-                          atmdict::Dict{Symbol, Vector{Array{ftype_ncur}}}, 
+function get_volume_rates(sp::Symbol, source_rxn::Vector{Any}, source_rxn_rc_func,
+                          atmdict::Dict{Symbol, Vector{Array{ftype_ncur}}},
                           Mtot, ihoriz::Int64; globvars...)
     #=
     Override to call for a single reaction. Useful for doing non-thermal flux boundary conditions.
@@ -384,7 +373,8 @@ function diffusion_timescale(s::Symbol, T_arr::Array, atmdict; globvars...)
     =#
     
     GV = values(globvars)
-    required = [:all_species, :alt, :molmass, :n_alt_index, :neutral_species, :polarizability, :planet, :q, :speciesbclist, :use_ambipolar, :use_molec_diff]
+    required = [:all_species, :alt, :molmass, :M_P, :n_alt_index, :neutral_species, :polarizability, :planet, :q, :R_P, 
+                :speciesbclist, :use_ambipolar, :use_molec_diff]
     check_requirements(keys(GV), required)
 
     # Get diffusion coefficient array template
@@ -395,6 +385,7 @@ function diffusion_timescale(s::Symbol, T_arr::Array, atmdict; globvars...)
     ncur_with_bdys =  ncur_with_boundary_layers(atmdict, n_horiz; GV.all_species, GV.n_alt_index)
     
     # Molecular diffusion timescale: H_s^2 / D, scale height over diffusion constant
+    Hs = scaleH(GV.alt, s, T_arr; globvars...)
     D = Dcoef!(Dcoef_template, T_arr, s, ncur_with_bdys; globvars...)
     molec_or_ambi_timescale = (Hs .^ 2) ./ D
    
@@ -418,11 +409,11 @@ function final_escape(thefolder, thefile, n_horiz::Int64; globvars...)
     
     GV = values(globvars)
     required = [ # Things from CONSTANTS.jl
-                                   :q, :molmass, :polarizability, :collision_xsect,
-                                   # From CUSTOMIZATIONS.jl
-                                   :alt, :dz, :num_layers, :n_alt_index, :non_bdy_layers, 
-                                   # Simulation-unique stuff 
-                                    :all_species, :hHnet, :hDnet, :hH2net, :hHDnet, :hHrc, :hDrc, :hH2rc, :hHDrc, :use_ambipolar, :use_molec_diff]
+                :q, :molmass, :polarizability, :collision_xsect,
+                # From CUSTOMIZATIONS.jl
+                :alt, :dz, :num_layers, :n_alt_index, :non_bdy_layers, 
+                # Simulation-unique stuff 
+                :all_species, :hHnet, :hDnet, :hH2net, :hHDnet, :hHrc, :hDrc, :hH2rc, :hHDrc, :use_ambipolar, :use_molec_diff]
     check_requirements(keys(GV), required)
     
     # First load the atmosphere and associated variables.
@@ -501,13 +492,13 @@ function get_transport_PandL_rate(sp::Symbol, atmdict::Dict{Symbol, Vector{Array
 
     GV = values(globvars)
     required = [:all_species, :alt, :dz, :Hs_dict, :molmass,  :n_alt_index,
-                                   :neutral_species, :num_layers, :polarizability, :q, :speciesbclist, :Te, :Ti, :Tn, :Tp, 
-                                   :Tprof_for_Hs, :Tprof_for_diffusion, :transport_species, :use_ambipolar, :use_molec_diff]
+                :neutral_species, :num_layers, :polarizability, :q, :speciesbclist, :Te, :Ti, :Tn, :Tp, 
+                :Tprof_for_Hs, :Tprof_for_diffusion, :transport_species, :use_ambipolar, :use_molec_diff]
     check_requirements(keys(GV), required)
 
     if nonthermal
         required = [:hot_H_network, :hot_D_network, :hot_H_rc_funcs, :hot_D_rc_funcs, 
-                                       :hot_H2_network, :hot_H2_rc_funcs, :hot_HD_network, :hot_HD_rc_funcs, :Jratedict]
+                    :hot_H2_network, :hot_H2_rc_funcs, :hot_HD_network, :hot_HD_rc_funcs, :Jratedict]
         check_requirements(keys(GV), required)
     end
 
@@ -617,7 +608,7 @@ function get_directional_fluxes(sp::Symbol, atmdict::Dict{Symbol, Vector{ftype_n
 
     # Fill array 
     flux = fill(convert(ftype_ncur, NaN), (length(GV.alt), 1)) # will store positive and negative values at each alt, with + meaning up, - meaning down.
-    up = fill(convert(ftype_ncur, NaN), (length(GV.alt), 1)) # Bethan asked for just up fluxes on time so now I also track them separately. 
+    up = fill(convert(ftype_ncur, NaN), (length(GV.alt), 1)) # Bethan asked for just up fluxes one time so now I also track them separately. 
     down = fill(convert(ftype_ncur, NaN), (length(GV.alt), 1))
     flux[1] = NaN # 0 alt
     up[1] = NaN
@@ -698,7 +689,7 @@ end
 
 # Note: These functions are probably misleading. They were used to create plots that never made it 
 # to publication.
-function limiting_flux(sp, atmdict, T_arr; treat_H_as_rare=false, full_equation=true, globvars...)
+function limiting_flux(sp, atmdict, T_arr; ihoriz::Int=1, treat_H_as_rare=false, full_equation=true, globvars...)
     #=
     Calculate the limiting upward flux (Hunten, 1973; Zahnle, 2008). 
     Inputs:
@@ -734,7 +725,7 @@ function limiting_flux(sp, atmdict, T_arr; treat_H_as_rare=false, full_equation=
         dTdz = zeros(GV.n_all_layers)
         dTdz = dTdz[2:end] = @. (T_arr[2:end] - T_arr[1:end-1]) / GV.dz # make the temp gradient
         print(dTdz)
-        fi = thedensity ./ n_tot(atmdict, 1; ignore=[sp], globvars...)
+        fi = thedensity ./ n_tot(atmdict, ihoriz; ignore=[sp], globvars...)
         ma = meanmass(atmdict, n_horiz; ignore=[sp], globvars...) 
 
         return @. ((bi*fi)/(1+fi)) * ( mH*(ma - GV.molmass[sp]) * (g/(kB*T_arr)) - (thermaldiff(sp)/T_arr) * dTdz[1:end-1])
