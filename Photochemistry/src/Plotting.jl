@@ -137,14 +137,16 @@ function plot_atm(atmdict::Dict{Symbol, Vector{Array{ftype_ncur}}}, savepath::St
                                 :H2O2,:HDO2,
                                 :HO2,:HO2pl,:DO2,
                                 :OH,:OHpl,:OD,:ODpl],
-                            # NITROGEN NEUTRALS + IONS and RARE C MOLECULES
+                            # NITROGEN NEUTRALS + IONS, RARE C MOLECULES, CHLORINE, SULFUR
                             3=>[:C,:Cpl,:CH,:CHpl,
                                 :CN,:CNpl,:HCN,:HCNpl,:HCNHpl,
                                 :HNO,:HNOpl,:HN2Opl,
                                 :N,:Npl,:N2O,:N2Opl,
                                 :NH,:NHpl,:NH2,:NH2pl,:NH3pl,
                                 :NO,:NOpl,:NO2,:NO2pl,
-                                :N2Hpl,:N2Dpl]
+                                :N2Hpl,:N2Dpl,
+                                :HCl, :Cl, :ClO, :ClCO, :DCl, :Cl2,
+                                :S, :SO, :SO2, :SO3, :H2SO4, :HDSO4]
                         );
 
     axes_by_sp = Dict()
@@ -295,12 +297,12 @@ function plot_bg(axob; bg="#ededed")
     turn_off_borders(axob)
 end
 
-function plot_directional_flux(sp, atmdict; globvars...)
+function plot_directional_flux(sp, atmdict; xlims=((1e0, 1e10), (1e3, 1e12)), titlestr="", globvars...)
     #=
     Makes a directional flux plot for sp in atmosphere atmdict.
     =#
     GV = values(globvars)
-    required = [:all_species, :alt, :dz, :Hs_dict, :molmass, :n_alt_index, :neutral_species, :polarizability, :q, 
+    required = [:all_species, :alt, :dz, :Hs_dict, :molmass, :n_alt_index, :neutral_species, :polarizability, :q, :plot_grid,
                 :speciesbclist, :Tn, :Ti, :Te, :Tp, :Tprof_for_Hs, :Tprof_for_diffusion, :transport_species]
     
     check_requirements(keys(GV), required)
@@ -311,24 +313,26 @@ function plot_directional_flux(sp, atmdict; globvars...)
 
     fig, ax = subplots()
     plot_bg(ax)
-    ax.scatter(fpos[2:end-1], plot_grid, marker="^", color="red", label="UP", zorder=10)
-    ax.scatter(fneg[2:end-1], plot_grid, marker="v", color="blue", label="DOWN", zorder=10)
+    ax.scatter(fpos[2:end-1], GV.plot_grid, marker="^", color="red", label="UP", zorder=10)
+    ax.scatter(fneg[2:end-1], GV.plot_grid, marker="v", color="blue", label="DOWN", zorder=10)
     ax.legend()
     ax.set_xscale("log")
     ax.set_ylabel("Alt (km)")
-    ax.set_title(string_to_latexstr(string(sp))*" transport")
+    ax.set_title(string_to_latexstr(string(sp))*" transport"*titlestr)
     ax.set_xlabel(L"Net fluxes (cm$^{-2}$s$^{-1}$)")
+    ax.set_xlim(xlims[1]...)
     show() 
 
     fig, ax = subplots()
     plot_bg(ax)
-    ax.plot(up[2:end-1], plot_grid, color="red", label="Upward flux")
-    ax.plot(down[2:end-1], plot_grid, color="blue", label="Downward flux")
+    ax.plot(up[2:end-1], GV.plot_grid, color="red", label="Upward flux")
+    ax.plot(down[2:end-1], GV.plot_grid, color="blue", label="Downward flux")
     ax.legend()
     ax.set_xscale("log")
     ax.set_ylabel("Alt (km)")
-    ax.set_title(string_to_latexstr(string(sp))*" transport")
+    ax.set_title(string_to_latexstr(string(sp))*" transport"*titlestr)
     ax.set_xlabel(L"Directional flux (cm$^{-2}$s$^{-1}$)")
+    ax.set_xlim(xlims[2]...)
     show()    
 end
 
@@ -522,7 +526,6 @@ function plot_net_volume_change(sp, atmdict; globvars...)
     ax.scatter(fpos, plot_grid, marker="^", color="red", label="Gain", zorder=10)
     ax.scatter(fneg, plot_grid, marker="v", color="blue", label="Loss", zorder=10)
     ax.legend()
-    # ax.axhline(165, linestyle="--", color="gray", linewidth=2, zorder=0)
     ax.set_xscale("log")
     ax.set_ylabel("Alt (km)")
     ax.set_title(string_to_latexstr(string(sp))*" transport")
@@ -1015,9 +1018,10 @@ function plot_reaction_on_demand(atmdict, reactants, n_horiz::Int64; ihoriz=1, p
     end
 end
 
-function plot_species_on_demand(atmdict, spclist, filename; savepath=nothing, showonly=false, shaded_region=false, axh_text="", mixing_ratio=false, plot_e=false, lw=2,
-                                xlab=L"Number density (cm$^{-3}$)", xlims=(1e-12, 1e18), figsz=(16,6), ylims=(0,zmax/1e5), titl=nothing,
-                                overridestyle=false, posdict = Dict(), extratext=nothing, LL=(0.9,0.9), titlcol="black",
+function plot_species_on_demand(atmdict, spclist, filename; second_atm=nothing, savepath=nothing, showonly=false, shaded_region=nothing, 
+                                axh_text="", mixing_ratio=false, plot_e=false, lw=1, lw_callout=3, callout_sp=[], col_override_gray=[],
+                                xlab=L"Number density (cm$^{-3}$)", xlims=(1e-12, 1e18), figsz=(16,6), ylims=(0, 250), titl=nothing,
+                                overridestyle=false, posdict = Dict(), extratext=nothing, LL=(0.9,0.9), titlcol="black", plot_hline=nothing,
                                 globvars...)
     #=
     Makes a "spaghetti plot" of the species in spclist, in concentrations by altitude in the
@@ -1026,9 +1030,10 @@ function plot_species_on_demand(atmdict, spclist, filename; savepath=nothing, sh
     Inputs:
         atmdict: dictionary of vertical profiles of a plottable quantity, keys are species names.
         spclist: a list of species to plot.
-        filename: what to call the file
+        filename: what to call the image file for writeout.
     
     optional inputs:
+        second_atm: another dictionary of species densities; will be overplotted to compare.
         savepath: path in which to save the file
         showonly: whether to just show() the plot (true) or save and show (false)
         xlab: override for x axis label
@@ -1069,6 +1074,15 @@ function plot_species_on_demand(atmdict, spclist, filename; savepath=nothing, sh
             plot_me = plot_me ./ n_tot(atmdict, 1; GV.all_species)
         end
         ax.plot(plot_me, GV.plot_grid, color=col, linewidth=lw, label=sp, linestyle=ls, zorder=10)
+
+        if second_atm != nothing
+            ax.plot(second_atm[sp], GV.plot_grid, color=col, linewidth=lw-1.5, label=sp, linestyle=ls, zorder=10)
+        end
+
+        if plot_hline != nothing
+            ax.axhline(plot_hline, color="black", zorder=10)
+        end
+
         
         textloc = get(posdict, sp, nothing)
         if textloc != nothing
@@ -1077,11 +1091,17 @@ function plot_species_on_demand(atmdict, spclist, filename; savepath=nothing, sh
     end
 
     if plot_e==true
+        electron_linestyle = (0, (15, 3))
+        e_lw = 1
         required =  [:non_bdy_layers]
         check_requirements(keys(GV), required)
         ionsp = [sp for sp in keys(atmdict) if charge_type(sp)=="ion"]
         ax.plot(electron_density(atmdict; e_profile_type="quasineutral", ion_species=ionsp, GV.non_bdy_layers), GV.plot_grid, 
-                color="black", linewidth=lw, linestyle=":", zorder=10)
+                color="black", linewidth=e_lw, linestyle=electron_linestyle, zorder=10)
+        if second_atm != nothing
+            ax.plot(electron_density(second_atm; e_profile_type="quasineutral", ion_species=ionsp, GV.non_bdy_layers), GV.plot_grid, 
+                color="black", linewidth=e_lw, linestyle=electron_linestyle, zorder=10)
+        end
         if get(posdict, "e^-", nothing) != nothing
             ax.text(posdict["e^-"]..., L"$\mathrm{e^-}$", transform=ax.transAxes, color="black", fontsize=17)
         end

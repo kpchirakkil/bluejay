@@ -55,29 +55,22 @@ const SA = 4*pi*(R_P)^2 # cm^2
 #              Model species, Jrate lists, and lists of chemistry/transport species                     #
 #                                                                                                       #
 # ***************************************************************************************************** #
+
 # Minor species that have reactions available in the network files, but aren't used. These are just for
 # reference: [:CNpl,:HCNpl,:HCNHpl,:HN2Opl,:NH2pl,:NH3pl,:CH,:CN,:HCN,:HNO,:NH,:NH2,:HD2pl]
-remove_ignored_species = true # Whether to use a slightly smaller list of species and reactions (removing minor species that Roger had in his model)
-ignored_species = [:CNpl,:HCNpl,:HCNHpl,:HN2Opl,:NH2pl,:NH3pl,:N2Opl,:NO2pl,:CH,:CN,:HCN,:HNO,:NH,:NH2,:HD2pl]#:N2O,:NO2
-
-#                                        Neutrals
-# ==============================================================================
-const neutral_species = [conv_neutrals[planet]..., new_neutrals...];
-
-#                                          Ions
-# ==============================================================================
-const ion_species = [conv_ions[planet]..., new_ions...]
-const new_species = [new_neutrals..., new_ions...]  # Needed later to be excluded from n_tot() if adding new species
-const nontherm = ions_included==true ? true : false   # whether to do non-thermal escape. Must be here, used in call to format Jrates
  
 #                                     Full species list
-# ==============================================================================
+# =======================================================================================================
+const neutral_species = [conv_neutrals[planet]..., new_neutrals...];
+const ion_species = [conv_ions[planet]..., new_ions...]
+const new_species = [new_neutrals..., new_ions...]  # Needed later to be excluded from n_tot() as called 
+                                                    # in the water saturation calculation, in the case
+                                                    # where new species are being added.
 const all_species = [neutral_species..., ion_species...];
-
 
 #                        Photolysis and Photoionization rate symbol lists 
 # =======================================================================================================
-
+const nontherm = ions_included==true ? true : false   # whether to do non-thermal escape. Must be here, sued in call to format Jrates
 const conv_Jrates, newJrates = format_Jrates(reaction_network_spreadsheet, all_species, "Jratelist"; ions_on=ions_included, hot_atoms=nontherm)
 const Jratelist = [conv_Jrates..., newJrates...];
 
@@ -447,8 +440,7 @@ if planet=="Mars"
                        );
 elseif planet=="Venus"
     const ntot_at_lowerbdy = 9.5e15 # at 90 km
-    # const KoverH_lowerbdy = Keddy([zmin], [ntot_at_lowerbdy]; planet)[1]/scaleH_lowerboundary(zmin, Tn_arr[1]; molmass, M_P, R_P, zmin)
-    const KoverH_lowerbdy = Keddy([zmin], [ntot_at_lowerbdy]; planet=planet)[1] / scaleH_lowerboundary(zmin, Tn_arr[1]; molmass, M_P, R_P, zmin)
+    const KoverH_lowerbdy = Keddy([zmin], [ntot_at_lowerbdy]; planet=planet)[1] / scaleH_lowerboundary(zmin, Tn_arr[1, 1]; molmass, M_P, R_P, zmin)
     const manual_speciesbclist=Dict(# major species neutrals at lower boundary (estimated from Fox&Sung 2001, Hedin+1985, agrees pretty well with VIRA)
                                     :CO2=>Dict("n"=>[[0.965*ntot_at_lowerbdy, NaN] for ihoriz in 1:n_horiz], "f"=>[[NaN, 0.] for ihoriz in 1:n_horiz]),
                                     :Ar=>Dict("n"=>[[5e11, NaN] for ihoriz in 1:n_horiz], "f"=>[[NaN, 0.] for ihoriz in 1:n_horiz]),
@@ -710,7 +702,6 @@ push!(PARAMETERS_ALT_INFO, ("num_layers", num_layers, "", "Number of discretized
 
 # Atmospheric conditions.
 PARAMETERS_CONDITIONS = DataFrame(Field=[], Value=[], Unit=[]);
-
 push!(PARAMETERS_CONDITIONS, ("SZA", SZA, "deg"));
 push!(PARAMETERS_CONDITIONS, ("TSURF", controltemps[1], "K"));
 push!(PARAMETERS_CONDITIONS, ("TMESO", controltemps[2], "K"));

@@ -28,6 +28,7 @@ using HDF5, JLD
 using LaTeXStrings
 using Dates
 using DataFrames
+using DataStructures
 using DelimitedFiles
 using SparseArrays
 using LinearAlgebra
@@ -69,8 +70,6 @@ include(paramfile)
 # Perform the rest of the model set up
 include("MODEL_SETUP.jl")
 
-# Plot styles
-include("PLOT_STYLES.jl")
 
 # **************************************************************************** #
 #                                                                              #
@@ -78,6 +77,7 @@ include("PLOT_STYLES.jl")
 #                                                                              #
 # **************************************************************************** #
 
+include("PLOT_STYLES.jl")
 set_rc_params(sansserif=sansserif_choice, monospace=monospace_choice)
 
 # **************************************************************************** #
@@ -152,7 +152,7 @@ function evolve_atmosphere(atm_init::Dict{Symbol, Vector{Array{ftype_ncur}}}, lo
     find_nonfinites(example_jacobian, collec_name="example_jacobian")
     sparsity = round(length(example_jacobian.nzval)*100/(size(example_jacobian)[1] * size(example_jacobian)[2]), digits=2)
     if sparsity > 1
-        println("Warning! Sparsity of the jacobian is rather high: $(sparsity)%")
+        println("Warning! Percent of nonzero elements in the jacobian is rather high: $(sparsity)%")
     end
 
     # Now define the problem function to be solved
@@ -534,7 +534,7 @@ function converge(n_current::Dict{Symbol, Vector{Array{ftype_ncur}}}, log_t_star
                                    :speciescolor, :speciesstyle, 
                                    :Te, :Ti, :Tn, :Tp, :timestep_type, :Tprof_for_diffusion, :upper_lower_bdy_i, :zmax, :horiz_wind_v, :enable_horiz_diffusion])
     
-    # A combination of log timesteps when simulation time is low, and linear after
+    # A combination of log timesteps when simulation time is low, and linear after - used to simulate a single season, mainly.
     if GV.timestep_type=="log-linear"
         println("Using a combo of log and linear timesteps")
         log_timesteps = 10. .^(range(log_t_start, stop=log_t_end, length=GV.n_steps));
@@ -1049,7 +1049,7 @@ as such in the reaction spreadsheet.
 =#
 println("$(Dates.format(now(), "(HH:MM:SS)")) Loading reaction network")
 reaction_network, hot_H_network, hot_D_network, 
-hot_H2_network, hot_HD_network = load_reaction_network(reaction_network_spreadsheet; saveloc=results_dir*sim_folder_name*"/active_rxns.xlsx",
+hot_H2_network, hot_HD_network = load_reaction_network(reaction_network_spreadsheet; saveloc=results_dir*sim_folder_name*"/$(used_rxns_spreadsheet_name)",
                                                                        write_rxns=true, get_hot_rxns=ions_included, ions_on=ions_included, all_species)
 
 #              Create evaluatable rate coefficients by reaction                 #
@@ -1060,7 +1060,7 @@ const hot_D_rc_funcs = Dict([rxn => mk_function(:((Tn, Ti, Te, M) -> $(rxn[3])))
 const hot_H2_rc_funcs = Dict([rxn => mk_function(:((Tn, Ti, Te, M) -> $(rxn[3]))) for rxn in hot_H2_network]);
 const hot_HD_rc_funcs = Dict([rxn => mk_function(:((Tn, Ti, Te, M) -> $(rxn[3]))) for rxn in hot_HD_network]);
 
-#                          Change the vertical extent                           #
+#           Load starting atmosphere; change alt grid if requested              #
 #===============================================================================#
 if make_new_alt_grid==true
     throw("The code for extending the altitude grid needs to be redone.")
@@ -1076,11 +1076,14 @@ if make_new_alt_grid==true
     # end
 
     # const alt = convert(Array, (0:dz:new_zmax*1e5))
-
+# elseif make_new_alt_grid==false 
+#     println("$(Dates.format(now(), "(HH:MM:SS)")) Loading atmosphere")
+#     n_current = get_ncurrent(initial_atm_file)
     # const max_alt = new_zmax*1e5
 end
 
-#                        Load starting atmosphere                               #
+
+#                 Set the boundary altitude below which water is fixed          #
 #===============================================================================#
 println("$(Dates.format(now(), "(HH:MM:SS)")) Loading atmosphere")
 n_current = get_ncurrent(initial_atm_file, n_horiz)
@@ -1100,7 +1103,7 @@ if adding_new_species==true
         if use_nonzero_initial_profiles
             println("Initializing non-zero profiles for $(new_neutrals)")
             for nn in new_neutrals
-                n_current[nn] = reshape(readdlm("../Resources/initial_profiles/$(string(nn))_initial_profile.txt", '\r', comments=true, comment_char='#'), (num_layers,))
+                n_current[nn] = reshape(readdlm("Resources/initial_profiles/$(string(nn))_initial_profile.txt", '\r', comments=true, comment_char='#'), (num_layers,))
             end
         end
     elseif converge_which == "ions"
@@ -1114,7 +1117,7 @@ if adding_new_species==true
             println("Initializing non-zero profiles for $(new_ions)")
             # first fill in the H-bearing ions from data-inspired profiles
             for ni in setdiff(new_ions, keys(D_H_analogues))
-                n_current[ni] = reshape(readdlm("../Resources/initial_profiles/$(string(ni))_initial_profile.txt", '\r', comments=true, comment_char='#'), (num_layers,))
+                n_current[ni] = reshape(readdlm("Resources/initial_profiles/$(string(ni))_initial_profile.txt", '\r', comments=true, comment_char='#'), (num_layers,))
             end
             # Then create profiles for the D-bearing analogues based on the H-bearing species profiles
             for ni in intersect(new_ions, keys(D_H_analogues))
@@ -1139,7 +1142,7 @@ if adding_new_species==true
             println("Initializing non-zero profiles for $(new_neutrals) and $(new_ions)")
             for nn in new_neutrals
                 try
-                    n_current[nn] = reshape(readdlm("../Resources/initial_profiles/$(string(nn))_initial_profile.txt", '\r', comments=true, comment_char='#'), (num_layers,))
+                    n_current[nn] = reshape(readdlm("Resources/initial_profiles/$(string(nn))_initial_profile.txt", '\r', comments=true, comment_char='#'), (num_layers,))
                 catch 
                     println("No initial guess found for $(nn). Initial profile will be zero everywhere.")
                 end
@@ -1147,7 +1150,7 @@ if adding_new_species==true
 
             for ni in setdiff(new_ions, keys(D_H_analogues))
                 try
-                    n_current[ni] = reshape(readdlm("../Resources/initial_profiles/$(string(ni))_initial_profile.txt", '\r', comments=true, comment_char='#'), (num_layers,))
+                    n_current[ni] = reshape(readdlm("Resources/initial_profiles/$(string(ni))_initial_profile.txt", '\r', comments=true, comment_char='#'), (num_layers,))
                 catch 
                     println("No initial guess found for $(ni). Initial profile will be zero everywhere.")
                 end
@@ -1182,7 +1185,7 @@ E = electron_density(n_current; e_profile_type, non_bdy_layers, ion_species)
 # If you want to completely wipe out the water profile and install the initial one
 # (i.e. when running a stand alone simulation)
 if reinitialize_water_profile
-    println("Initializing the water profile anew (reinitialize_water_profile=true)")
+    println("$(Dates.format(now(), "(HH:MM:SS)")) Initializing the water profile anew (reinitialize_water_profile=true)")
     # hygropause_alt is an optional argument. If using, must be a unit of length in cm i.e. 40e5 = 40 km.
     println("$(Dates.format(now(), "(HH:MM:SS)")) Setting up the water profile...")
     cf = planet == "Venus" ? water_mixing_ratio : 1
@@ -1435,7 +1438,7 @@ const set_concentration_arglist_typed = [:($s::ftype_chem) for s in set_concentr
         
         # This section calculates the net change but arranges entries by size, so we don't have floating point errors.
         for r in 1:size(result,1)
-            net_chem_change[r] = subtract_difflength(sort(result[r, :][1], rev=true), sort(result[r, :][2], rev=true))
+            net_chem_change[r] = subtract_difflength(sort(result[r, :][1], rev=true), sort(result[r, :][2], rev=true)) # Production - Loss from chemistry.
             net_trans_change[r] = subtract_difflength(sort(result[r, :][3], rev=true), sort(result[r, :][4], rev=true))
         end
 
@@ -1448,6 +1451,13 @@ end
 
 @eval begin
     function check_zero_distance($(set_concentration_arglist_typed...))
+        #=
+        This has to do with checking how far the given solution for a particular timestpe is from zero in the
+        n-dimensional phase space where n is the number of species (I think??). It was used to help find
+        when the model was finding "good" solutions to help with error tolerances.
+        It's currently not used.
+        But it's still here. Documenting now before I really forget it all
+        =#
 
         # M = $Mexpr
         # E = $Eexpr
@@ -1766,6 +1776,22 @@ println("Time to beginning convergence is $(format_sec_or_min(time()-t1))\n\n")
 #                         CONVERGE THE ATMOSPHERE                              #
 #                                                                              #
 # **************************************************************************** #
+
+# First set up a dictionary to store the parameter DataFrames, so that we can 
+# make more than one call to writing out the file (the normal call and also the
+# call in the case of the model crashing)
+
+param_df_dict = OrderedDict("General"=>PARAMETERS_GEN, 
+                            "AtmosphericConditions"=>PARAMETERS_CONDITIONS, 
+                            "AltGrid"=>PARAMETERS_ALTGRID, 
+                            "AltInfo"=>PARAMETERS_ALT_INFO,
+                            "SpeciesLists"=>PARAMETERS_SPLISTS,
+                            "TemperatureArrays"=>PARAMETERS_TEMPERATURE_ARRAYS,
+                            "Crosssections"=>PARAMETERS_XSECTS, 
+                            "BoundaryConditions"=>PARAMETERS_BCS,
+                            "Solver" => PARAMETERS_SOLVER
+                            )
+xlsx_parameter_log = "$(results_dir)$(sim_folder_name)/PARAMETERS.xlsx"
 
 ti = time()
 println("$(Dates.format(now(), "(HH:MM:SS)")) Beginning convergence")

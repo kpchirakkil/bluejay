@@ -1230,7 +1230,7 @@ function escape_probability(sp, atmdict, ihoriz; globvars...)::Array
     # Parameters determined through Bethan's Monte Carlo model. 
     # [1] = A = escape probability at altitude where above column = 0, for high energy particles. upper limit
     # [2] = a = how "transparent" the atmosphere is to an escaping atom. smaller for higher energy so this is for an upper limit.
-    params = Dict("Mars"=>[0.916, 0.39],
+    params = Dict("Mars"=>[0.916, 0.039],
                   "Venus"=>[0.868, 0.058]
                  )[GV.planet]
 
@@ -1479,7 +1479,7 @@ function T_Venus(Tsurf::Float64, Tmeso::Float64, Texo::Float64, file_for_interp;
         return returnme[particle_type]
     end
 
-    function NEUTRALS()
+    function NEUTRALS(new_a)
         Tn = zeros(size(GV.alt))
 
         Tn[i_lower] .= Tsurf .+ lapserate*GV.alt[i_lower]
@@ -1496,7 +1496,7 @@ function T_Venus(Tsurf::Float64, Tmeso::Float64, Texo::Float64, file_for_interp;
         return Tn
     end 
 
-    function ELECTRONS(;spc="electron") 
+    function ELECTRONS(new_a; spc="electron") 
         Te = zeros(size(GV.alt))
 
         Te[i_lower] .= Tsurf .+ lapserate*GV.alt[i_lower]
@@ -1513,7 +1513,7 @@ function T_Venus(Tsurf::Float64, Tmeso::Float64, Texo::Float64, file_for_interp;
         return Te
     end
 
-    function IONS(;spc="ion") 
+    function IONS(new_a; spc="ion") 
         Ti = zeros(size(GV.alt))
 
         Ti[i_lower] .= Tsurf .+ lapserate*GV.alt[i_lower]
@@ -1544,7 +1544,7 @@ function T_Venus(Tsurf::Float64, Tmeso::Float64, Texo::Float64, file_for_interp;
     # fixed numeric range.
     new_a = GV.alt[i_upper]
 
-    return Dict("neutrals"=>NEUTRALS(), "ions"=>IONS(), "electrons"=>ELECTRONS())
+    return Dict("neutrals"=>NEUTRALS(new_a), "ions"=>IONS(new_a), "electrons"=>ELECTRONS(new_a))
 end
 
 
@@ -1592,12 +1592,16 @@ and bottom of the atmosphere.
 
 function binary_dcoeff_inCO2(sp, T)
     #=
-    Calculate the bindary diffusion coefficient for species sp, AT^s.
+    Calculate the bindary diffusion coefficient for species sp, b = AT^s.
 
     Currently, this is set up to only work for diffusion through CO2 since that's the Mars atm.
     Could be extended to be for any gas, but that will require some work.
     =#
-    return diffparams(sp)[1] .* 1e17 .* T .^ (diffparams(sp)[2])
+    
+    A = diffparams(sp)[1] .* 1e17 # Empirical parameter (determined it by experiment)
+    s = (diffparams(sp)[2]) # Empirical parameter (det. by exp.)
+    b = A .* T .^ s # T = temperature
+    return b
 end
 
 function boundaryconditions(fluxcoef_dict, atmdict, M, n_horiz::Int64; nonthermal=true, globvars...)
@@ -1941,7 +1945,7 @@ function Dcoef!(D_arr, T_arr_2D, sp::Symbol, atmdict::Dict{Symbol, Vector{Array{
     15.30 and table 15.2 footnote.
     For ions, it returns ambipolar diffusion coefficients according to Krasnopolsky 2002 and 
     Schunk & Nagy equation 5.55. Yes, the equation is done in one line and it's ugly, but it works.
-    Units: cm/s
+    Units: cm^2/s
 
     Inputs:
         D_arr: the container for the diffusion coefficients for ONE species.
@@ -2685,10 +2689,16 @@ function update_horiz_transport_coefficients(species_list, atmdict::Dict{Symbol,
     # transport coefficients for boundaries
     tbackedge = Vector{Array{Float64}}(undef, GV.num_layers)
     tfrontedge = Vector{Array{Float64}}(undef, GV.num_layers)
-    for ialt in [1:GV.num_layers;]
-    	tbackedge[ialt] = permutedims(reduce(hcat, [bc_dict_horiz[sp][ialt][1,:] for sp in GV.transport_species]))
-    	tfrontedge[ialt] = permutedims(reduce(hcat, [bc_dict_horiz[sp][ialt][2,:] for sp in GV.transport_species]))
+    for ialt in 1:GV.num_layers
+        back_cols  = [bc_dict_horiz[sp][ialt][1, :] for sp in GV.transport_species]
+        front_cols = [bc_dict_horiz[sp][ialt][2, :] for sp in GV.transport_species]
+        tbackedge[ialt]  = permutedims(reduce(hcat, back_cols))
+        tfrontedge[ialt] = permutedims(reduce(hcat, front_cols))
     end
+
+    expected_edge_shape = (length(GV.transport_species), 2)
+    @assert all(size(mat) == expected_edge_shape for mat in tbackedge) "horizontal back edge shape mismatch"
+    @assert all(size(mat) == expected_edge_shape for mat in tfrontedge) "horizontal front edge shape mismatch"
 
     return tbackedge, tforwards, tbackwards, tfrontedge
 end
@@ -2785,6 +2795,8 @@ function set_h2oinitfrac_bySVP(atmdict, h_alt; ihoriz=1, globvars...)
 end
 
 function setup_water_profile!(atmdict; constfrac=1, dust_storm_on=false, make_sat_curve=false, water_amt="standard", excess_water_in="mesosphere", 
+                                       venus_special_water=false, venus_special_h2o_bot=nothing, venus_special_hdo_bot=nothing,
+                                       venus_special_h2o_top=nothing, venus_special_hdo_top=nothing,
                                        showonly=false, hygropause_alt=40e5, globvars...)
     #=
     Sets up the water profile as a fraction of the initial atmosphere. 

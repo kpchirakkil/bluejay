@@ -309,6 +309,12 @@ function populate_xsect_dict(pd_dataf, xsecfolder; ion_xsects=true, globvars...)
         end
     end
 
+    # Validate that cross sections have shape (n_horiz, n_all_layers)
+    for (jr, cols) in xsect_dict
+        @assert length(cols) == GV.n_horiz "cross section column count mismatch for $(jr)"
+        @assert all(length(profile) == GV.n_all_layers for profile in cols) "cross section altitude count mismatch for $(jr)"
+    end
+
     return xsect_dict
 end
 

@@ -157,6 +157,13 @@ def interpolate_solar_spectrum(
     
     return whole_spectrum
 
+# MAIN =======================================================================================================================
+# Get user input -------------------------------------------------------------------------------------------------------------
+planet_name = input("Enter planet name: ")
+solarfile = input("Enter the file with solar spectrum data in W/m^2/nm: ")
+theAU = float(input("Enter AU at which you'd like the output: "))
+descriptive_tag = input("Enter a descriptive tag for this spectrum (please use underscores): ")
+in_situ_data = input(f"Is any of the data taken by a mission that orbits {planet_name}? (Please enter True or False): ")
 
 # MAIN =======================================================================================================================
 # Get user input -------------------------------------------------------------------------------------------------------------
