@@ -2289,7 +2289,7 @@ function fluxcoefs_horiz(
     globvars...
 )
     GV = values(globvars)
-    required = [:dx, :n_all_layers]
+    required = [:dx, :n_all_layers, :enable_horiz_diffusion]
     check_requirements(keys(GV), required)
     
     # the return dictionary: Each species has 2 entries for every layer of the atmosphere.
@@ -2312,16 +2312,18 @@ function fluxcoefs_horiz(
                 diff_back = 0.0
                 diff_front = 0.0
 
-                if behind_idx >= 1
-                    K_back = (K[ihoriz][ialt] + K[behind_idx][ialt]) / 2
-                    D_back = (D[s][ihoriz][ialt] + D[s][behind_idx][ialt]) / 2
-                    diff_back = (K_back + D_back) / GV.dx^2
-                end
+                if GV.enable_horiz_diffusion
+                    if behind_idx >= 1
+                        K_back = (K[ihoriz][ialt] + K[behind_idx][ialt]) / 2
+                        D_back = (D[s][ihoriz][ialt] + D[s][behind_idx][ialt]) / 2
+                        diff_back = (K_back + D_back) / GV.dx^2
+                    end
 
-                if infront_idx <= n_horiz
-                    K_front = (K[ihoriz][ialt] + K[infront_idx][ialt]) / 2
-                    D_front = (D[s][ihoriz][ialt] + D[s][infront_idx][ialt]) / 2
-                    diff_front = (K_front + D_front) / GV.dx^2
+                    if infront_idx <= n_horiz
+                        K_front = (K[ihoriz][ialt] + K[infront_idx][ialt]) / 2
+                        D_front = (D[s][ihoriz][ialt] + D[s][infront_idx][ialt]) / 2
+                        diff_front = (K_front + D_front) / GV.dx^2
+                    end
                 end
 
                 # v = horiz_wind_v[ihoriz][ialt]
@@ -2332,10 +2334,14 @@ function fluxcoefs_horiz(
                 v_front = infront_idx <= n_horiz ? horiz_wind_v[infront_idx][ialt] : 0.0
                 v_back  = behind_idx >= 1     ? horiz_wind_v[behind_idx][ialt]  : 0.0
 
-                adv_front = (v_local > 0 ? v_local : 0.0) / GV.dx +
-                            (v_front < 0 ? -v_front : 0.0) / GV.dx
-                adv_back  = (v_local < 0 ? -v_local : 0.0) / GV.dx +
-                            (v_back  > 0 ? v_back  : 0.0) / GV.dx
+                adv_front = 0.0
+                adv_back  = 0.0
+                if GV.enable_horiz_diffusion
+                    adv_front = (v_local > 0 ? v_local : 0.0) / GV.dx +
+                                (v_front < 0 ? -v_front : 0.0) / GV.dx
+                    adv_back  = (v_local < 0 ? -v_local : 0.0) / GV.dx +
+                                (v_back  > 0 ? v_back  : 0.0) / GV.dx
+                end
 
                 fluxcoef_dict[s][ihoriz][ialt, 1] = diff_back + adv_back
                 fluxcoef_dict[s][ihoriz][ialt, 2] = diff_front + adv_front
@@ -2629,7 +2635,7 @@ function update_horiz_transport_coefficients(species_list, atmdict::Dict{Symbol,
                :hot_H2_network, :hot_H2_rc_funcs, :hot_HD_network, :hot_HD_rc_funcs, :Hs_dict,
                :ion_species, :M_P, :molmass, :neutral_species, :non_bdy_layers, :num_layers, :n_all_layers, :n_alt_index,
                :polarizability, :q, :R_P, :Tn, :Ti, :Te, :Tp, :Tprof_for_diffusion, :transport_species,
-               :use_ambipolar, :use_molec_diff, :zmax, :horiz_wind_v]
+               :use_ambipolar, :use_molec_diff, :zmax, :horiz_wind_v, :enable_horiz_diffusion]
     check_requirements(keys(GV), required)
 
     # Get flux coefficients

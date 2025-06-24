@@ -95,7 +95,16 @@ function get_ncurrent(readfile::String, n_horiz::Int64)
             profile = vcat(profile, fill(last(profile), target_layers - length(profile)))
         end
 
-        n_current[n_current_tag_list[ispecies]] = fill(profile, n_horiz)
+        # n_current[n_current_tag_list[ispecies]] = fill(profile, n_horiz)
+        
+        # Duplicate the profile for each column so that updates to one column do not modify the others by aliasing the same array.
+        n_current[n_current_tag_list[ispecies]] = [copy(profile) for _ in 1:n_horiz]
+    end
+    if isdefined(Main, :all_species)
+        zero_prof = fill(ftype_ncur(0.0), target_layers)
+        for sp in setdiff(Main.all_species, keys(n_current))
+            n_current[sp] = fill(copy(zero_prof), n_horiz)
+        end
     end
     return n_current
 end

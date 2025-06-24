@@ -345,6 +345,10 @@ const Tprof_for_Hs = Dict("neutral"=>Tn_arr, "ion"=>Ti_arr)
 # Setting that value to zero disables horizontal transport.
 const horiz_wind_v = [fill(horiz_wind_speed, length(alt)) for ihoriz in 1:n_horiz]
 
+# Toggle cross-column diffusion.  When disabled the horizontal transport
+# routines will return zero coefficients so that each column evolves
+# independently.
+
 #                                      Water profile settings
 # =======================================================================================================
 
@@ -380,6 +384,7 @@ if planet=="Venus"
     const reinitialize_water_profile = venus_special_water==true ? true : false
 elseif planet=="Mars"
     const reinitialize_water_profile = seasonal_cycle==true ? false : true # should be off if trying to run simulations for seasons
+    # const reinitialize_water_profile = false
 end
 
 const update_water_profile = seasonal_cycle==true ? true : false # this is for modifying the profile during cycling, MAY be fixed?

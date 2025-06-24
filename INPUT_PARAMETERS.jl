@@ -14,14 +14,14 @@
 
 # Set the planet 
 # =======================================================================================================
-const planet = "Mars"
+const planet = "Venus"
     # OPTIONS: "Mars", "Venus"
 
 # Input and output files, directory
 # =======================================================================================================
 const results_dir = code_dir*"../Results_$(planet)/"
-const initial_atm_file = "$(planet)-Inputs/INITIAL_GUESS_MARS_bxz4YnHk.h5"  # File to use to initialize the atmosphere.
-# const initial_atm_file = "$(planet)-Inputs/INITIAL_GUESS_VENUS_oUT0ZbGN.h5"  # File to use to initialize the atmosphere.
+# const initial_atm_file = "$(planet)-Inputs/INITIAL_GUESS_MARS_bxz4YnHk.h5"  # File to use to initialize the atmosphere.
+const initial_atm_file = "$(planet)-Inputs/INITIAL_GUESS_VENUS_oUT0ZbGN.h5"  # File to use to initialize the atmosphere.
     # OPTIONS: 
     # INITIAL_GUESS_MARS.h5 --> Basic Mars starting file.
     # INITIAL_GUESS_MARS_bxz4YnHk.h5 --> A Mars atmosphere that includes N2O, NO2, and their ions;
@@ -198,4 +198,9 @@ const use_molec_diff = true # Toggle molecular diffusion. If turned off, eddy di
 
 # Default horizontal wind speed in cm/s used to initialize wind profiles in
 # `MODEL_SETUP.jl`. Set to zero for no horizontal transport.
-const horiz_wind_speed = 10.0
+const horiz_wind_speed = 0.0
+
+# Whether to allow horizontal diffusion between columns. When set to `false`
+# the model does not compute any cross-column mixing, matching the behaviour of
+# the single-column set-up even when multiple columns are present.
+const enable_horiz_diffusion = false
