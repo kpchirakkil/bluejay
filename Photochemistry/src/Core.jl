@@ -88,16 +88,32 @@ function electron_density(atmdict; globvars...)
     required = [:e_profile_type, :ion_species, :non_bdy_layers]
     check_requirements(keys(GV), required)
 
-    if GV.e_profile_type=="constant"
-        E = [1e5 for i in GV.non_bdy_layers]
-    elseif GV.e_profile_type=="quasineutral"
-        E = sum([atmdict[sp] for sp in GV.ion_species])
-    elseif GV.e_profile_type=="none"  # For neutrals-only simulation but without changing how E is passed to other functions. 
-        E = [0. for i in GV.non_bdy_layers]
+    # Determine how many horizontal columns are present.
+    n_horiz = get(GV, :n_horiz, 1)
+
+    if GV.e_profile_type == "constant"
+        # Fill with a constant electron density profile for every column.
+        template = fill(1e5, length(GV.non_bdy_layers))
+        return [copy(template) for _ in 1:n_horiz]
+
+    elseif GV.e_profile_type == "quasineutral"
+        # Multi column atmospheres store species as vectors of altitude arrays.
+        # Handle both the legacy single column format and the new multicolumn
+        # format.
+        if atmdict[GV.ion_species[1]] isa Vector
+            return [sum(atmdict[sp][ih] for sp in GV.ion_species)
+                    for ih in 1:n_horiz]
+        else
+            return [sum(atmdict[sp] for sp in GV.ion_species)]
+        end
+
+    elseif GV.e_profile_type == "none"
+        template = zeros(length(GV.non_bdy_layers))
+        return [copy(template) for _ in 1:n_horiz]
+
     else
-        throw("Unhandled electron profile specification: $(e_profile_type)")
+        throw("Unhandled electron profile specification: $(GV.e_profile_type)")
     end
-    return E
 end
 
 function find_exobase(sp::Symbol, atmdict::Dict{Symbol, Vector{Array{ftype_ncur}}};
@@ -2627,10 +2643,6 @@ function update_horiz_transport_coefficients(species_list, atmdict::Dict{Symbol,
     =#
 
     GV = values(globvars)
-    # required = [:all_species, :alt, :speciesbclist, :dx, :hot_H_network, :hot_H_rc_funcs, :hot_D_network, :hot_D_rc_funcs, 
-    #            :hot_H2_network, :hot_H2_rc_funcs, :hot_HD_network, :hot_HD_rc_funcs, :Hs_dict, 
-    #            :ion_species, :M_P, :molmass, :neutral_species, :non_bdy_layers, :num_layers, :n_all_layers, :n_alt_index, 
-    #            :polarizability, :q, :R_P, :Tn, :Ti, :Te, :Tp, :Tprof_for_diffusion, :transport_species, :use_ambipolar, :use_molec_diff, :zmax]
     required = [:all_species, :alt, :speciesbclist, :dx, :hot_H_network, :hot_H_rc_funcs, :hot_D_network, :hot_D_rc_funcs,
                :hot_H2_network, :hot_H2_rc_funcs, :hot_HD_network, :hot_HD_rc_funcs, :Hs_dict,
                :ion_species, :M_P, :molmass, :neutral_species, :non_bdy_layers, :num_layers, :n_all_layers, :n_alt_index,

@@ -59,10 +59,8 @@ Note that this is a simplified version with 4 species and 7 altitude bins.
 - Horizontal boundary conditions are stored separately per altitude with bc_dict_horiz[sp][ialt][row, col] and populated consistently inside the loop over ialt
 - Make sure the horizontal transport coefficients are placed correctly in the transport matrices (chemical Jacobian and rate functions)
 - Focus on important model files (such as but not limited to): converge_new_file.jl, MODEL_SETUP.jl, INPUT_PARAMETERS.jl, ReactionNetwork.jl, Plotting.jl, Core.jl, AnalyzeChemAndTransport.jl, Crosssections.jl
-- Resolve any remaining "MULTICOL WARNING" or "MID FIX" or "HARD CODED" issues in the implementation of 2-D multicolumn model with horizontal transport
-- No need to run Julia scripts, since Julia is not installed in the environment?
 
-## In the process of putting all the species and altitudes back in
+## Put all the species and altitudes back in
 
 - Make sure the 2-D multicolumn framework is working in the full set-up (all species and altitudes) with horizontal transport implemented.
 - Make sure the multicolumn branch is working for both Mars and Venus. Master branch (1-D single column) is working for both Mars and Venus.
