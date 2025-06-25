@@ -58,15 +58,15 @@ $$
 
 - Forward advection coefficient:
 
-$$
+$\displaystyle
 \mathrm{adv}_{\text{front}} = \frac{\max(v_{\text{local}},0) + \max(-v_{\text{front}},0)}{\Delta x}
-$$
+$
 
 - Backward advection coefficient:
 
-$$
+$\displaystyle
 \mathrm{adv}_{\text{back}} = \frac{\max(-v_{\text{local}},0) + \max(v_{\text{back}},0)}{\Delta x}
-$$
+$
 
 ### 4. `update_horiz_transport_coefficients`
 
@@ -94,7 +94,7 @@ The implementation was validated using a test script (`horizontal_transport_test
 **Example:**
 
 - Two altitude bins and two horizontal columns.
-- Horizontal cell width \((\Delta x = 1\,\text{cm})\), wind speed \((v = 10\,\text{cm/s})\):
+- Horizontal cell width $(\Delta x = 1\,\text{cm})$, wind speed $(v = 10\,\text{cm/s})$:
 
 $$
 \text{Advection rate} = \frac{v}{\Delta x} = 10\,\text{s}^{-1}
@@ -132,4 +132,5 @@ Horizontal transport is implemented using an upwind numerical scheme for advecti
 4. **Planetary Atmosphere Modeling Examples**
    - Krasnopolsky, V. A. (2019). "Spectroscopy and Photochemistry of Planetary Atmospheres and Ionospheres: Mars, Venus, Titan, Triton and Pluto." *Cambridge Planetary Science, Series Number 23* (Reviews photochemical modeling frameworks used specifically for Venus, Mars, and other planetary atmospheres, including transport considerations.)
    - Lefèvre, F., Lebonnois, S., Montmessin, F., & Forget, F. (2004). "Three-dimensional modeling of ozone on Mars." *Journal of Geophysical Research: Planets, 109*(E7), E07004. <https://doi.org/10.1029/2004JE002268> (A practical example of implementing horizontal transport with advection-diffusion schemes on Mars.)
-   - Montmessin, F., & Lefèvre, F. (2013). "Transport-driven formation of a polar ozone layer on Mars." *Nature Geosci 6*930–933. <https://doi.org/10.1038/ngeo1957> (Detailed application of horizontal transport modeling including wind-driven advection and diffusion on Mars.)
+   - Montmessin, F. et al., (2011). "A layer of ozone detected in the nightside upper atmosphere of Venus." *Icarus, 216*, 82-85. <https://doi.org/10.1016/j.icarus.2011.08.010>
+   - Montmessin, F., & Lefèvre, F. (2013). "Transport-driven formation of a polar ozone layer on Mars." *Nature Geoscience, 6*, 930–933. <https://doi.org/10.1038/ngeo1957> (Detailed application of horizontal transport modeling including wind-driven advection and diffusion on Mars.)
