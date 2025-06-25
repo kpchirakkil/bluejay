@@ -1,4 +1,4 @@
-# Implementation of Horizontal Transport in 2-D Multicolumn Photochemical Model for Venus and Mars
+# Implementation of Horizontal Transport in bluejay (2-D Multicolumn Photochemical Model for Venus and Mars)
 
 ## Overview
 
@@ -59,13 +59,13 @@ $$
 - Forward advection coefficient:
 
 $$
-\text{adv\_front} = \frac{\max(v_{local},0) + \max(-v_{front},0)}{\Delta x}
+\mathrm{adv}_{\text{front}} = \frac{\max(v_{\text{local}},0) + \max(-v_{\text{front}},0)}{\Delta x}
 $$
 
 - Backward advection coefficient:
 
 $$
-\text{adv\_back} = \frac{\max(-v_{local},0) + \max(v_{back},0)}{\Delta x}
+\mathrm{adv}_{\text{back}} = \frac{\max(-v_{\text{local}},0) + \max(v_{\text{back}},0)}{\Delta x}
 $$
 
 ### 4. `update_horiz_transport_coefficients`
@@ -94,7 +94,7 @@ The implementation was validated using a test script (`horizontal_transport_test
 **Example:**
 
 - Two altitude bins and two horizontal columns.
-- Horizontal cell width, \(\Delta x = 1\,\text{cm}\), wind speed, \(v = 10\,\text{cm/s}\):
+- Horizontal cell width \((\Delta x = 1\,\text{cm})\), wind speed \((v = 10\,\text{cm/s})\):
 
 $$
 \text{Advection rate} = \frac{v}{\Delta x} = 10\,\text{s}^{-1}
@@ -113,58 +113,23 @@ Transport matrix comparison verifies agreement with the analytic solution.
 
 The implemented horizontal transport scheme in the 2-D multicolumn photochemical model effectively combines advection (using an upwind numerical scheme) and diffusion (via averaged diffusion coefficients). The modular design, flexible boundary conditions, and comprehensive verification provide a robust and adaptable framework suitable for modeling planetary atmospheres such as those of Venus and Mars.
 
-## Literature References
+## References
 
 Horizontal transport is implemented using an upwind numerical scheme for advection, consistent with methods described by LeVeque (2002) and Hundsdorfer & Verwer (2003), with averaged diffusion coefficients following Brasseur & Solomon (2005) and Jacobson (2005). Similar approaches have been successfully applied in planetary atmospheric models (e.g., Lefèvre et al., 2004; Montmessin et al., 2011).
 
-1. General Photochemical and Transport Modeling References:
-Yung, Y. L., & DeMore, W. B. (1999).
-Photochemistry of Planetary Atmospheres.
-Oxford University Press.
-(Provides foundational theory and examples of photochemical models for planetary atmospheres, including basic transport equations.)
+1. **General Photochemical and Transport Modeling References**
+   - Yung, Y. L., & DeMore, W. B. (1999). *Photochemistry of Planetary Atmospheres*. Oxford University Press. (Provides foundational theory and examples of photochemical models for planetary atmospheres, including basic transport equations.)
+   - Jacobson, M. Z. (2005). *Fundamentals of Atmospheric Modeling* (2nd ed.). Cambridge University Press. (Detailed coverage of numerical transport schemes, including horizontal advection and diffusion, with explicit numerical formulations.)
 
-Jacobson, M. Z. (2005).
-Fundamentals of Atmospheric Modeling (2nd Edition).
-Cambridge University Press.
-(Detailed coverage of numerical transport schemes, including horizontal advection and diffusion, with explicit numerical formulations.)
+2. **Upwind Numerical Advection Schemes**
+   - Hundsdorfer, W., & Verwer, J. G. (2003). *Numerical Solution of Time-Dependent Advection-Diffusion-Reaction Equations*. Springer Series in Computational Mathematics, Vol. 33. (Clear and thorough description of upwind advection schemes and stability considerations.)
+   - LeVeque, R. J. (2002). *Finite Volume Methods for Hyperbolic Problems*. Cambridge University Press. (Comprehensive reference for numerical flux schemes, including detailed discussion of upwind and related numerical methods.)
 
-2. Upwind Numerical Advection Schemes:
-Hundsdorfer, W., & Verwer, J. G. (2003).
-Numerical Solution of Time-Dependent Advection-Diffusion-Reaction Equations.
-Springer Series in Computational Mathematics, Vol. 33.
-(Clear and thorough description of upwind advection schemes and stability considerations.)
+3. **Diffusion Coefficients and Numerical Averaging**
+   - Brasseur, G. P., & Solomon, S. (2005). *Aeronomy of the Middle Atmosphere* (3rd ed.). Springer Netherlands. (Discusses diffusion in planetary atmospheres, averaging techniques for diffusivity between adjacent grid cells, and practical considerations in numerical models.)
+   - Seinfeld, J. H., & Pandis, S. N. (2006). *Atmospheric Chemistry and Physics: From Air Pollution to Climate Change* (2nd ed.). John Wiley & Sons. (Detailed treatments of numerical diffusion approaches, stability, and accuracy concerns in horizontal transport.)
 
-LeVeque, R. J. (2002).
-Finite Volume Methods for Hyperbolic Problems.
-Cambridge University Press.
-(Comprehensive reference for numerical flux schemes, including detailed discussion of upwind and related numerical methods.)
-
-3. Diffusion Coefficients and Numerical Averaging:
-Brasseur, G. P., & Solomon, S. (2005).
-Aeronomy of the Middle Atmosphere (3rd Edition).
-Springer Netherlands.
-(Discusses diffusion in planetary atmospheres, averaging techniques for diffusivity between adjacent grid cells, and practical considerations in numerical models.)
-
-Seinfeld, J. H., & Pandis, S. N. (2006).
-Atmospheric Chemistry and Physics: From Air Pollution to Climate Change (2nd Edition).
-John Wiley & Sons.
-(Detailed treatments of numerical diffusion approaches, stability, and accuracy concerns in horizontal transport.)
-
-4. Planetary Atmosphere Modeling Examples:
-Krasnopolsky, V. A. (2019).
-"Photochemistry of planetary atmospheres: Advances and challenges."
-Planetary and Space Science, 175, 49-60.
-https://doi.org/10.1016/j.pss.2019.04.005
-(Reviews photochemical modeling frameworks used specifically for Venus, Mars, and other planetary atmospheres, including transport considerations.)
-
-Lefèvre, F., Lebonnois, S., Montmessin, F., & Forget, F. (2004).
-"Three-dimensional modeling of ozone on Mars."
-Journal of Geophysical Research: Planets, 109(E7), E07004.
-https://doi.org/10.1029/2004JE002268
-(A practical example of implementing horizontal transport with advection-diffusion schemes on Mars.)
-
-Montmessin, F., Lefèvre, F., Lebonnois, S., Forget, F., & Quémerais, E. (2011).
-"Simulating the chemistry and transport of water vapor and aerosols in the Martian atmosphere."
-Icarus, 215(1), 304-322.
-https://doi.org/10.1016/j.icarus.2011.06.006
-(Detailed application of horizontal transport modeling including wind-driven advection and diffusion on Mars.)
+4. **Planetary Atmosphere Modeling Examples**
+   - Krasnopolsky, V. A. (2019). "Spectroscopy and Photochemistry of Planetary Atmospheres and Ionospheres: Mars, Venus, Titan, Triton and Pluto." *Cambridge Planetary Science, Series Number 23* (Reviews photochemical modeling frameworks used specifically for Venus, Mars, and other planetary atmospheres, including transport considerations.)
+   - Lefèvre, F., Lebonnois, S., Montmessin, F., & Forget, F. (2004). "Three-dimensional modeling of ozone on Mars." *Journal of Geophysical Research: Planets, 109*(E7), E07004. <https://doi.org/10.1029/2004JE002268> (A practical example of implementing horizontal transport with advection-diffusion schemes on Mars.)
+   - Montmessin, F., & Lefèvre, F. (2013). "Transport-driven formation of a polar ozone layer on Mars." *Nature Geosci 6*930–933. <https://doi.org/10.1038/ngeo1957> (Detailed application of horizontal transport modeling including wind-driven advection and diffusion on Mars.)
