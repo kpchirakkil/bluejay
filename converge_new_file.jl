@@ -6,8 +6,8 @@
 # 
 # Eryn Cangi
 # Created 2018
-# Last edited: October 2022
-# Currently tested for Julia: 1.7.1
+# Last edited: June 2025
+# Currently tested for Julia: 1.11.2
 ###############################################################################
 
 # **************************************************************************** #
@@ -140,7 +140,7 @@ function evolve_atmosphere(atm_init::Dict{Symbol, Vector{Array{ftype_ncur}}}, lo
         M[:, ihoriz] = n_tot(atm_init, ihoriz; GV.all_species)
     end
     # E = electron_density(n_current; GV.e_profile_type, GV.non_bdy_layers, GV.ion_species)
-    E = electron_density(atm_init; GV.e_profile_type, GV.non_bdy_layers, GV.ion_species)
+    E = electron_density(atm_init; GV.e_profile_type, GV.non_bdy_layers, GV.ion_species, n_horiz)
 
     params_Gear = [GV.Dcoef_arr_template, M, E]
     params_J = [globvars, GV.Dcoef_arr_template, M, E] # kwargs can't be passed to the julia ODE solver functions 
@@ -1001,7 +1001,7 @@ function update!(n_current::Dict{Symbol, Vector{Array{ftype_ncur}}}, t, dt; abst
     for ihoriz in 1:n_horiz
         M[:, ihoriz] = n_tot(n_current, ihoriz; GV.all_species)
     end
-    E = electron_density(n_current; GV.e_profile_type, GV.non_bdy_layers, GV.ion_species)
+    E = electron_density(n_current; GV.e_profile_type, GV.non_bdy_layers, GV.ion_species, n_horiz)
 
     # global params for simulation
     params = [GV.Dcoef_arr_template, M, E]
@@ -1178,7 +1178,7 @@ end
 
 #                        Initialize electron profile                            #
 #===============================================================================#
-E = electron_density(n_current; e_profile_type, non_bdy_layers, ion_species)
+E = electron_density(n_current; e_profile_type, non_bdy_layers, ion_species, n_horiz)
 
 #                          Set up the water profile                             #
 #===============================================================================#
@@ -1745,7 +1745,7 @@ if ftype_ncur==Double64
 
     # Set up the initial state and check for any problems 
     M = [n_tot(n_current, ihoriz; all_species) for ihoriz in 1:n_horiz]
-    E = electron_density(n_current; e_profile_type, non_bdy_layers, ion_species)
+    E = electron_density(n_current; e_profile_type, non_bdy_layers, ion_species, n_horiz)
 
     nstart = flatten_atm(n_current, active_longlived; num_layers)
     find_nonfinites(nstart, collec_name="nstart")
@@ -1917,7 +1917,7 @@ elseif problem_type == "ODE"
 elseif problem_type == "Gear"
     # Plot the final atmospheric state
     println("Plotting final atmosphere, writing out state")
-    final_E_profile = electron_density(atm_soln; e_profile_type, non_bdy_layers, ion_species)   
+    final_E_profile = electron_density(atm_soln; e_profile_type, non_bdy_layers, ion_species, n_horiz)
     plot_atm(atm_soln, results_dir*sim_folder_name*"/final_atmosphere.png", abs_tol_for_plot, final_E_profile, n_horiz; ylims=[zmin/1e5, zmax/1e5],
              t="final converged state, total time = $(sim_time)", neutral_species, ion_species, plot_grid, speciescolor, speciesstyle, zmax, hrshortcode, rshortcode,
              monospace_choice, sansserif_choice)
