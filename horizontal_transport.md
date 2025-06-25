@@ -59,13 +59,13 @@ $$
 - Forward advection coefficient:
 
 $$
-\text{adv\_front} = \frac{\max(v_{local},0) + \max(-v_{front},0)}{\Delta x}
+\text{adv$\_$front} = \frac{\max(v_{local},0) + \max(-v_{front},0)}{\Delta x}
 $$
 
 - Backward advection coefficient:
 
 $$
-\text{adv\_back} = \frac{\max(-v_{local},0) + \max(v_{back},0)}{\Delta x}
+\text{adv$\_$back} = \frac{\max(-v_{local},0) + \max(v_{back},0)}{\Delta x}
 $$
 
 ### 4. `update_horiz_transport_coefficients`
@@ -106,7 +106,7 @@ Transport matrix comparison verifies agreement with the analytic solution.
 
 - Upwind Scheme for Advection: This is a robust numerical method for ensuring stability, especially when handling sharp concentration gradients and high wind speeds.
 - Averaging Diffusion Coefficients: Taking the average of diffusion coefficients between adjacent columns is an effective way to represent continuous horizontal mixing accurately.
-- Modular Implementation: Clearly defined routines (speciesbclist_horiz, fluxcoefs_horiz, etc.) make the approach adaptable and easy to debug or modify.
+- Modular Implementation: Clearly defined routines (`speciesbclist_horiz`, `fluxcoefs_horiz`, etc.) make the approach adaptable and easy to debug or modify.
 - Flexible Boundary Conditions: Allowing for periodic and non-periodic boundary conditions, including customizable fluxes, adds significant versatility.
 
 ## Summary
@@ -115,7 +115,7 @@ The implemented horizontal transport scheme in the 2-D multicolumn photochemical
 
 ## References
 
-Horizontal transport is implemented using an upwind numerical scheme for advection, consistent with methods described by LeVeque (2002) and Hundsdorfer & Verwer (2003), with averaged diffusion coefficients following Brasseur & Solomon (2005) and Jacobson (2005). Similar approaches have been successfully applied in planetary atmospheric models (e.g., Lefèvre et al., 2004; Montmessin et al., 2011).
+Horizontal transport is implemented using an upwind numerical scheme for advection, consistent with methods described by LeVeque (2002) and Hundsdorfer & Verwer (2003), with averaged diffusion coefficients following Brasseur & Solomon (2005) and Jacobson (2005). Similar approaches have been successfully applied in planetary atmospheric models (e.g., Lefèvre et al., 2004).
 
 1. **General Photochemical and Transport Modeling References**
    - Yung, Y. L., & DeMore, W. B. (1999). *Photochemistry of Planetary Atmospheres*. Oxford University Press. (Provides foundational theory and examples of photochemical models for planetary atmospheres, including basic transport equations.)
@@ -132,5 +132,5 @@ Horizontal transport is implemented using an upwind numerical scheme for advecti
 4. **Planetary Atmosphere Modeling Examples**
    - Krasnopolsky, V. A. (2019). "Spectroscopy and Photochemistry of Planetary Atmospheres and Ionospheres: Mars, Venus, Titan, Triton and Pluto." *Cambridge Planetary Science, Series Number 23* (Reviews photochemical modeling frameworks used specifically for Venus, Mars, and other planetary atmospheres, including transport considerations.)
    - Lefèvre, F., Lebonnois, S., Montmessin, F., & Forget, F. (2004). "Three-dimensional modeling of ozone on Mars." *Journal of Geophysical Research: Planets, 109*(E7), E07004. <https://doi.org/10.1029/2004JE002268> (A practical example of implementing horizontal transport with advection-diffusion schemes on Mars.)
-   - Montmessin, F. et al., (2011). "A layer of ozone detected in the nightside upper atmosphere of Venus." *Icarus, 216*, 82-85. <https://doi.org/10.1016/j.icarus.2011.08.010>
-   - Montmessin, F., & Lefèvre, F. (2013). "Transport-driven formation of a polar ozone layer on Mars." *Nature Geoscience, 6*, 930–933. <https://doi.org/10.1038/ngeo1957> (Detailed application of horizontal transport modeling including wind-driven advection and diffusion on Mars.)
+   <!-- - Montmessin, F. et al., (2011). "A layer of ozone detected in the nightside upper atmosphere of Venus." *Icarus, 216*, 82-85. <https://doi.org/10.1016/j.icarus.2011.08.010>
+   - Montmessin, F., & Lefèvre, F. (2013). "Transport-driven formation of a polar ozone layer on Mars." *Nature Geoscience, 6*, 930–933. <https://doi.org/10.1038/ngeo1957> (Detailed application of horizontal transport modeling including wind-driven advection and diffusion on Mars.) -->
