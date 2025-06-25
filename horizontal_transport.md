@@ -58,13 +58,15 @@ $$
 
 - Forward advection coefficient:
 
-```math
-\mathrm{adv}_{\mathrm{front}} = \frac{\max(v_{\mathrm{local}},0) + \max(-v_{\mathrm{front}},0)}{\Delta x}
+$$
+\text{adv\_front} = \frac{\max(v_{local},0) + \max(-v_{front},0)}{\Delta x}
+$$
 
 - Backward advection coefficient:
 
-```math
-\mathrm{adv\_back} = \frac{\max(-v_{\mathrm{local}},0) + \max(v_{\mathrm{back}},0)}{\Delta x}
+$$
+\text{adv\_back} = \frac{\max(-v_{local},0) + \max(v_{back},0)}{\Delta x}
+$$
 
 ### 4. `update_horiz_transport_coefficients`
 
