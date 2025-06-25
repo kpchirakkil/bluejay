@@ -1076,10 +1076,10 @@ if make_new_alt_grid==true
     # end
 
     # const alt = convert(Array, (0:dz:new_zmax*1e5))
+    # const max_alt = new_zmax*1e5
 # elseif make_new_alt_grid==false 
 #     println("$(Dates.format(now(), "(HH:MM:SS)")) Loading atmosphere")
 #     n_current = get_ncurrent(initial_atm_file)
-    # const max_alt = new_zmax*1e5
 end
 
 
@@ -1853,13 +1853,6 @@ if problem_type == "SS"
     write_final_state(nc_all, results_dir, sim_folder_name, final_atm_file; alt, num_layers, hrshortcode, Jratedict=Jrates, rshortcode, external_storage)
     write_to_log(logfile, "$(Dates.format(now(), "(HH:MM:SS)")) Making production/loss plots", mode="a")
     println("Making production/loss plots (this tends to take several minutes)")
-    # @show size(Tn_arr), size(Ti_arr), size(Te_arr), num_layers, n_horiz
-    # plot_production_and_loss(nc_all, results_dir, sim_folder_name, n_horiz; nonthermal=nontherm, all_species, alt, chem_species, collision_xsect, 
-    #                           dz, dx, hot_D_rc_funcs, hot_H_rc_funcs, hot_H2_rc_funcs, hot_HD_rc_funcs, Hs_dict, 
-    #                           hot_H_network, hot_D_network, hot_H2_network, hot_HD_network, hrshortcode, ion_species, Jratedict,
-    #                           molmass, neutral_species, non_bdy_layers, num_layers, n_all_layers, n_alt_index, polarizability, 
-    #                           plot_grid, q, rshortcode, reaction_network, speciesbclist, speciesbclist_horiz, Tn=Tn_arr, Ti=Ti_arr, Te=Te_arr, Tp=Tplasma_arr, 
-    #                           Tprof_for_Hs, Tprof_for_diffusion, transport_species, upper_lower_bdy_i, upper_lower_bdy, zmax)
     if make_P_and_L_plots
         plot_production_and_loss(nc_all, results_dir, sim_folder_name, n_horiz;
                                  separate_cols=true, nonthermal=nontherm, all_species, alt, chem_species,
@@ -1904,13 +1897,6 @@ elseif problem_type == "ODE"
             write_final_state(nc_all, results_dir, sim_folder_name, final_atm_file; alt, num_layers, hrshortcode, Jratedict=Jrates, rshortcode, external_storage)
             write_to_log(logfile, "$(Dates.format(now(), "(HH:MM:SS)")) Making production/loss plots", mode="a")
             println("Making production/loss plots (this tends to take several minutes)")
-            # @show size(Tn_arr), size(Ti_arr), size(Te_arr), num_layers, n_horiz
-            # plot_production_and_loss(nc_all, results_dir, sim_folder_name, n_horiz; nonthermal=nontherm, all_species, alt, chem_species, collision_xsect, 
-            #                           dz, dx, hot_D_rc_funcs, hot_H_rc_funcs, hot_H2_rc_funcs, hot_HD_rc_funcs, Hs_dict, 
-            #                           hot_H_network, hot_D_network, hot_H2_network, hot_HD_network, hrshortcode, ion_species, Jratedict,
-            #                           molmass, neutral_species, non_bdy_layers, num_layers, n_all_layers, n_alt_index, polarizability, 
-            #                           plot_grid, q, rshortcode, reaction_network, speciesbclist, speciesbclist_horiz, Tn=Tn_arr, Ti=Ti_arr, Te=Te_arr, Tp=Tplasma_arr, 
-            #                           Tprof_for_Hs, Tprof_for_diffusion, transport_species, upper_lower_bdy_i, upper_lower_bdy, zmax)
             if make_P_and_L_plots
                 plot_production_and_loss(nc_all, results_dir, sim_folder_name, n_horiz;
                                          separate_cols=true, nonthermal=nontherm, all_species, alt, chem_species,
@@ -1954,13 +1940,6 @@ elseif problem_type == "Gear"
     println("$(Dates.format(now(), "(HH:MM:SS)")) Making production/loss plots (this tends to take several minutes)")
     # make production and loss plots
     if make_P_and_L_plots
-        # @show size(Tn_arr), size(Ti_arr), size(Te_arr), num_layers, n_horiz
-        # plot_production_and_loss(atm_soln, results_dir, sim_folder_name, n_horiz; nonthermal=nontherm, all_species, alt, chem_species, collision_xsect, 
-        #                           dz, dx, hot_D_rc_funcs, hot_H_rc_funcs, hot_H2_rc_funcs, hot_HD_rc_funcs, Hs_dict, 
-        #                           hot_H_network, hot_D_network, hot_H2_network, hot_HD_network, hrshortcode, ion_species, Jratedict, M_P, 
-        #                           molmass, monospace_choice, neutral_species, non_bdy_layers, num_layers, n_all_layers, n_alt_index, polarizability, planet,
-        #                           plot_grid, q, R_P, rshortcode, reaction_network, sansserif_choice, speciesbclist, speciesbclist_horiz, Tn=Tn_arr, Ti=Ti_arr, Te=Te_arr, Tp=Tplasma_arr, 
-        #                           Tprof_for_Hs, Tprof_for_diffusion, transport_species, upper_lower_bdy_i, upper_lower_bdy, use_ambipolar, use_molec_diff, zmax)
         plot_production_and_loss(atm_soln, results_dir, sim_folder_name, n_horiz;
                                  separate_cols=true, nonthermal=nontherm, all_species, alt, chem_species,
                                  collision_xsect, dz, dx, hot_D_rc_funcs, hot_H_rc_funcs,

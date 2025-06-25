@@ -16,7 +16,7 @@
 #                                                                                                       #
 # ***************************************************************************************************** #
 
-# Sans-serif font to use 
+# Sans-serif font to use
 sansserif_choice = "Arial"
 
 # Monospace font to use

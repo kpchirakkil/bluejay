@@ -146,7 +146,7 @@ function get_volume_rates(sp::Symbol, atmdict::Dict{Symbol, Vector{Array{ftype_n
         atmdict: Present atmospheric state dictionary
         n_horiz: Number of vertical columns in the simulation
         Tn, Ti, Te: 2D temperature arrays each of shape (n_horiz, num_layers+2)
-        species_role: whether to look for sp as a "reactant", "product", or "both"
+        species_role: whether to look for the species as a "reactant", "product", or "both"
         which: "all", "Jrates", "krates"
         remove_sp_density: if set to true, remove sp from the reactants
     Output:
