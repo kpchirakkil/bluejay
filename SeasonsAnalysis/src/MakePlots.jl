@@ -221,9 +221,9 @@ function make_equilibrium_plots_temp(case_folders; savepath=nothing, extrafn="",
     esc_df_midT = final_escape(case_folders[2], "final_atmosphere.h5"; globvars...)
     esc_df_highT = final_escape(case_folders[3], "final_atmosphere.h5"; globvars...);
     
-    DH_of_escaping(esc_df_lowT; t=L"T$_{exo}=175$ K" )
-    DH_of_escaping(esc_df_midT; t=L"T$_{exo}=225$ K" )
-    DH_of_escaping(esc_df_midT; t=L"T$_{exo}=400$ K" )
+    DH_of_escaping(esc_df_lowT, case_folders; t=L"T$_{exo}=175$ K" )
+    DH_of_escaping(esc_df_midT, case_folders; t=L"T$_{exo}=225$ K" )
+    DH_of_escaping(esc_df_midT, case_folders; t=L"T$_{exo}=400$ K" )
     
     make_3panel_figure([atm_states["lowT"], atm_states["midT"], atm_states["highT"]], tempcols_dict, "temp", ["cold", "mean", "hot"]; 
                        savepath=savepath, fn="3panel_equilibrium_temps$(extrafn).png", Tn_all, Ti_all, Te_all, GV.alt, GV.speciesstyle)
@@ -401,9 +401,9 @@ function make_equilibrium_plots_water(case_folders; extrafn="", water_where="mes
     esc_df_mean = final_escape(case_folders[2], "final_atmosphere.h5"; globvars...)
     esc_df_high = final_escape(case_folders[3], "final_atmosphere.h5"; globvars...)
     
-    DH_of_escaping(esc_df_low; t="Dry" )
-    DH_of_escaping(esc_df_mean; t="Mean" )
-    DH_of_escaping(esc_df_mean; t="Wet" )
+    DH_of_escaping(esc_df_low, case_folders; t="Dry" )
+    DH_of_escaping(esc_df_mean, case_folders; t="Mean" )
+    DH_of_escaping(esc_df_mean, case_folders; t="Wet" )
     
     # Define some colors
     watercolors = get_colors(3, "Blues"; strt=0.4, stp=1) # starts with lighter one and progresses to darker. 

@@ -6,8 +6,8 @@
 # 
 # Eryn Cangi
 # Created April 2024
-# Last edited: August 2024
-# Currently tested for Julia: 1.8.5
+# Last edited: June 2025
+# Currently tested for Julia: 1.11.2
 ################################################################################
 
 using DataFrames

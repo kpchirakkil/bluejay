@@ -38,7 +38,7 @@ function parent_folders_from_full_path(list_of_full_paths)
     return thefolders
 end
 
-function DH_of_escaping(df; t="")
+function DH_of_escaping(df, thefiles; t="")
     
     SMOW = 1.6e-4
 

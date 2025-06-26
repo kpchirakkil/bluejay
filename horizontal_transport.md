@@ -104,10 +104,21 @@ Transport matrix comparison verifies agreement with the analytic solution.
 
 ## Strengths of the Current Approach
 
+The model implements horizontal transport by introducing separate horizontal columns coupled through diffusion and wind‑driven advection.
+
 - Upwind Scheme for Advection: This is a robust numerical method for ensuring stability, especially when handling sharp concentration gradients and high wind speeds.
 - Averaging Diffusion Coefficients: Taking the average of diffusion coefficients between adjacent columns is an effective way to represent continuous horizontal mixing accurately.
 - Modular Implementation: Clearly defined routines (`speciesbclist_horiz`, `fluxcoefs_horiz`, etc.) make the approach adaptable and easy to debug or modify.
 - Flexible Boundary Conditions: Allowing for periodic and non-periodic boundary conditions, including customizable fluxes, adds significant versatility.
+
+## Potential Improvements or Alternatives
+
+Implementing more advanced advection schemes or coupling with external wind data could enhance accuracy for cases with strong horizontal variability.
+
+- Higher-order advection: Upwind schemes are robust but only first-order accurate. Using higher-order methods (e.g., flux limiters, TVD schemes) could reduce numerical diffusion, especially when strong gradients occur across columns.
+- Variable or spatially dependent horizontal winds: The current implementation allows a wind profile per column. More sophisticated models often include spatial variability in the advection term (e.g., using winds from a GCM or prescribing shear with altitude). Extending the wind arrays or reading them from external data would improve realism.
+- Mass-conserving diffusion: The code already averages diffusion coefficients, but ensuring strict global mass conservation (especially with cyclic boundaries) might require verifying that flux leaving one column is exactly balanced by the flux entering the next. Checks or constraints in fluxcoefs_horiz could reinforce this.
+- Two-way coupling with vertical transport: Horizontal transport is computed separately from vertical flux coefficients. For atmospheres where horizontal transport interacts with vertical mixing (e.g., along isentropes), a more integrated solver might be beneficial.
 
 ## Summary
 

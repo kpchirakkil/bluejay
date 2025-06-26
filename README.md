@@ -32,7 +32,7 @@ Things bluejay does not do at this time:
 
 ## Installation 
 
-bluejay is currently up-to-date with Julia 1.8.5. It will likely work with newer versions, but it has not yet been tested. 
+bluejay is currently up-to-date with Julia 1.11.2. It will likely work with newer versions, but it has not yet been tested. 
 
 At this time, there are no compiled binaries. The model is provided as a collection of modules (under the Photochemistry module) and related scripts. To install, simply ensure that Julia is installed in the location of your choice and added to your environment $PATH variable, and fork the repo. The root directory of the model must contain:
 
@@ -83,9 +83,9 @@ The Photochemistry module contains several submodules:
   - Photochemical equilibrium functions
 - **Crosssections.jl**: Functions which load cross section data and populate the dictionary of cross sections. Note, the J rates are hard-coded in as lists of reactants and products at this time due to the many different ways they are handled. This may be improvable/automatable in the future.
 - **FileIO.jl**: Anything that involves getting info out of or writing info into a file, including saving the model results and parameter logs.
-- **JuliaODEsolver.jl**: Optional submodule with functions to utilize the Julia ODE solvers. Not presently used in our work as the Gear solver (included in the `convege_new_file.jl` script) works better.
+- **JuliaODEsolver.jl**: Optional submodule with functions to utilize the Julia ODE solvers. Not presently used in our work as the Gear solver (included in the `converge_new_file.jl` script) works better.
 - **Plotting.jl**: Functions which make plots for showing model inputs, model evolution, and results.
-- **ReactionNetwork.jl**: Everything needed to ingest an Excel spreadsheet of reaction rate data and turn it into a symbolic chemical network for Julia to read. Also includes functions which calculate enthapies of reaction and modify a reaction rate spreadsheet. These functions are NOT called by the model directly and MUST be run by the user when establishing a new simulation, say, for a new planet, because escape energy changes with different gravities.
+- **ReactionNetwork.jl**: Everything needed to ingest an Excel spreadsheet of reaction rate data and turn it into a symbolic chemical network for Julia to read. Also includes functions which calculate enthalpies of reaction and modify a reaction rate spreadsheet. These functions are NOT called by the model directly and MUST be run by the user when establishing a new simulation, say, for a new planet, because escape energy changes with different gravities.
 - **UnitConversions.jl**: Some basic unit conversions relevant to planetary atmospheres and water budgets.
 
     

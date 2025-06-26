@@ -5,7 +5,7 @@
 # 
 # Eryn Cangi
 # Created November 2021
-# Currently tested for Julia: 1.8.5
+# Currently tested for Julia: 1.11.2
 ################################################################################
 
 #                              Universal constants
@@ -22,7 +22,7 @@ const SMOW = 1.6e-4             # Standard mean ocean water
 # Polarizability from NIST. Experimental values from: https://cccbdb.nist.gov/pollistx.asp
 # Calculations for species not available in experiment from: https://cccbdb.nist.gov/polcalc2x.asp
 # Deuterated species not listed in either are estimated by me to be the same as their H-bearing analogue.
-# I used the calcualtions that use "Density functional", "aug-cc-PVDZ", and "mPW1PW91" 
+# I used the calculations that use "Density functional", "aug-cc-PVDZ", and "mPW1PW91" 
 # because that was the method that gave the closest answer for HD to the experimental value. 
 # I have no idea what any of it means or whether it's reasonable. I'm not a quantum chemist.
 # Values are given in cm^3

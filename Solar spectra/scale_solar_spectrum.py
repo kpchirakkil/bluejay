@@ -89,7 +89,7 @@ def interpolate_solar_spectrum(
 
     # put the interpolated data together with the data that started out fine for one new data frame 
     i_interp = find_nearest(spec[col[0]], interp_start)
-    newsolardata = pd.concat([spec[:i_interp+1], interp_data[1:]], ignore_index="true")
+    newsolardata = pd.concat([spec[:i_interp+1], interp_data[1:]], ignore_index=True)
     
     if extrap_tail:
         # This data is still missing 10 or so datapoints near the end (Mike's solar photon flux goes out to 2399.5).
@@ -129,7 +129,7 @@ def interpolate_solar_spectrum(
         whole_spectrum = newsolardata
     
     #make the FINAL dataframe with ALL data for solar max;
-    # First convert from W/m^2/nm to the units below, and yes, I have checkd it multiple times lol including on 11/3/22. 
+    # First convert from W/m^2/nm to the units below, and yes, I have checked it multiple times lol including on 11/3/22. 
     # multiply the irradiance by λ/hc to get photons; by 1/10000 to convert to cm^2; and 1/AU^2 to convert to planet orbit.
     # whole_spectrum["photon flux (phot/s/cm^2/nm)"] = whole_spectrum[col[1]] * ((whole_spectrum[col[0]] * 10**(-9))/(h*c)) * 1/(AU**2) * (1/10000)
     
