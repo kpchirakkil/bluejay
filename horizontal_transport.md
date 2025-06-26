@@ -117,7 +117,7 @@ Implementing more advanced advection schemes or coupling with external wind data
 
 - Higher-order advection: Upwind schemes are robust but only first-order accurate. Using higher-order methods (e.g., flux limiters, TVD schemes) could reduce numerical diffusion, especially when strong gradients occur across columns.
 - Variable or spatially dependent horizontal winds: The current implementation allows a wind profile per column. More sophisticated models often include spatial variability in the advection term (e.g., using winds from a GCM or prescribing shear with altitude). Extending the wind arrays or reading them from external data would improve realism.
-- Mass-conserving diffusion: The code already averages diffusion coefficients, but ensuring strict global mass conservation (especially with cyclic boundaries) might require verifying that flux leaving one column is exactly balanced by the flux entering the next. Checks or constraints in fluxcoefs_horiz could reinforce this.
+- Mass-conserving diffusion: The code already averages diffusion coefficients, but ensuring strict global mass conservation (especially with cyclic boundaries) might require verifying that flux leaving one column is exactly balanced by the flux entering the next. Checks or constraints in `fluxcoefs_horiz` could reinforce this.
 - Two-way coupling with vertical transport: Horizontal transport is computed separately from vertical flux coefficients. For atmospheres where horizontal transport interacts with vertical mixing (e.g., along isentropes), a more integrated solver might be beneficial.
 
 ## Summary

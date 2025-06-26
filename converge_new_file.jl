@@ -1694,11 +1694,16 @@ plot_temp_prof(Tn_arr; savepath=results_dir*sim_folder_name, Tprof_2=Ti_arr, Tpr
 # Absolute tolerance
 if problem_type == "Gear"
     const atol = 1e-12 # absolute tolerance in ppm, used by Gear solver # NOTE: I think this is actually #/cm³ not ppm, because n_i+1 - n_i is compared against it.--Eryn
-    const abs_tol_for_plot = fill(atol, length(n_tot(n_current, 1; all_species)))
+    const abs_tol_for_plot = [fill(atol, length(n_tot(n_current, ihoriz; all_species)))
+                              for ihoriz in 1:n_horiz]
 else
     # absolute tolerance relative to total atmosphere density, used by DifferentialEquations.jl solvers
-    const atol = 1e-12 .* [[n_tot(n_current, a, 1; n_alt_index, all_species) for sp in active_longlived, a in non_bdy_layers]...]
-    const abs_tol_for_plot = 1e-12 .* n_tot(n_current, 1; n_alt_index, all_species) # calculates 1 ppt of the total density at each altitude.
+    const atol = vcat([1e-12 .* [n_tot(n_current, a, ihoriz; n_alt_index, all_species)
+                                 for sp in active_longlived
+                                 for a in non_bdy_layers]
+                       for ihoriz in 1:n_horiz]...)
+    const abs_tol_for_plot = [1e-12 .* n_tot(n_current, ihoriz; n_alt_index, all_species)
+                              for ihoriz in 1:n_horiz]
 end
     
 # Plot initial atmosphere condition  ===========================================

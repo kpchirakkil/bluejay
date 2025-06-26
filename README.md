@@ -140,6 +140,8 @@ This list may be incomplete. If you discover a necessary step that isn't written
 - Edge fluxes are set through the `speciesbclist_horiz` dictionary; specify altitude profiles for each species to impose non-zero flux at the back and front edges. Passing `cyclic=true` treats the domain as periodic so that flux leaving one edge enters from the opposite side and horizontal coefficients wrap between the first and last columns.
 - Horizontal advection employs an upwind scheme that averages the local and neighbouring wind speeds so that flux leaving one column exactly enters the next.
 
+**[See detailed explanation here](horizontal_transport.md).**
+
 **Running the model**:
 1. Modify `INPUT_PARAMETERS.jl` to your chosen conditions for the simulation. 
 2. At the command line, navigate to the model root folder and run `julia converge_new_file.jl`. 
