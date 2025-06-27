@@ -322,52 +322,6 @@ function load_from_paramlog(folder; quiet=true, globvars...)
     # Basics - more
     rxn_spreadsheet = get_param("RXN_SOURCE", df_gen)
     DH = get_param("DH", df_gen)
-
-    if ~(:alt in keys(GV))
-        try 
-            global df_alt = DataFrame(XLSX.readtable("$(folder)PARAMETERS.xlsx", "AltGrid"));
-            global df_altinfo = DataFrame(XLSX.readtable("$(folder)PARAMETERS.xlsx", "AltInfo"));
-        catch y
-            println("WARNING: Exception: $(y) - you tried to load the altitude grid but it's not logged. File probably made before module updates. Please pass in alt manually")
-            println()
-        end
-    else
-        global alt = GV.alt # This seems stupid but has to be done because apparently the if/else blocks can't access the keyword arg alt??
-    end
-
-    # AltInfo
-    if (@isdefined df_altinfo) & (@isdefined df_alt)
-        global alt = df_alt.Alt
-        global non_bdy_layers = [parse(Float64, f) for f in collect(skipmissing(df_alt.non_bdy_layers))]
-        global zmin = get_param("zmin", df_altinfo)
-        global dz = get_param("dz", df_altinfo)
-        global zmax = get_param("zmax", df_altinfo)
-        global n_all_layers = get_param("n_all_layers", df_altinfo)
-        global num_layers = get_param("num_layers", df_altinfo)
-        global upper_lower_bdy = get_param("upper_lower_bdy", df_altinfo)
-        global upper_lower_bdy_i = get_param("upper_lower_bdy_i", df_altinfo)
-    else 
-        # In this case, alt should have been passed in manually.
-        global non_bdy_layers = alt[2:end-1]
-        global zmin = alt[1]
-        global dz = alt[2] - alt[1]
-        global zmax = alt[end]
-        global n_all_layers = length(alt)
-        global num_layers = length(non_bdy_layers)
-        # In older versions of the parameter logging, this variable was named "WATER_BDY".
-        global upper_lower_bdy = get_param("WATER_BDY", df_atmcond) * 1e5
-        # Ideally we would not repeat the code for n_alt_index here, but oh well.
-        global upper_lower_bdy_i = Dict([z=>clamp((i-1),1, num_layers) for (i, z) in enumerate(alt)])[upper_lower_bdy]
-
-    end
-
-    # Codes
-    hrshortcode = get_param("RSHORTCODE", df_gen)
-    rshortcode = get_param("HRSHORTCODE", df_gen)
-
-    # Basics - more
-    rxn_spreadsheet = get_param("RXN_SOURCE", df_gen)
-    DH = get_param("DH", df_gen)
     
     # Species lists
     ions_included = get_param("IONS", df_gen)

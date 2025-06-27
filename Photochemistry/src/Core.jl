@@ -1080,8 +1080,8 @@ function subtract_difflength(a::Array, b::Array)
     return sum(a[1:shared_size] .- b[1:shared_size]) + extra_a - extra_b
 end
 
-# IDENTICAL solar fluxes
-function update_Jrates!(n_cur_densities::Dict{Symbol, Vector{Array{ftype_ncur}}}, n_horiz::Int64; nlambda=2000, globvars...)
+function update_Jrates!(n_cur_densities::Dict{Symbol, Vector{Array{ftype_ncur}}},
+                        n_horiz::Int64; nlambda=2000, globvars...)
     #=
     Updates photolysis rates (Jrates) in n_cur_densities for each altitude and horizontal column
     considering altitude distribution of absorbing species.
@@ -1100,11 +1100,21 @@ function update_Jrates!(n_cur_densities::Dict{Symbol, Vector{Array{ftype_ncur}}}
     solarabs = optical_depth(n_cur_densities; n_horiz=n_horiz, globvars...)
     # solarabs now records the total optical depth of the atmosphere at each wavelength and altitude
 
-    # actinic flux at each wavelength is solar flux diminished by total optical depth
-    # Actinic flux at each wavelength and each horizontal column
+     # Determine whether solar flux is provided per column.  If a single array is
+    # given, replicate it for all columns to maintain backwards compatibility.
+    flux_per_column = if GV.solarflux isa Vector
+        GV.solarflux
+    else
+        [GV.solarflux for _ in 1:n_horiz]
+    end
+
+    # Actinic flux at each wavelength and each horizontal column is the solar
+    # flux for that column diminished by the integrated optical depth above that
+    # layer.
     for ihoriz in 1:n_horiz
+        col_flux = flux_per_column[ihoriz][:, 2]
         for ialt in 1:GV.num_layers
-            solarabs[ihoriz][ialt] .= GV.solarflux[:, 2] .* exp.(-solarabs[ihoriz][ialt])
+            solarabs[ihoriz][ialt] .= col_flux .* exp.(-solarabs[ihoriz][ialt])
         end
     end
 
@@ -1137,50 +1147,6 @@ function update_Jrates!(n_cur_densities::Dict{Symbol, Vector{Array{ftype_ncur}}}
         end
     end
 end
-
-# DIFFERENT solar fluxes
-# function update_Jrates!(n_cur_densities::Dict{Symbol, Vector{Array{ftype_ncur}}}, n_horiz::Int64; nlambda=2000, globvars...)
-#     #=
-#     Updates photolysis rates (Jrates) in n_cur_densities for each altitude and horizontal column
-#     considering altitude distribution of absorbing species.
-
-#     Input:
-#         n_cur_densities: The present atmospheric state. This will be updated to include Jrates by this function.
-#         n_cur_densities structure: 
-#         Dict{Symbol, Vector{Array{ftype_ncur}}} (species -> [horizontal columns][altitudes])
-#     =#
-
-#     GV = values(globvars)
-#     required = [:absorber, :dz, :crosssection, :Jratelist, :num_layers, :solarflux]
-#     check_requirements(keys(GV), required)
-
-#     # Column-specific solar flux multipliers
-#     solarflux_multipliers = [1.0, 0.5, 2.0]
-
-#     # Optical depth calculation (no multipliers here!)
-#     solarabs = optical_depth(n_cur_densities; n_horiz=n_horiz, globvars...)
-
-#     # Adjust actinic flux per column
-#     for ihoriz in 1:n_horiz
-#         for ialt in 1:GV.num_layers
-#             # multiply solar flux BEFORE applying optical depth
-#             solarabs[ihoriz][ialt] .= (GV.solarflux[:, 2] .* solarflux_multipliers[ihoriz]) .* exp.(-solarabs[ihoriz][ialt])
-#         end
-#     end
-
-#     # Calculate Jrates independently for each horizontal column
-#     for j in GV.Jratelist
-#         n_cur_densities[j] = [zeros(Float64, GV.num_layers) for ihoriz in 1:n_horiz]
-
-#         for ihoriz in 1:n_horiz
-#             for ialt in 1:GV.num_layers
-#                 n_cur_densities[j][ihoriz][ialt] = ftype_ncur(
-#                     BLAS.dot(nlambda, solarabs[ihoriz][ialt], 1, GV.crosssection[j][ihoriz][ialt+1], 1) # updated update_Jrates! so Jrates integrate column-specific cross sections
-#                 )
-#             end
-#         end
-#     end
-# end
 
 #===============================================================================#
 #                             Escape functions                                  #

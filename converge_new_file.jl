@@ -1748,8 +1748,11 @@ if ftype_ncur==Double64
     println("$(Dates.format(now(), "(HH:MM:SS)")) Compiling and calling the chemical jacobian outside evolve_atmosphere (this will take ~45 min)...")
     write_to_log(logfile, "$(Dates.format(now(), "(HH:MM:SS)")) Started first chemical jacobian compile")
 
-    # Set up the initial state and check for any problems 
-    M = [n_tot(n_current, ihoriz; all_species) for ihoriz in 1:n_horiz]
+    # Set up the initial state and check for any problems
+    M = zeros(GV.num_layers, n_horiz)
+    for ihoriz in 1:n_horiz
+        M[:, ihoriz] = n_tot(n_current, ihoriz; all_species)
+    end
     E = electron_density(n_current; e_profile_type, non_bdy_layers, ion_species, n_horiz)
 
     nstart = flatten_atm(n_current, active_longlived; num_layers)
