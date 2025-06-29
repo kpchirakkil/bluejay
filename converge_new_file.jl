@@ -133,13 +133,10 @@ function evolve_atmosphere(atm_init::Dict{Symbol, Vector{Array{ftype_ncur}}}, lo
     find_nonfinites(nstart, collec_name="nstart")
 
     # Set up parameters
-    # MULTICOL UPDATE: calculate total atmospheric density for each horizontal column separately
     M = zeros(GV.num_layers, n_horiz)
     for ihoriz in 1:n_horiz
-        # M[:, ihoriz] = n_tot(n_current, ihoriz; GV.all_species)
         M[:, ihoriz] = n_tot(atm_init, ihoriz; GV.all_species)
     end
-    # E = electron_density(n_current; GV.e_profile_type, GV.non_bdy_layers, GV.ion_species)
     E = electron_density(atm_init; GV.e_profile_type, GV.non_bdy_layers, GV.ion_species, n_horiz)
 
     params_Gear = [GV.Dcoef_arr_template, M, E]
@@ -1077,16 +1074,26 @@ if make_new_alt_grid==true
 
     # const alt = convert(Array, (0:dz:new_zmax*1e5))
     # const max_alt = new_zmax*1e5
-# elseif make_new_alt_grid==false 
-#     println("$(Dates.format(now(), "(HH:MM:SS)")) Loading atmosphere")
-#     n_current = get_ncurrent(initial_atm_file)
+elseif make_new_alt_grid==false 
+    println("$(Dates.format(now(), "(HH:MM:SS)")) Loading atmosphere")
+    n_current = get_ncurrent(initial_atm_file)
 end
 
 
 #                 Set the boundary altitude below which water is fixed          #
 #===============================================================================#
-println("$(Dates.format(now(), "(HH:MM:SS)")) Loading atmosphere")
-n_current = get_ncurrent(initial_atm_file, n_horiz)
+H2Osatfrac = H2Osat ./ map(z->n_tot(n_current, z; all_species, n_alt_index), alt)  # get SVP as fraction of total atmo
+const upper_lower_bdy = alt[something(findfirst(isequal(minimum(H2Osatfrac)), H2Osatfrac), 0)] # in cm
+const upper_lower_bdy_i = n_alt_index[upper_lower_bdy]  # the uppermost layer at which water will be fixed, in cm
+# Control whether the removal of rates etc at "Fixed altitudes" runs. If the boundary is 
+# the bottom of the atmosphere, we shouldn't do it at all.
+const remove_rates_flag = true
+if upper_lower_bdy == zmin
+    const remove_rates_flag = false 
+end
+# Add these to the logging dataframes
+push!(PARAMETERS_ALT_INFO, ("upper_lower_bdy", upper_lower_bdy, "cm", "Altitude at which water goes from being fixed to calculated"));
+push!(PARAMETERS_ALT_INFO, ("upper_lower_bdy_i", upper_lower_bdy_i, "", "Index of the line above within the alt grid"));
 
 
 #                       Establish new species profiles                          #
@@ -1187,14 +1194,23 @@ E = electron_density(n_current; e_profile_type, non_bdy_layers, ion_species, n_h
 if reinitialize_water_profile
     println("$(Dates.format(now(), "(HH:MM:SS)")) Initializing the water profile anew (reinitialize_water_profile=true)")
     # hygropause_alt is an optional argument. If using, must be a unit of length in cm i.e. 40e5 = 40 km.
-    println("$(Dates.format(now(), "(HH:MM:SS)")) Setting up the water profile...")
-    cf = planet == "Venus" ? water_mixing_ratio : 1
-    setup_water_profile!(n_current; constfrac=cf, dust_storm_on=dust_storm_on, water_amt=water_case, ffac=f_fac_opts[water_case], ealt=add_water_alt_opts[water_case],
-                                    hygropause_alt=hygropause_alt, excess_water_in=water_loc,
-                                    all_species, alt, DH, num_layers, non_bdy_layers, n_alt_index, planet, plot_grid,
-                                    H2O_excess, HDO_excess,  H2Osat, water_mixing_ratio,  results_dir,
-                                    sim_folder_name, speciescolor, speciesstyle, upper_lower_bdy_i, monospace_choice, sansserif_choice,
-                                    n_horiz)
+    if planet=="Venus"
+        setup_water_profile!(n_current; constfrac=water_mixing_ratio, venus_special_water, 
+                                        venus_special_h2o_bot=h2o_vmr_low, venus_special_hdo_bot=hdo_vmr_low,
+                                        venus_special_h2o_top=h2o_vmr_high, venus_special_hdo_top=hdo_vmr_high,
+                                        dust_storm_on=dust_storm_on, water_amt=water_case, ffac=f_fac_opts[water_case], ealt=add_water_alt_opts[water_case], 
+                                        hygropause_alt=hygropause_alt, excess_water_in=water_loc, 
+                                        all_species, alt, DH, num_layers, non_bdy_layers, n_alt_index, planet, plot_grid,
+                                        H2O_excess, HDO_excess,  H2Osat, water_mixing_ratio,  results_dir, 
+                                        sim_folder_name, speciescolor, speciesstyle, upper_lower_bdy_i, monospace_choice, sansserif_choice)
+    elseif planet=="Mars"
+        setup_water_profile!(n_current; dust_storm_on=dust_storm_on, water_amt=water_case, ffac=f_fac_opts[water_case], ealt=add_water_alt_opts[water_case], 
+                                        hygropause_alt=hygropause_alt, excess_water_in=water_loc, 
+                                        all_species, alt, DH, num_layers, non_bdy_layers, n_alt_index, planet, plot_grid,
+                                        H2O_excess, HDO_excess,  H2Osat, water_mixing_ratio,  results_dir, 
+                                        sim_folder_name, speciescolor, speciesstyle, upper_lower_bdy_i, monospace_choice, sansserif_choice)
+
+    end
 end
 
 # If you want to just modify the water profile, i.e. when running several simulations
@@ -1287,7 +1303,7 @@ HDOprum = [precip_microns(:HDO, [n_current[:HDO][ihoriz][1]; n_current[:HDO][iho
 # Jrates must be stored here because they have to be updated alongside evolution
 # of the atmospheric densities--the solver doesn't handle their values currently.
 
-# See SOLAR INPUT
+# NOTE: The stored Jrates will have units of #/s.
 # const external_storage = Dict{Symbol, Vector{Array{Float64}}}([j=>n_current[j] for j in union(short_lived_species, inactive_species, Jratelist)])
 # const n_inactive = flatten_atm(n_current, inactive_species, n_horiz; num_layers)
 
@@ -1597,22 +1613,12 @@ const crosssection = populate_xsect_dict(photochem_data_files, xsecfolder; ion_x
 solarflux = readdlm(code_dir*solarfile,'\t', Float64, comments=true, comment_char='#')[1:2000,:]
 solarflux[:,2] = solarflux[:,2] * cosd(SZA)  # Adjust the flux according to specified SZA
 
-lambdas = Float64[]
-for j in Jratelist, ihoriz in 1:n_horiz, ialt in 1:length(alt)
-    global lambdas = union(lambdas, crosssection[j][ihoriz][ialt][:,1])
-end
-
-if !(setdiff(solarflux[:,1],lambdas)==[])
-    throw("Solar flux wavelengths don't match cross section wavelengths!") # this might be triggered if some photolysis reactions are missing; solarflux is length 2000 and lambdas might end up shorter
-end
-
 # pad all cross-sections to solar
 for j in Jratelist, ihoriz in 1:n_horiz, ialt in 1:length(alt)
     crosssection[j][ihoriz][ialt] = padtosolar(solarflux, crosssection[j][ihoriz][ialt])
 end
 
 # this is the unitialized array for storing values
-# solarabs = fill(fill(0.,size(solarflux, 1)), num_layers);
 
 update_Jrates!(n_current, n_horiz;
                Jratelist=Jratelist,
@@ -1621,6 +1627,7 @@ update_Jrates!(n_current, n_horiz;
                absorber=absorber,
                dz=dz,
                solarflux=solarflux)
+# NOTE: The stored Jrates will have units of #/s.
 const external_storage = Dict{Symbol, Vector{Array{Float64}}}(
     [j => n_current[j] for j in union(short_lived_species, inactive_species, Jratelist)
      if haskey(n_current, j)]
@@ -1824,8 +1831,8 @@ try
                                  Tn=Tn_arr, Ti=Ti_arr, Te=Te_arr, Tp=Tplasma_arr, Tprof_for_diffusion, transport_species, opt="",
                                  upper_lower_bdy_i, use_ambipolar, use_molec_diff, zmax)
 catch y
-    XLSX.writetable("$(results_dir)$(sim_folder_name)/PARAMETERS.xlsx", "General"=>PARAMETERS_GEN, "AtmosphericConditions"=>PARAMETERS_CONDITIONS, "SpeciesLists"=>PARAMETERS_SPLISTS,
-                    "Solver"=>PARAMETERS_SOLVER, "Crosssections"=>PARAMETERS_XSECTS, "BoundaryConditions"=>PARAMETERS_BCS, "BoundaryConditionsHorizontal"=>PARAMETERS_BCS_HORIZ)
+    XLSX.writetable(xlsx_parameter_log, param_df_dict...)
+
     write_to_log(logfile, "Terminated before completion at $(format_sec_or_min(time()-ti))", mode="a")
     throw("ERROR: Simulation terminated before completion with exception:")
 end
@@ -1941,8 +1948,8 @@ elseif problem_type == "Gear"
     @assert size(Te_arr) == (n_horiz, num_layers+2) "Te_arr must be (n_horiz, num_layers+2)"
 
     # Write out the final column rates to the reaction log
-    calculate_and_write_column_rates("active_rxns.xlsx", atm_soln, n_horiz; all_species, dz, ion_species, num_layers, reaction_network, results_dir, sim_folder_name, 
-                                                              Tn=Tn_arr, Ti=Ti_arr, Te=Te_arr) #Tn=Tn_arr[2:end-1, :], Ti=Ti_arr[2:end-1, :], Te=Te_arr[2:end-1, :]
+    calculate_and_write_column_rates(used_rxns_spreadsheet_name, atm_soln, n_horiz; all_species, dz, ion_species, num_layers, reaction_network, results_dir, sim_folder_name, 
+                                                              Tn=Tn_arr[2:end-1], Ti=Ti_arr[2:end-1], Te=Te_arr[2:end-1])
     
     write_to_log(logfile, "$(Dates.format(now(), "(HH:MM:SS)")) Making production/loss plots", mode="a")
     println("$(Dates.format(now(), "(HH:MM:SS)")) Making production/loss plots (this tends to take several minutes)")
@@ -1970,15 +1977,8 @@ t7 = time()
 
 # Write out the parameters as the final step 
 
-XLSX.writetable("$(results_dir)$(sim_folder_name)/PARAMETERS.xlsx", "General"=>PARAMETERS_GEN, 
-                                                                    "AltGrid"=>PARAMETERS_ALTGRID, 
-                                                                    "AtmosphericConditions"=>PARAMETERS_CONDITIONS, 
-                                                                    "SpeciesLists"=>PARAMETERS_SPLISTS,
-                                                                    "Solver"=>PARAMETERS_SOLVER, 
-                                                                    "Crosssections"=>PARAMETERS_XSECTS, 
-                                                                    "BoundaryConditions"=>PARAMETERS_BCS,
-                                                                    "BoundaryConditionsHorizontal"=>PARAMETERS_BCS_HORIZ, 
-                                                                    "TemperatureArrays"=>PARAMETERS_TEMPERATURE_ARRAYS)
+XLSX.writetable(xlsx_parameter_log, param_df_dict...)
+
 println("Saved parameter spreadsheet")
 write_to_log(logfile, "Simulation total runtime $(format_sec_or_min(t7-t1))", mode="a")
 println("Simulation finished!")
