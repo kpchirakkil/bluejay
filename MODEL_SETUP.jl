@@ -125,6 +125,7 @@ for s in dont_compute_transport
     end
 end
 
+
 # Chemistry and transport participants
 # -------------------------------------------------------------------
 if converge_which == "neutrals"
@@ -331,7 +332,6 @@ if planet=="Venus"
     const reinitialize_water_profile = venus_special_water==true ? true : false
 elseif planet=="Mars"
     const reinitialize_water_profile = seasonal_cycle==true ? false : true # should be off if trying to run simulations for seasons
-    # const reinitialize_water_profile = false
 end
 
 const update_water_profile = seasonal_cycle==true ? true : false # this is for modifying the profile during cycling, MAY be fixed?
@@ -352,21 +352,20 @@ const HDOi = findfirst(x->x==:HDO, active_longlived)
 
 # Altitude at which water transitions from fixed to freely solved for
 # Calculate the saturation vapor pressure fraction for each horizontal column
-initial_atm = get_ncurrent(initial_atm_file, n_horiz)
-H2Osatfrac = hcat([H2Osat ./ map(z -> n_tot(initial_atm, z, ihoriz; all_species, n_alt_index), alt) for ihoriz in 1:n_horiz]...)
-const upper_lower_bdy = alt[something(findfirst(isequal(minimum(H2Osatfrac[:, 1])), H2Osatfrac[:, 1]), 0)] # in cm
-const upper_lower_bdy_i = n_alt_index[upper_lower_bdy]  # the uppermost layer at which water will be fixed, in cm
-# Control whether the removal of rates etc at "Fixed altitudes" runs. If the boundary is
-# the bottom of the atmosphere, we shouldn't do it at all.
-const remove_rates_flag = true
-if upper_lower_bdy == zmin
-    const remove_rates_flag = false
-end
+# initial_atm = get_ncurrent(initial_atm_file, n_horiz)
+# H2Osatfrac = hcat([H2Osat ./ map(z -> n_tot(initial_atm, z, ihoriz; all_species, n_alt_index), alt) for ihoriz in 1:n_horiz]...)
+# const upper_lower_bdy = alt[something(findfirst(isequal(minimum(H2Osatfrac[:, 1])), H2Osatfrac[:, 1]), 0)] # in cm
+# const upper_lower_bdy_i = n_alt_index[upper_lower_bdy]  # the uppermost layer at which water will be fixed, in cm
+# # Control whether the removal of rates etc at "Fixed altitudes" runs. If the boundary is
+# # the bottom of the atmosphere, we shouldn't do it at all.
+# const remove_rates_flag = true
+# if upper_lower_bdy == zmin
+#     const remove_rates_flag = false
+# end
 
 #                              Species-specific scale heights
 # =======================================================================================================
 const Hs_dict = Dict{Symbol, Vector{Vector{Float64}}}([sp => [scaleH(alt, sp, Tprof_for_Hs[charge_type(sp)][ihoriz, :]; molmass, M_P, R_P) for ihoriz in 1:n_horiz] for sp in all_species])
-# @show typeof(Hs_dict[:O][1]), size(Hs_dict[:O][1])
 
 #                                     Boundary conditions (lower and upper)
 # =======================================================================================================
@@ -663,23 +662,17 @@ push!(PARAMETERS_CONDITIONS, ("TEXO", controltemps[3], "K"));
 push!(PARAMETERS_CONDITIONS, ("MEAN_TEMPS", join(meantemps, " "), "K"));
 push!(PARAMETERS_CONDITIONS, ("WATER_MR", water_mixing_ratio, "mixing ratio"));
 push!(PARAMETERS_CONDITIONS, ("WATER_CASE", water_case, "whether running with 10x, 1/10th, or standard water in middle/upper atmo"));
-waterbdy = :H2O in inactive_species ? zmax : upper_lower_bdy/1e5
-push!(PARAMETERS_CONDITIONS, ("WATER_BDY", waterbdy, "km"))
-# This is so ugly because the XLSX package won't write columns of different lengths, so I have to pad all the shorter lists
-# with blanks up to the length of the longest list and also transform all the symbols into strings.
+
 L = max(length(all_species), length(neutral_species), length(ion_species), length(no_chem_species), length(no_transport_species), length(Jratelist))
-PARAMETERS_SPLISTS = DataFrame(AllSpecies=[[string(a) for a in all_species]..., ["" for i in 1:L-length(all_species)]...],
-                               Neutrals=[[string(n) for n in neutral_species]..., ["" for i in 1:L-length(neutral_species)]...],
+PARAMETERS_SPLISTS = DataFrame(AllSpecies=[[string(a) for a in all_species]..., ["" for i in 1:L-length(all_species)]...], 
+                               Neutrals=[[string(n) for n in neutral_species]..., ["" for i in 1:L-length(neutral_species)]...], 
                                Ions=[[string(i) for i in ion_species]..., ["" for i in 1:L-length(ion_species)]...],
                                NoChem=[[string(nc) for nc in no_chem_species]..., ["" for i in 1:L-length(no_chem_species)]...],
                                NoTransport=[[string(nt) for nt in no_transport_species]..., ["" for i in 1:L-length(no_transport_species)]...],
                                Jratelist=[[string(j) for j in Jratelist]..., ["" for i in 1:L-length(Jratelist)]...]);
 PARAMETERS_SOLVER = DataFrame(Field=[], Value=[]);
 PARAMETERS_XSECTS = DataFrame(Species=[], Description=[], Filename=[]);
-# PARAMETERS_BCS = DataFrame(Species=[], Type=[], Lower=[], Upper=[]);
-# PARAMETERS_BCS_HORIZ = DataFrame(Species=[], Type=[], BackEdge=[], FrontEdge=[]);
-PARAMETERS_BCS = DataFrame(Species=[], Type=[], Column=Int[], Lower=[], Upper=[]);
-PARAMETERS_BCS_HORIZ = DataFrame(Species=[], Type=[], Altitude=Int[], BackEdge=[], FrontEdge=[]);
+PARAMETERS_BCS = DataFrame(Species=[], Type=[], Lower=[], Upper=[]);
 
 # LOG THE TEMPERATURES
 PARAMETERS_TEMPERATURE_ARRAYS = DataFrame(Neutrals = vec(Tn_arr), Ions = vec(Ti_arr), Electrons = vec(Te_arr))
