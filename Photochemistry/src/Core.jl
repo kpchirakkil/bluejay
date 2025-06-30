@@ -1505,12 +1505,10 @@ function T_Venus(Tsurf::Float64, Tmeso::Float64, Texo::Float64, file_for_interp;
     i_upper = findall(z->z > z_meso_top, GV.alt)
     # i_meso_top = findfirst(z->z==z_meso_top, GV.alt)
 
-    # For interpolating upper-atmosphere temperatures from Fox & Sung 2001
-    # use the global altitude grid for the upper atmosphere instead of a
-    # fixed numeric range.
-    new_a = GV.alt[i_upper]
+    # For interpolating upper atmo temperatures from Fox & Sung 2001 - only from 90 km up
+    interp_alts = collect(90e5:GV.alt[2]-GV.alt[1]:GV.alt[end])
 
-    return Dict("neutrals"=>NEUTRALS(new_a), "ions"=>IONS(new_a), "electrons"=>ELECTRONS(new_a))
+    return Dict("neutrals"=>NEUTRALS(interp_alts), "ions"=>IONS(interp_alts), "electrons"=>ELECTRONS(interp_alts))
 end
 
 
@@ -1945,12 +1943,8 @@ function Dcoef!(D_arr, T_arr_2D, sp::Symbol, atmdict::Dict{Symbol, Vector{Array{
         if GV.use_molec_diff == true
             # Calculate as if it was a neutral - not using function above because this is faster than going into 
             # the function and using an if/else block since we know we'll always have vectors in this case.
+            # This equation is: D = b/n
             D_arr[ihoriz] .= (binary_dcoeff_inCO2(sp, T_col)) ./ n_tot(atmdict, ihoriz; GV.all_species, GV.n_alt_index)
-            # If the species is an ion but we have "use_ambipolar=false", then zero out
-            # the molecular diffusion part for ions:
-            if (GV.use_ambipolar==false) && (charge_type(sp)=="ion")# temporarily disallow molecular diffusion for ions
-                D_arr[ihoriz] .= 0
-            end
         else
             D_arr[ihoriz] .= 0 
         end
@@ -2347,7 +2341,8 @@ function Keddy(z::Vector, nt; ihoriz=nothing, globvars...)
             - For single-column case: Vector (#/cm³)
             - For multi-column, this should be a Matrix (#altitudes, n_horiz), and `ihoriz` must be specified.
     Output:
-        k: eddy diffusion coefficients at all altitudes (cm²/s).
+        k: eddy diffusion coefficients at all altitudes.
+           Units: cm^2/s
 
     If running multi-column, make sure to specify the column index (ihoriz).
     This version accommodates both single-column and multi-column simulations.
@@ -2846,9 +2841,25 @@ function setup_water_profile!(atmdict; constfrac=1, dust_storm_on=false, make_sa
             end
         end
     elseif GV.planet=="Venus"
+        ntot_all = [n_tot(atmdict, ihoriz; GV.n_alt_index, GV.all_species) for ihoriz in 1:GV.n_horiz]
+
         for ihoriz in 1:GV.n_horiz
-            atmdict[:H2O][ihoriz] = constfrac .* n_tot(atmdict, ihoriz; GV.n_alt_index, GV.all_species)
+            ntot = ntot_all[ihoriz]
+            atmdict[:H2O][ihoriz] = constfrac .* ntot
             atmdict[:HDO][ihoriz] = 2 * GV.DH * atmdict[:H2O][ihoriz]
+        end
+
+        # SPECIAL: Try a prescribed high water abundance in the mesosphere.
+        if venus_special_water == true
+            n = 11
+            vmr_h2o = logrange(venus_special_h2o_bot, venus_special_h2o_top, n)
+            vmr_hdo = logrange(venus_special_hdo_bot, venus_special_hdo_top, n)
+
+            for ihoriz in 1:GV.n_horiz
+                ntot = ntot_all[ihoriz]
+                atmdict[:H2O][ihoriz][1:n] = vmr_h2o .* ntot[1:n]
+                atmdict[:HDO][ihoriz][1:n] = vmr_hdo .* ntot[1:n]
+            end
         end
     end
 

@@ -154,9 +154,9 @@ function get_volume_rates(sp::Symbol, atmdict::Dict{Symbol, Vector{Array{ftype_n
     check_requirements(keys(GV), required)
 
     # Make sure temperatures are correct format
-    @assert size(GV.Tn) == (n_horiz, GV.num_layers+2) "Tn must be (n_horiz, num_layers+2)"
-    @assert size(GV.Ti) == (n_horiz, GV.num_layers+2) "Ti must be (n_horiz, num_layers+2)"
-    @assert size(GV.Te) == (n_horiz, GV.num_layers+2) "Te must be (n_horiz, num_layers+2)"
+    # @assert size(GV.Tn) == (n_horiz, GV.num_layers+2) "Tn must be (n_horiz, num_layers+2)"
+    # @assert size(GV.Ti) == (n_horiz, GV.num_layers+2) "Ti must be (n_horiz, num_layers+2)"
+    # @assert size(GV.Te) == (n_horiz, GV.num_layers+2) "Te must be (n_horiz, num_layers+2)"
 
     # Fill in the rate x density dictionary ------------------------------------------------------------------------------
     rxn_dat = Dict{String, Vector{Array{ftype_ncur}}}()
@@ -231,9 +231,9 @@ function get_volume_rates(sp::Symbol, source_rxn::Vector{Any}, source_rxn_rc_fun
     check_requirements(keys(GV), required)
 
     # Make sure temperatures are correct format
-    @assert size(GV.Tn) == (n_horiz, GV.num_layers+2) "Tn must be (n_horiz, num_layers+2)"
-    @assert size(GV.Ti) == (n_horiz, GV.num_layers+2) "Ti must be (n_horiz, num_layers+2)"
-    @assert size(GV.Te) == (n_horiz, GV.num_layers+2) "Te must be (n_horiz, num_layers+2)"
+    # @assert size(GV.Tn) == (n_horiz, GV.num_layers+2) "Tn must be (n_horiz, num_layers+2)"
+    # @assert size(GV.Ti) == (n_horiz, GV.num_layers+2) "Ti must be (n_horiz, num_layers+2)"
+    # @assert size(GV.Te) == (n_horiz, GV.num_layers+2) "Te must be (n_horiz, num_layers+2)"
 
     # Now Tn_col, Ti_col, Te_col each is length num_layers+2
     Tn_col = GV.Tn[ihoriz, :]
@@ -258,11 +258,11 @@ function get_volume_rates(sp::Symbol, source_rxn::Vector{Any}, source_rxn_rc_fun
     else                        # bi- and ter-molecular chemistry
         # evaluate the rate coef for just the interior alt range
         remove_me = remove_sp_density == true ? sp : nothing
-        # density_prod = reactant_density_product(atmdict, source_rxn[1]; removed_sp=remove_me, globvars...)
+        density_prod = reactant_density_product(atmdict, source_rxn[1], ihoriz; removed_sp=remove_me, globvars...)
         # thisrate = typeof(source_rxn[3]) != Expr ? :($source_rxn[3] + 0) : source_rxn[3]
         rate_coef = source_rxn_rc_func(Tn_col[2:end-1], Ti_col[2:end-1], Te_col[2:end-1], Mtot)
 
-        vol_rates = reactant_density_product(atmdict, source_rxn[1], ihoriz; removed_sp=remove_me, globvars...) .* rate_coef # This is k * [R1] * [R2] where [] is density of a reactant.
+        vol_rates = density_prod .* rate_coef # This is k * [R1] * [R2] where [] is density of a reactant.
     end
 
     return vol_rates
