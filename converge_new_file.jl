@@ -1062,7 +1062,7 @@ const hot_HD_rc_funcs = Dict([rxn => mk_function(:((Tn, Ti, Te, M) -> $(rxn[3]))
 if make_new_alt_grid==true
     throw("The code for extending the altitude grid needs to be redone.")
     # const alt = convert(Array, (0:2e5:200e5))
-    # n_current = get_ncurrent(initial_atm_file)
+    # n_current = get_ncurrent(initial_atm_file, n_horiz)
 
     # new_zmax = parse(Int64, input("Enter the new top of the atmosphere in km: "))
     # extra_entries = Int64((new_zmax - (zmax / 1e5))/(dz/1e5))
@@ -1076,14 +1076,17 @@ if make_new_alt_grid==true
     # const max_alt = new_zmax*1e5
 elseif make_new_alt_grid==false 
     println("$(Dates.format(now(), "(HH:MM:SS)")) Loading atmosphere")
-    n_current = get_ncurrent(initial_atm_file)
+    n_current = get_ncurrent(initial_atm_file, n_horiz)
 end
 
 
 #                 Set the boundary altitude below which water is fixed          #
 #===============================================================================#
-H2Osatfrac = H2Osat ./ map(z->n_tot(n_current, z; all_species, n_alt_index), alt)  # get SVP as fraction of total atmo
-const upper_lower_bdy = alt[something(findfirst(isequal(minimum(H2Osatfrac)), H2Osatfrac), 0)] # in cm
+H2Osatfrac = zeros(num_layers, n_horiz)
+for ihoriz in 1:n_horiz
+    H2Osatfrac[:, ihoriz] = H2Osat[2:end-1] ./ map(z -> n_tot(n_current, z, ihoriz; all_species, n_alt_index), alt[2:end-1]) # get SVP as fraction of total atmo
+end
+const upper_lower_bdy = alt[2:end-1][something(findfirst(isequal(minimum(H2Osatfrac[:, 1])), H2Osatfrac[:, 1]), 0)] # in cm
 const upper_lower_bdy_i = n_alt_index[upper_lower_bdy]  # the uppermost layer at which water will be fixed, in cm
 # Control whether the removal of rates etc at "Fixed altitudes" runs. If the boundary is 
 # the bottom of the atmosphere, we shouldn't do it at all.
@@ -1202,13 +1205,13 @@ if reinitialize_water_profile
                                         hygropause_alt=hygropause_alt, excess_water_in=water_loc, 
                                         all_species, alt, DH, num_layers, non_bdy_layers, n_alt_index, planet, plot_grid,
                                         H2O_excess, HDO_excess,  H2Osat, water_mixing_ratio,  results_dir, 
-                                        sim_folder_name, speciescolor, speciesstyle, upper_lower_bdy_i, monospace_choice, sansserif_choice)
+                                        sim_folder_name, speciescolor, speciesstyle, upper_lower_bdy_i, monospace_choice, sansserif_choice, n_horiz)
     elseif planet=="Mars"
         setup_water_profile!(n_current; dust_storm_on=dust_storm_on, water_amt=water_case, ffac=f_fac_opts[water_case], ealt=add_water_alt_opts[water_case], 
                                         hygropause_alt=hygropause_alt, excess_water_in=water_loc, 
                                         all_species, alt, DH, num_layers, non_bdy_layers, n_alt_index, planet, plot_grid,
                                         H2O_excess, HDO_excess,  H2Osat, water_mixing_ratio,  results_dir, 
-                                        sim_folder_name, speciescolor, speciesstyle, upper_lower_bdy_i, monospace_choice, sansserif_choice)
+                                        sim_folder_name, speciescolor, speciesstyle, upper_lower_bdy_i, monospace_choice, sansserif_choice, n_horiz)
 
     end
 end
@@ -1796,14 +1799,15 @@ println("Time to beginning convergence is $(format_sec_or_min(time()-t1))\n\n")
 # make more than one call to writing out the file (the normal call and also the
 # call in the case of the model crashing)
 
-param_df_dict = OrderedDict("General"=>PARAMETERS_GEN, 
-                            "AtmosphericConditions"=>PARAMETERS_CONDITIONS, 
-                            "AltGrid"=>PARAMETERS_ALTGRID, 
+param_df_dict = OrderedDict("General"=>PARAMETERS_GEN,
+                            "AtmosphericConditions"=>PARAMETERS_CONDITIONS,
+                            "AltGrid"=>PARAMETERS_ALTGRID,
                             "AltInfo"=>PARAMETERS_ALT_INFO,
                             "SpeciesLists"=>PARAMETERS_SPLISTS,
                             "TemperatureArrays"=>PARAMETERS_TEMPERATURE_ARRAYS,
-                            "Crosssections"=>PARAMETERS_XSECTS, 
+                            "Crosssections"=>PARAMETERS_XSECTS,
                             "BoundaryConditions"=>PARAMETERS_BCS,
+                            "BoundaryConditionsHoriz"=>PARAMETERS_BCS_HORIZ,
                             "Solver" => PARAMETERS_SOLVER
                             )
 xlsx_parameter_log = "$(results_dir)$(sim_folder_name)/PARAMETERS.xlsx"
@@ -1949,7 +1953,7 @@ elseif problem_type == "Gear"
 
     # Write out the final column rates to the reaction log
     calculate_and_write_column_rates(used_rxns_spreadsheet_name, atm_soln, n_horiz; all_species, dz, ion_species, num_layers, reaction_network, results_dir, sim_folder_name, 
-                                                              Tn=Tn_arr[2:end-1], Ti=Ti_arr[2:end-1], Te=Te_arr[2:end-1])
+                                                              Tn=Tn_arr, Ti=Ti_arr, Te=Te_arr)
     
     write_to_log(logfile, "$(Dates.format(now(), "(HH:MM:SS)")) Making production/loss plots", mode="a")
     println("$(Dates.format(now(), "(HH:MM:SS)")) Making production/loss plots (this tends to take several minutes)")

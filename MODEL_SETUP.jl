@@ -672,7 +672,10 @@ PARAMETERS_SPLISTS = DataFrame(AllSpecies=[[string(a) for a in all_species]..., 
                                Jratelist=[[string(j) for j in Jratelist]..., ["" for i in 1:L-length(Jratelist)]...]);
 PARAMETERS_SOLVER = DataFrame(Field=[], Value=[]);
 PARAMETERS_XSECTS = DataFrame(Species=[], Description=[], Filename=[]);
-PARAMETERS_BCS = DataFrame(Species=[], Type=[], Lower=[], Upper=[]);
+# Track vertical boundary conditions for each column
+PARAMETERS_BCS = DataFrame(Species=[], Type=[], Column=[], Lower=[], Upper=[]);
+# Track horizontal boundary conditions at the back and front edges
+PARAMETERS_BCS_HORIZ = DataFrame(Species=[], Type=[], AltIndex=[], Back=[], Front=[]);
 
 # LOG THE TEMPERATURES
 PARAMETERS_TEMPERATURE_ARRAYS = DataFrame(Neutrals = vec(Tn_arr), Ions = vec(Ti_arr), Electrons = vec(Te_arr))
