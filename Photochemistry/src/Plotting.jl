@@ -298,7 +298,15 @@ function plot_bg(axob; bg="#ededed")
     turn_off_borders(axob)
 end
 
-function plot_directional_flux(sp, atmdict; xlims=((1e0, 1e10), (1e3, 1e12)), titlestr="", globvars...)
+function plot_directional_flux(
+    sp,
+    atmdict,
+    n_horiz::Int64;
+    ihoriz::Int=1,
+    xlims=((1e0, 1e10), (1e3, 1e12)),
+    titlestr="",
+    globvars...
+)
     #=
     Makes a directional flux plot for sp in atmosphere atmdict.
     =#
@@ -308,9 +316,10 @@ function plot_directional_flux(sp, atmdict; xlims=((1e0, 1e10), (1e3, 1e12)), ti
     
     check_requirements(keys(GV), required)
     
-    fluxes, up, down = get_directional_fluxes(sp, atmdict; return_up_n_down=true, globvars...)
-    
-    fpos, fneg = flux_pos_and_neg(fluxes)
+    fluxes, up, down =
+        get_directional_fluxes(sp, atmdict, n_horiz; return_up_n_down=true, globvars...)
+
+    fpos, fneg = flux_pos_and_neg(fluxes[ihoriz])
 
     fig, ax = subplots()
     plot_bg(ax)
@@ -326,8 +335,8 @@ function plot_directional_flux(sp, atmdict; xlims=((1e0, 1e10), (1e3, 1e12)), ti
 
     fig, ax = subplots()
     plot_bg(ax)
-    ax.plot(up[2:end-1], GV.plot_grid, color="red", label="Upward flux")
-    ax.plot(down[2:end-1], GV.plot_grid, color="blue", label="Downward flux")
+    ax.plot(up[ihoriz][2:end-1], GV.plot_grid, color="red", label="Upward flux")
+    ax.plot(down[ihoriz][2:end-1], GV.plot_grid, color="blue", label="Downward flux")
     ax.legend()
     ax.set_xscale("log")
     ax.set_ylabel("Alt (km)")
@@ -687,7 +696,7 @@ function plot_rxns(sp::Symbol, atmdict::Dict{Symbol, Vector{Array{ftype_ncur}}},
         )
         # Water is turned off in the lower atmosphere, so we should represent that.
         if sp in [:H2O, :HDO]
-	    for ihoriz in [1:n_horiz;]
+	    for ihoriz in 1:n_horiz
             	for (prod_k, loss_k) in zip(keys(rxd_prod), keys(rxd_loss))
                     rxd_prod[prod_k][ihoriz][1:GV.upper_lower_bdy_i] .= NaN
                     rxd_loss[loss_k][ihoriz][1:GV.upper_lower_bdy_i] .= NaN
@@ -710,7 +719,7 @@ function plot_rxns(sp::Symbol, atmdict::Dict{Symbol, Vector{Array{ftype_ncur}}},
         for kv in rxd_prod  # loop through the dict of format reaction => [[rates by altitude] for each vertical column]
             if shown_rxns != nothing
                 if kv[1] in shown_rxns
-		    for ihoriz in [1:n_horiz;]
+		    for ihoriz in 1:n_horiz
                     	ax[1].semilogx(kv[2][ihoriz], GV.plot_grid, linestyle=ls[ls_i], marker=9, markevery=20, color=cols[col_i], linewidth=1, label=kv[1])
 	            end
                     col_i = next_in_loop(col_i, length(cols))
@@ -720,7 +729,7 @@ function plot_rxns(sp::Symbol, atmdict::Dict{Symbol, Vector{Array{ftype_ncur}}},
             # Add up the total chemical production. Accounts for cases where species is produced more than once.
             prods = split(match(pat, kv[1])[1], " + ")
             num_created = count(i->(i==string(sp)), prods)
-	    for ihoriz in [1:n_horiz;]
+	    for ihoriz in 1:n_horiz
             	total_chem_prod[ihoriz] += num_created .* kv[2][ihoriz]
 	    end
         end
@@ -735,7 +744,7 @@ function plot_rxns(sp::Symbol, atmdict::Dict{Symbol, Vector{Array{ftype_ncur}}},
             if shown_rxns != nothing
                 if kv[1] in shown_rxns
                     # ax[1].semilogx(kv[2], GV.plot_grid, linestyle=ls[ls_i], marker=8, markevery=20, color=cols[col_i], linewidth=1, label=kv[1])
-                    for ihoriz in [1:n_horiz;]
+                    for ihoriz in 1:n_horiz
                         ax[1].semilogx(kv[2][ihoriz], GV.plot_grid,
                             linestyle=ls[ls_i], marker=8, markevery=20,
                             color=cols[col_i], linewidth=1, label=kv[1])
@@ -745,18 +754,18 @@ function plot_rxns(sp::Symbol, atmdict::Dict{Symbol, Vector{Array{ftype_ncur}}},
                 end
             end
             # total_chem_loss += kv[2]
-            for ihoriz in [1:n_horiz;]
+            for ihoriz in 1:n_horiz
                 total_chem_loss[ihoriz] += kv[2][ihoriz]
             end
         end
         for kv in rate_coefs_loss
-	    for ihoriz in [1:n_horiz;]
+	    for ihoriz in 1:n_horiz
             	total_chem_loss_ratecoef[ihoriz] += vec(kv[2][ihoriz])
 	    end
         end
 
         # Plot the totals
-	for ihoriz in [1:n_horiz;]
+	for ihoriz in 1:n_horiz
             ax[1].semilogx(total_chem_prod[ihoriz], GV.plot_grid, color="xkcd:forest green", linestyle=(0, (4,2)), marker=9, markevery=20, linewidth=2, label="Total chemical production", zorder=5)
             ax[1].semilogx(total_chem_loss[ihoriz], GV.plot_grid, color="xkcd:shamrock", linestyle=(0, (4,2)), marker=8, markevery=20, linewidth=2, label="Total chemical loss", zorder=5)
 	end
@@ -777,7 +786,7 @@ function plot_rxns(sp::Symbol, atmdict::Dict{Symbol, Vector{Array{ftype_ncur}}},
             ax_1_2.set_ylabel("Rate coefficient (cm^3/s)", color="xkcd:royal purple")
             # ax_1_2.semilogx(total_chem_prod_ratecoef, GV.plot_grid, color="xkcd:royal purple", linestyle=":", linewidth=3, label="Total chemical production rate coef", zorder=6)
             # ax_1_2.semilogx(total_chem_loss_ratecoef, GV.plot_grid, color="xkcd:lavender", linestyle=":", linewidth=3, label="Total chemical loss rate coef", zorder=6)
-            for ihoriz in [1:n_horiz;]
+            for ihoriz in 1:n_horiz
                 ax_1_2.semilogx(total_chem_prod_ratecoef[ihoriz], GV.plot_grid,
                     color="xkcd:royal purple", linestyle=":", linewidth=3,
                     label="Total chemical production rate coef", zorder=6)
@@ -809,7 +818,7 @@ function plot_rxns(sp::Symbol, atmdict::Dict{Symbol, Vector{Array{ftype_ncur}}},
         total_transport_loss = [loss_i[ihoriz] .* abs.(transportPL[ihoriz]) for ihoriz in 1:n_horiz]
 
         if sp in [:H2O, :HDO] # Water is turned off in the lower atmosphere, so we should represent that.
-	    for ihoriz in [1:n_horiz;]
+	    for ihoriz in 1:n_horiz
             	total_transport_prod[ihoriz][1:GV.upper_lower_bdy_i] .= NaN
             	total_transport_loss[ihoriz][1:GV.upper_lower_bdy_i] .= NaN
             end
@@ -820,7 +829,7 @@ function plot_rxns(sp::Symbol, atmdict::Dict{Symbol, Vector{Array{ftype_ncur}}},
 	maxx[2] = 10.0^(ceil(log10(maximum([maximum(abs.(filter(x->!isnan(x),transportPL[ihoriz]))) for ihoriz in 1:n_horiz]))))
 
         # Plot the transport production and loss without the boundary layers
-	for ihoriz in [1:n_horiz;]
+	for ihoriz in 1:n_horiz
             ax[2].scatter(total_transport_prod[ihoriz], GV.plot_grid, color="red", marker=9, label="Total gain this layer", zorder=4)
             ax[2].scatter(total_transport_loss[ihoriz], GV.plot_grid, color="blue", marker=8, label="Total loss this layer", zorder=4)
 	end
@@ -845,7 +854,7 @@ function plot_rxns(sp::Symbol, atmdict::Dict{Symbol, Vector{Array{ftype_ncur}}},
     prod_without_nans = [filter(x->!isnan(x), total_prod_rate[ihoriz]) for ihoriz in 1:n_horiz]
     loss_without_nans = [filter(x->!isnan(x), total_loss_rate[ihoriz]) for ihoriz in 1:n_horiz]
 
-    for ihoriz in [1:n_horiz;]
+    for ihoriz in 1:n_horiz
     	ax[3].semilogx(total_prod_rate[ihoriz], GV.plot_grid, color="black", marker=9, markevery=15, linewidth=2, label="Total production", zorder=3) 
     	ax[3].semilogx(total_loss_rate[ihoriz], GV.plot_grid, color="gray", marker=8, markevery=15, linewidth=2, label="Total loss", zorder=3)
     end
@@ -986,7 +995,7 @@ function plot_reaction_on_demand(atmdict, reactants, n_horiz::Int64; ihoriz=1, p
     ax.set_title(plottitle)
 
     # Get volume rates by altitude
-    for ihoriz in [1:n_horiz;]
+    for ihoriz in 1:n_horiz
     	by_alt = volume_rate_wrapper(reactants[1], relevant_reactions, rc_funcs, atmdict, Mtot, i_horiz; globvars...) # array format--by alt
     	by_alt_df = DataFrame(by_alt, rxn_strings)
 
@@ -1369,7 +1378,7 @@ function top_mechanisms(x, sp, atmdict, p_or_r, n_horiz; savepath=nothing, filen
                 :n_alt_index, :reaction_network, :sansserif_choice, :Tn, :Ti, :Te, :dz, :zmax, :plot_grid]
     check_requirements(keys(GV), required)
 
-    for ihoriz in [1:n_horiz;] # MULTICOL loop to plot multiple vertical columns individually
+    for ihoriz in 1:n_horiz # MULTICOL loop to plot multiple vertical columns individually
     
         # String used for various labels
         rxntype = p_or_r == "product" ? "production" : "loss"

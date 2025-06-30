@@ -165,7 +165,7 @@ function write_atmosphere(atmdict::Dict{Symbol, Vector{Array{ftype_ncur}}}, file
     sorted_keys = sort(collect(keys(atmdict)))
     atm_mat = Array{Float64}(undef, n_horiz, GV.num_layers, length(sorted_keys));
 
-    for ihoriz in [1:n_horiz;]
+    for ihoriz in 1:n_horiz
     	for ispecies in [1:length(sorted_keys);]
             for ialt in [1:GV.num_layers;]
             	atm_mat[ihoriz, ialt, ispecies] = convert(Float64, atmdict[sorted_keys[ispecies]][ihoriz][ialt])

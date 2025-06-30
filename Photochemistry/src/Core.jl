@@ -1624,7 +1624,7 @@ function boundaryconditions(fluxcoef_dict, atmdict, M, n_horiz::Int64; nontherma
             continue
         end
 
-        for ihoriz in [1:n_horiz;]
+        for ihoriz in 1:n_horiz
  
             # DENSITY
             try 

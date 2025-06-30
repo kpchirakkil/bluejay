@@ -1168,10 +1168,11 @@ function flux_vs_time(thefiles, IVAR_array, change_indices, sp; fn="flux_vs_time
         Jratedict = Dict([j=>thisatm[j] for j in Jratelist])
         
         # Get flux
-        flux_heatmap[:, c] = get_directional_fluxes(sp, thisatm; nonthermal=true, Jratedict, speciesbclist=vardict["speciesbclist"], 
+        n_horiz = length(thisatm[GV.all_species[1]])
+        flux_heatmap[:, c] = get_directional_fluxes(sp, thisatm, n_horiz; nonthermal=true, Jratedict, speciesbclist=vardict["speciesbclist"],
                                                          Tprof_for_Hs=vardict["Tprof_for_Hs"], Tprof_for_diffusion=vardict["Tprof_for_diffusion"],
                                                          Hs_dict = vardict["Hs_dict"], Tn = vardict["Tn_arr"], Ti = vardict["Ti_arr"],
-                                                         Te = vardict["Te_arr"], Tp = vardict["Tplasma_arr"], 
+                                                         Te = vardict["Te_arr"], Tp = vardict["Tplasma_arr"],
                                                          transport_species=vardict["transport_species"], globvars...)[2:end-1]
         c += 1
     end

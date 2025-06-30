@@ -15,6 +15,7 @@
 function chemical_lifetime(s::Symbol, atmdict; globvars...)
     #=
     Calculates chemical lifetime of a molecule s in the atmosphere atmdict. 
+    
     Good for comparing with the results of diffusion_timescale.
     =#
     GV = values(globvars)
@@ -61,16 +62,19 @@ function get_column_rates(sp::Symbol, atmdict::Dict{Symbol, Vector{ftype_ncur}},
     Input:
         sp: species for which to search for reactions
         atmdict: the present atmospheric state to calculate on
-        ihoriz: horizontal column index to extract correct column data
         Tn, Ti, Te: Arrays of the temperature profiles including boundary layers
+        ihoriz: horizontal column index to extract correct column data
+        bcdict: Boundary conditions dictionary specified in parameters file
         which: whether to do photochemistry, or just bimolecular reactions. "all", "Jrates" or "krates"
         sp2: optional second species to include, i.e. usually sp's ion.
         role: "product" or "reactant" only.
-        startalt_i: Index of the altitude at which to start. 
+        startalt_i: Index of the altitude at which to start. This lets you only calculate column rate down to a certain altitude, which is
+                    useful, for example, for water, which is fixed at 80 km so we don't care what produces/consumes it,
+                    or if you want to know the column rate only above a certain altitude.
         returntype: whether to return a dataframe ("df") or a dictionary "dict"
     Output:
-        sorted: Total column rates for all reactions of species sp. 
-                Sorted, in order of largest rate to smallest.
+        sorted: Total column rates for all reactions of species sp. Sorted, in order of largest rate to smallest. NOT a dictionary.
+                sorted[1] is the top production mechanism, e.g.
     =#
     GV = values(globvars)
     required = [:Tn, :Ti, :Te, :all_species, :ion_species, :reaction_network, :num_layers, :dz]
@@ -81,16 +85,6 @@ function get_column_rates(sp::Symbol, atmdict::Dict{Symbol, Vector{ftype_ncur}},
     Ti_col = GV.Ti[ihoriz, :]
     Te_col = GV.Te[ihoriz, :]
 
-    # Internal slicing for bulk altitudes
-    # Tn_col = Tn_col_full[2:end-1]
-    # Ti_col = Ti_col_full[2:end-1]
-    # Te_col = Te_col_full[2:end-1]
-
-    # Debug: confirm shapes
-    # @assert length(Tn_col) == GV.num_layers + 2 "Tn_col length should match num_layers+2"
-    # @assert length(Ti_col) == GV.num_layers + 2 "Ti_col length should match num_layers+2"
-    # @assert length(Te_col) == GV.num_layers + 2 "Te_col length should match num_layers+2"
-
     # Now we compute reaction rates for just this column
     rxd, coefs = get_volume_rates(sp, atmdict, n_horiz;
                                   species_role=role,
@@ -99,7 +93,7 @@ function get_column_rates(sp::Symbol, atmdict::Dict{Symbol, Vector{ftype_ncur}},
                                   # pass the column slices for Tn, Ti, Te
                                   Tn=Tn_col[2:end-1], Ti=Ti_col[2:end-1], Te=Te_col[2:end-1])
 
-    # Sum up the column rates for each reaction
+    # # Make the column rates dictionary for production: sum up the column rates for each reaction
     columnrate = Dict{String, Float64}()
 
     for k in keys(rxd)
@@ -107,7 +101,7 @@ function get_column_rates(sp::Symbol, atmdict::Dict{Symbol, Vector{ftype_ncur}},
         columnrate[k] = sum(rxd[k][startalt_i:end] .* GV.dz)
     end
 
-    # If second species is requested
+    # Optionally one can specify a second species to include in the sorted result, i.e. a species' ion. If second species is requested
     if sp2 != nothing
         rxd2, _ = get_volume_rates(sp2, atmdict, n_horiz;
                                    species_role=role,
@@ -145,19 +139,26 @@ function get_volume_rates(sp::Symbol, atmdict::Dict{Symbol, Vector{Array{ftype_n
         sp: Species name
         atmdict: Present atmospheric state dictionary
         n_horiz: Number of vertical columns in the simulation
-        Tn, Ti, Te: 2D temperature arrays each of shape (n_horiz, num_layers+2)
-        species_role: whether to look for the species as a "reactant", "product", or "both"
-        which: "all", "Jrates", "krates"
-        remove_sp_density: if set to true, remove sp from the reactants
-    Output:
-        rxn_dat: dictionary reaction => Vector{Array{ftype_ncur}}
-                 where each entry is the alt-dependent rate for each column
-        rate_coefs: dictionary of reaction => rate coefficient
+        Tn, Ti, Te: temperature arrays
+        species_role: whether to look for the species as a "reactant", "product", or "both".  If it has a value, so must species.
+        which: "all", "Jrates", "krates". Whether to fill the dictionary with all reactions, only photochemistry/photoionization 
+               (Jrates) or only chemistry (krates).
+        remove_sp_density: if set to true, the density of sp will be removed from the calculation k[sp][B][C].... Useful for chemical lifetimes.
+    Output: 
+        rxn_dat: Evaluated rates, i.e. k[A][B], units #/cm^3/s for bimolecular rxns
+        rate_coefs: Evaluated rate coefficients for each reaction 
     =#
+
     GV = values(globvars)
     required = [:all_species, :ion_species, :num_layers, :reaction_network, :Tn, :Ti, :Te]
     check_requirements(keys(GV), required)
 
+    # Make sure temperatures are correct format
+    @assert size(GV.Tn) == (n_horiz, GV.num_layers+2) "Tn must be (n_horiz, num_layers+2)"
+    @assert size(GV.Ti) == (n_horiz, GV.num_layers+2) "Ti must be (n_horiz, num_layers+2)"
+    @assert size(GV.Te) == (n_horiz, GV.num_layers+2) "Te must be (n_horiz, num_layers+2)"
+
+    # Fill in the rate x density dictionary ------------------------------------------------------------------------------
     rxn_dat = Dict{String, Vector{Array{ftype_ncur}}}()
     rate_coefs = Dict{String, Vector{Array{ftype_ncur}}}()
 
@@ -173,8 +174,10 @@ function get_volume_rates(sp::Symbol, atmdict::Dict{Symbol, Vector{Array{ftype_n
 
         # For each reaction in the filtered list:
         for rxn in filtered_rxn_list
+            # get the reactants and products in string form for use in plot labels
             rxn_str = format_chemistry_string(rxn[1], rxn[2])
 
+            # Fill in rate coefficient * species density for all reactions
             if typeof(rxn[3]) == Symbol
                 # photodissociation
                 if remove_sp_density == false
@@ -182,11 +185,11 @@ function get_volume_rates(sp::Symbol, atmdict::Dict{Symbol, Vector{Array{ftype_n
                     # store alt profiles for each column
                     rxn_dat[rxn_str] = [atmdict[rxn[1][1]][ihoriz] .* vec(atmdict[rxn[3]][ihoriz]) for ihoriz in 1:n_horiz]
                 else
-                    rxn_dat[rxn_str] = 1 .* atmdict[rxn[3]]
+                    rxn_dat[rxn_str] = 1 .* atmdict[rxn[3]] # this will functionally be the same as the rate coefficient for photodissociation.
                 end
                 rate_coefs[rxn_str] = vec(atmdict[rxn[3]])
             else
-                # bi- or termolecular
+                # bi- and ter-molecular chemistry
                 remove_me = (remove_sp_density == true) ? sp : nothing
                 density_prod = [reactant_density_product(atmdict, rxn[1], ihoriz; removed_sp=remove_me, globvars...)
                                 for ihoriz in 1:n_horiz]
@@ -195,7 +198,7 @@ function get_volume_rates(sp::Symbol, atmdict::Dict{Symbol, Vector{Array{ftype_n
                 rate_coef = [eval_rate_coef(atmdict, thisrate, ihoriz; globvars...)
                              for ihoriz in 1:n_horiz]
 
-                rxn_dat[rxn_str] = [density_prod[ihoriz] .* rate_coef[ihoriz] for ihoriz in 1:n_horiz]
+                rxn_dat[rxn_str] = [density_prod[ihoriz] .* rate_coef[ihoriz] for ihoriz in 1:n_horiz] # This is k * [R1] * [R2] where [] is density of a reactant.
 
                 if typeof(rate_coef) == Vector{Float64} && typeof(rate_coef[1]) == Float64
                     rate_coef = [rate_coef[ihoriz] .* ones(GV.num_layers) for ihoriz in 1:n_horiz]
@@ -211,44 +214,55 @@ end
 
 function get_volume_rates(sp::Symbol, source_rxn::Vector{Any}, source_rxn_rc_func,
                           atmdict::Dict{Symbol, Vector{Array{ftype_ncur}}},
-                          Mtot, ihoriz::Int64; globvars...)
+                          Mtot, ihoriz::Int64; remove_sp_density=false, globvars...)
     #=
     Override to call for a single reaction. Useful for doing non-thermal flux boundary conditions.
     Input:
-        sp: species name
+        sp: Species name
         source_rxn: chemical reaction for which to get the volume rate 
         atmdict: Present atmospheric state dictionary
         Mtot: total atmospheric density at each altitude
         ihoriz: vertical column index
     Output: 
-        vol_rates: alt-dependent rates (#/cm^3/s) for the reaction
+        vol_rates: Evaluated rates, e.g. k[A][B] [#/cm^3/s] for bimolecular rxns, for the whole atmosphere.
     =#
     GV = values(globvars)
     required = [:all_species, :ion_species, :Jratedict, :num_layers, :Tn, :Ti, :Te]
     check_requirements(keys(GV), required)
 
-    # println("\n[DEBUG - second (override) get_volume_rates called]")
-    # println("[DEBUG] Species = ", sp, ", ihoriz = ", ihoriz)
-    # @show size(GV.Tn), GV.num_layers, ihoriz
+    # Make sure temperatures are correct format
+    @assert size(GV.Tn) == (n_horiz, GV.num_layers+2) "Tn must be (n_horiz, num_layers+2)"
+    @assert size(GV.Ti) == (n_horiz, GV.num_layers+2) "Ti must be (n_horiz, num_layers+2)"
+    @assert size(GV.Te) == (n_horiz, GV.num_layers+2) "Te must be (n_horiz, num_layers+2)"
 
     # Now Tn_col, Ti_col, Te_col each is length num_layers+2
     Tn_col = GV.Tn[ihoriz, :]
     Ti_col = GV.Ti[ihoriz, :]
     Te_col = GV.Te[ihoriz, :]
 
-    # println("length(Tn_col) at column $(ihoriz) = ", length(Tn_col))
-    # @assert length(Tn_col) == GV.num_layers + 2 "Tn_col length mismatch"
-
-    # Fill in the rate * density
-    if typeof(source_rxn[3]) == Symbol
-        # photodissociation
-        # multiply [molecule] * Jrate
-        vol_rates = atmdict[source_rxn[1][1]][ihoriz] .* GV.Jratedict[source_rxn[3]][ihoriz]
-    else
-        # bi- or termolecular reaction
+   # Fill in the rate x density dictionary ------------------------------------------------------------------------------
+    if typeof(source_rxn[3]) == Symbol # for photodissociation
+-       # Look for density of dissociating molecule in atmdict, but rate in Jratedict. This is like this because
+        # of the wonky way the code is written to allow for photochemical equilibrium as an option, which 
+        # requires the Jrates be stored in an external dictionary because they can't go through the Julia solvers. 
+        # Honestly I could probably rewrite everything so that photochem eq is possible with the Gear solver and ditch
+        # the Julia solvers entirely but I like having the option and would rather get my PhD and get a pay raise
+        # println(keys(GV.Jratedict))
+        if remove_sp_density == false
+            # multiply [molecule] * Jrate
+            vol_rates = atmdict[source_rxn[1][1]][ihoriz] .* GV.Jratedict[source_rxn[3]][ihoriz]
+        else
+            # just use the Jrate if the species density is removed
+            vol_rates = 1 .* GV.Jratedict[source_rxn[3]][ihoriz] # this will functionally be the same as the rate coefficient for photodissociation.
+        end
+    else                        # bi- and ter-molecular chemistry
         # evaluate the rate coef for just the interior alt range
+        remove_me = remove_sp_density == true ? sp : nothing
+        # density_prod = reactant_density_product(atmdict, source_rxn[1]; removed_sp=remove_me, globvars...)
+        # thisrate = typeof(source_rxn[3]) != Expr ? :($source_rxn[3] + 0) : source_rxn[3]
         rate_coef = source_rxn_rc_func(Tn_col[2:end-1], Ti_col[2:end-1], Te_col[2:end-1], Mtot)
-        vol_rates = reactant_density_product(atmdict, source_rxn[1], ihoriz; globvars...) .* rate_coef
+
+        vol_rates = reactant_density_product(atmdict, source_rxn[1], ihoriz; removed_sp=remove_me, globvars...) .* rate_coef # This is k * [R1] * [R2] where [] is density of a reactant.
     end
 
     return vol_rates
@@ -289,7 +303,7 @@ function reactant_density_product(atmdict::Dict{Symbol, Vector{Array{ftype_ncur}
     Input:
         atmdict: the atmospheric state dictionary
         reactants: a list of reactant symbols.
-	ihoriz: Vertical column index
+	    ihoriz: Vertical column index
     Output: 
         density_product: returns n_A * n_B for all altitudes for the reaction A + B for column ihoriz--> ...
     =#
@@ -322,7 +336,17 @@ end
 function volume_rate_wrapper(sp, source_rxns, source_rxn_rc_funcs, atmdict, Mtot, ihoriz::Int64; returntype="array", globvars...)
     #=
     Gets altitude-dependent volume production or loss of species sp due to reactions in source_rxns.
-    Does NOT care if it is production or loss. 
+    Does NOT care if it is production or loss. This is mainly just a convenient wrapper to get_volume_production
+    to return the information in a variety of different useful formats.
+    
+    Input
+        sp: species
+        source_rxns: reaction network--should ALREADY be filtered to be either production or loss reactions for sp.
+        source_rxn_rc_funcs: Evalutable functions for each reaction. 
+        atmdict: present atmospheric state dictionary
+        Mtot: Atmospheric density at all altitudes
+    Output: 
+        array of production or loss by altitude (rows) and reaction  (columns)
     =#
 
     GV = values(globvars)
@@ -381,7 +405,6 @@ function diffusion_timescale(s::Symbol, T_arr::Array, atmdict; globvars...)
     Dcoef_template = zeros(size(T_arr)) 
 
     # Other stuff
-    Hs = scaleH(GV.alt, s, T_arr; GV.molmass)
     ncur_with_bdys =  ncur_with_boundary_layers(atmdict, n_horiz; GV.all_species, GV.n_alt_index)
     
     # Molecular diffusion timescale: H_s^2 / D, scale height over diffusion constant
@@ -390,11 +413,11 @@ function diffusion_timescale(s::Symbol, T_arr::Array, atmdict; globvars...)
     molec_or_ambi_timescale = (Hs .^ 2) ./ D
    
     # Eddy timescale... this was in here only as scale H... 
+    H0 = scaleH(ncur_with_bdys, T_arr; globvars...)
     K = [Keddy(alt, n_tot(ncur_with_bdys, ihoriz; GV.all_species, GV.molmass); GV.planet) for ihoriz in 1:n_horiz]
-    #eddy_timescale = (Hs .^ 2) ./ K # original
-    eddy_timescale = ([Hs for ihoriz in 1:n_horiz] .^ 2) ./ K
+    eddy_timescale = ([H0 for ihoriz in 1:n_horiz] .^ 2) ./ K
 
-    # Combined timescale?!??
+    # Combined timescale
     combined_timescale = ([Hs for ihoriz in 1:n_horiz] .^ 2) ./ (K .+ D)
 
     return molec_or_ambi_timescale, eddy_timescale, combined_timescale
@@ -483,7 +506,7 @@ function get_transport_PandL_rate(sp::Symbol, atmdict::Dict{Symbol, Vector{Array
         atmdict: species number density by altitude for each vertical column
         returnfluxes: whether to return fluxes (thermal and nonthermal) instead of production/loss
         nonthermal: whether to consider nonthermal escape
-	n_horiz: Number of vertical columns in simulation
+	    n_horiz: Number of vertical columns in simulation
     Output
         Array of production and loss (#/cm³/s) at each atmospheric layer boundary.
         i = 1 in the net_bulk_flow array corresponds to the boundary at 1 km,
@@ -518,13 +541,13 @@ function get_transport_PandL_rate(sp::Symbol, atmdict::Dict{Symbol, Vector{Array
     transport_PL = [fill(convert(ftype_ncur, NaN), GV.num_layers) for ihoriz in 1:n_horiz]
 
     # These are the derivatives, which should be what we want (check math)
-    for ihoriz in [1:n_horiz;]
-    	transport_PL[ihoriz][1] = ((atmdict[sp][ihoriz][2]*fluxcoefs_bulk_layers[sp][ihoriz][2, 1]  # in from layer above
+    for ihoriz in 1:n_horiz
+        transport_PL[ihoriz][1] = ((atmdict[sp][ihoriz][2]*fluxcoefs_bulk_layers[sp][ihoriz][2, 1]  # in from layer above
                         -atmdict[sp][ihoriz][1]*fluxcoefs_bulk_layers[sp][ihoriz][1, 2]) # out to layer above
                     +(-atmdict[sp][ihoriz][1]*thesebcs[ihoriz][1, 1] # out to boundary layer
                       +thesebcs[ihoriz][1, 2])) # in from the boundary layer
-        for ialt in 2:length(transport_PL) - 1
-            transport_PL[ihoriz][ialt] = ((atmdict[sp][ihoriz][ialt+1]*fluxcoefs_bulk_layers[sp][ihoriz][ialt+1, 1]  # coming in from above    
+        for ialt in 2:length(transport_PL[ihoriz]) - 1
+            transport_PL[ihoriz][ialt] = ((atmdict[sp][ihoriz][ialt+1]*fluxcoefs_bulk_layers[sp][ihoriz][ialt+1, 1]  # coming in from above 
                                -atmdict[sp][ihoriz][ialt]*fluxcoefs_bulk_layers[sp][ihoriz][ialt, 2])    # leaving out to above layer
                              +(-atmdict[sp][ihoriz][ialt]*fluxcoefs_bulk_layers[sp][ihoriz][ialt, 1]     # leaving to the layer below
                                +atmdict[sp][ihoriz][ialt-1]*fluxcoefs_bulk_layers[sp][ihoriz][ialt-1, 2]))  # coming in from below
@@ -542,24 +565,22 @@ function get_transport_PandL_rate(sp::Symbol, atmdict::Dict{Symbol, Vector{Array
     # println("Down to layer below: $(-atmdict[sp][end]*fluxcoefs_all[sp][end, 1]*GV.dz)")
     # println("In from layer below: $(atmdict[sp][end-1]*fluxcoefs_all[sp][end-1, 2]*GV.dz)")
     if returnfluxes
-        tflux = zeros(0)
-        if nonthermal
-            ntflux = zeros(0)
-        end
-        for ihoriz in [1:n_horiz;]
-            append!(tflux, atmdict[sp][ihoriz][end]*thesebcs[ihoriz][2, 1]*GV.dz)
+        tflux = zeros(ftype_ncur, n_horiz)
+        ntflux = zeros(ftype_ncur, n_horiz)
+        for ihoriz in 1:n_horiz
+            tflux[ihoriz] = atmdict[sp][ihoriz][end]*thesebcs[ihoriz][2, 1]*GV.dz
             if nonthermal
-                append!(ntflux, thesebcs[ihoriz][2, 2]*GV.dz)
+                ntflux[ihoriz] = thesebcs[ihoriz][2, 2]*GV.dz
                 if sp in [:H, :D, :H2, :HD]
                     ntflux[ihoriz] = ntflux[ihoriz] < 0 ? abs(ntflux[ihoriz]) : throw("I somehow got a positive nonthermal flux, meaning it's going INTO the atmosphere? for $(sp)")
-                else 
-                    ntflux[ihoriz] = 0 
+                else
+                    ntflux[ihoriz] = 0
                 end
             end
         end
         if nonthermal
             return ntflux, tflux
-        else 
+        else
             return tflux
         end
     else 
@@ -567,15 +588,23 @@ function get_transport_PandL_rate(sp::Symbol, atmdict::Dict{Symbol, Vector{Array
     end
 end
 
-function get_directional_fluxes(sp::Symbol, atmdict::Dict{Symbol, Vector{ftype_ncur}}; nonthermal=true, return_up_n_down=false, globvars...)
+function get_directional_fluxes(
+    sp::Symbol,
+    atmdict::Dict{Symbol, Vector{Array{ftype_ncur}}},
+    n_horiz::Int64;
+    nonthermal=true,
+    return_up_n_down=false,
+    globvars...
+)
     #=
     Returns the flux up and down from each atmospheric cell. 
 
     Input:
         sp: species for which to return the transport production and loss
-        atmdict: species number density by altitude
+        atmdict: species number density by altitude for each column
         returnfluxes: whether to return fluxes (thermal and nonthermal) instead of production/loss
-        nonthermal: whether to consider nonthermal escape 
+        nonthermal: whether to consider nonthermal escape
+        n_horiz: number of vertical columns in the simulation
     Output
         Array of production and loss (#/cm³/s) at each atmospheric layer boundary.
         i = 1 in the net_bulk_flow array corresponds to the boundary at 1 km,
@@ -594,12 +623,14 @@ function get_directional_fluxes(sp::Symbol, atmdict::Dict{Symbol, Vector{ftype_n
         check_requirements(keys(GV), required)
     end
 
-    # Generate the fluxcoefs dictionary and boundary conditions dictionary
-    Keddy_arr, H0_dict, Dcoef_dict = update_diffusion_and_scaleH(GV.all_species, atmdict, n_horiz; globvars...)
+    # Generate vertical transport coefficients and boundary conditions for all columns
+    Keddy_arr, H0_dict, Dcoef_dict =
+        update_diffusion_and_scaleH(GV.all_species, atmdict, n_horiz; globvars...)
     fluxcoefs_all = fluxcoefs(GV.all_species, Keddy_arr, Dcoef_dict, H0_dict, n_horiz; globvars...)
 
-    # For the bulk layers only to make the loops below more comprehendable: 
-    fluxcoefs_bulk_layers = Dict([s=>fluxcoefs_all[s][2:end-1, :] for s in keys(fluxcoefs_all)])
+    # For the bulk layers only to make the loops below more comprehensible
+    fluxcoefs_bulk_layers =
+        Dict([s => [fluxcoefs_all[s][ihoriz][2:end-1, :] for ihoriz in 1:n_horiz] for s in keys(fluxcoefs_all)])
 
     bc_dict = boundaryconditions(fluxcoefs_all, atmdict, sum([atmdict[sp] for sp in GV.all_species]), n_horiz; nonthermal=nonthermal, globvars...)
 
@@ -607,46 +638,48 @@ function get_directional_fluxes(sp::Symbol, atmdict::Dict{Symbol, Vector{ftype_n
     thesebcs = bc_dict[sp]
 
     # Fill array 
-    flux = fill(convert(ftype_ncur, NaN), (length(GV.alt), 1)) # will store positive and negative values at each alt, with + meaning up, - meaning down.
-    up = fill(convert(ftype_ncur, NaN), (length(GV.alt), 1)) # Bethan asked for just up fluxes one time so now I also track them separately. 
-    down = fill(convert(ftype_ncur, NaN), (length(GV.alt), 1))
-    flux[1] = NaN # 0 alt
-    up[1] = NaN
-    down[1] = NaN
+    # Allocate arrays per column
+    flux  = [fill(convert(ftype_ncur, NaN), length(GV.alt)) for _ in 1:n_horiz]
+    up    = [fill(convert(ftype_ncur, NaN), length(GV.alt)) for _ in 1:n_horiz]
+    down  = [fill(convert(ftype_ncur, NaN), length(GV.alt)) for _ in 1:n_horiz]
 
-    # Lower boundary 
-    up2 = thesebcs[1, 2] # in from the boundary layer (upwards)
-    down2 = atmdict[sp][1]*thesebcs[1, 1] # out to boundary layer (downwards)
-    flux[2] = up2 - down2
-    up[2] = up2
-    down[2] = down2
+    for ihoriz in 1:n_horiz
+        flux[ihoriz][1] = NaN  # 0 alt
+        up[ihoriz][1] = NaN
+        down[ihoriz][1] = NaN
 
-    # println("Alt $(alt[2]): up $(up2*dz), down $(down2*dz), net $(up2*dz-down2*dz)")
+        # Lower boundary
+        up2 = thesebcs[ihoriz][1, 2]  # in from the boundary layer (upwards)
+        down2 = atmdict[sp][ihoriz][1] * thesebcs[ihoriz][1, 1]  # out to boundary (downwards)
+        flux[ihoriz][2] = up2 - down2
+        up[ihoriz][2] = up2
+        down[ihoriz][2] = down2
 
-    for ialt in 3:length(flux) - 2
-        up_i = atmdict[sp][ialt-1]*fluxcoefs_bulk_layers[sp][ialt-1, 2] # in from layer below (upwards)
-        down_i = atmdict[sp][ialt]*fluxcoefs_bulk_layers[sp][ialt, 1]     # out to the layer below [downwards]
-        # println("Alt $(GV.alt[ialt]): up $(up*dz), down $(down*dz), net $(up*dz-down*dz)")
-        flux[ialt] = up_i - down_i
-        up[ialt] = up_i
-        down[ialt] = down_i
+        # Interior layers
+        for ialt in 3:length(flux[ihoriz]) - 2
+            up_i = atmdict[sp][ihoriz][ialt-1] * fluxcoefs_bulk_layers[sp][ihoriz][ialt-1, 2]
+            down_i = atmdict[sp][ihoriz][ialt] * fluxcoefs_bulk_layers[sp][ihoriz][ialt, 1]
+            flux[ihoriz][ialt] = up_i - down_i
+            up[ihoriz][ialt] = up_i
+            down[ihoriz][ialt] = down_i
+        end
+
+        # Upper boundary
+        up_penult = atmdict[sp][ihoriz][end] * thesebcs[ihoriz][2, 1]
+        down_penult = thesebcs[ihoriz][2, 2]
+        flux[ihoriz][end-1] = up_penult - down_penult
+        up[ihoriz][end-1] = up_penult
+        down[ihoriz][end-1] = down_penult
+
+        flux[ihoriz][end] = NaN
+        up[ihoriz][end] = NaN
+        down[ihoriz][end] = NaN
+
+        # Multiply by dz so the array is truly a flux
+        flux[ihoriz] .*= GV.dz
+        up[ihoriz]   .*= GV.dz
+        down[ihoriz] .*= GV.dz
     end
-
-    up_penult = atmdict[sp][end]*thesebcs[2, 1] # (#/cm³) * (#/s) out to space from upper bdy (thermal loss from velocity bc) (upwards)
-    down_penult = thesebcs[2, 2] # in from upper boundary layer (non-thermal loss from flux bc) (downwards) (has to be negative to come out positive)
-    flux[end-1] = up_penult - down_penult
-    up[end-1] = up_penult
-    down[end-1] = down_penult
-    # println("Alt $(alt[end-1]): up $(up_penult*dz), down $(down_penult*dz), net $(up_penult*dz-down_penult*dz)")
-
-    flux[end] = NaN
-    up[end] = NaN 
-    down[end] = NaN
-
-    # mult by dz so the array is truly a flux
-    flux = flux .* GV.dz
-    up = up .* GV.dz 
-    down = down .* GV.dz
 
     # Use these for a sanity check if you like. 
     # println("Activity in the top layer for sp $(sp) AS FLUX:")
@@ -735,7 +768,6 @@ function limiting_flux(sp, atmdict, T_arr; ihoriz::Int=1, treat_H_as_rare=false,
     end
 end
 
-# function limiting_flow_velocity(sp, atmdict, T_arr; globvars...)
 function limiting_flow_velocity(sp, atmdict, T_arr; ihoriz::Int=1, globvars...)
     #=
     Calculate the limiting upward flux (Hunten, 1973; Zahnle, 2008). 
@@ -759,7 +791,6 @@ function limiting_flow_velocity(sp, atmdict, T_arr; ihoriz::Int=1, globvars...)
     return @. (bi / na) * (1/Ha - 1/Hi)
 end
 
-# function limiting_flux_molef(sp, atmdict, T_arr; globvars...)
 function limiting_flux_molef(sp, atmdict, T_arr; ihoriz::Int=1, globvars...)
     #=
     Roger requested the limiting flux in in mole fraction. This is actually the same result as above. But this way we're sure

@@ -351,9 +351,8 @@ const H2Oi = findfirst(x->x==:H2O, active_longlived)
 const HDOi = findfirst(x->x==:HDO, active_longlived)
 
 # Altitude at which water transitions from fixed to freely solved for
-# Calculate the saturation vapor pressure fraction for each horizontal column
 # initial_atm = get_ncurrent(initial_atm_file, n_horiz)
-# H2Osatfrac = hcat([H2Osat ./ map(z -> n_tot(initial_atm, z, ihoriz; all_species, n_alt_index), alt) for ihoriz in 1:n_horiz]...)
+# H2Osatfrac = hcat([H2Osat ./ map(z -> n_tot(initial_atm, z, ihoriz; all_species=setdiff(all_species, new_species), n_alt_index), alt) for ihoriz in 1:n_horiz]...)
 # const upper_lower_bdy = alt[something(findfirst(isequal(minimum(H2Osatfrac[:, 1])), H2Osatfrac[:, 1]), 0)] # in cm
 # const upper_lower_bdy_i = n_alt_index[upper_lower_bdy]  # the uppermost layer at which water will be fixed, in cm
 # # Control whether the removal of rates etc at "Fixed altitudes" runs. If the boundary is
