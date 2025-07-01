@@ -1,5 +1,5 @@
 diff --git a/converge_new_file.jl b/converge_new_file.jl
-index 744cc6a..5536a65 100644
+index 744cc6a..2666125 100644
 --- a/converge_new_file.jl
 +++ b/converge_new_file.jl
 @@ -6,8 +6,8 @@
@@ -572,7 +572,7 @@ index 744cc6a..5536a65 100644
 -    n_cur_all = compile_ncur_all(n, n_short, GV.n_inactive; GV.active_longlived, GV.active_shortlived, GV.inactive_species, GV.num_layers)
 +    n_cur_all = compile_ncur_all(n, n_horiz, n_short, GV.n_inactive; GV.active_longlived, GV.active_shortlived, GV.inactive_species, GV.num_layers)
 +
-+    update_Jrates!(n_cur_all, n_horiz; GV.Jratelist, GV.crosssection, GV.num_layers, GV.absorber, GV.dz, GV.solarflux)
++    update_Jrates!(n_cur_all, n_horiz; GV.Jratelist, GV.crosssection, GV.num_layers, GV.absorber, GV.dz, GV.solarflux, enable_horiz_transport=GV.enable_horiz_transport)
  
 -    update_Jrates!(n_cur_all; GV.Jratelist, GV.crosssection, GV.num_layers, GV.absorber, GV.dz, GV.solarflux)
      # copy all the Jrates into an external dictionary for storage
@@ -690,8 +690,13 @@ index 744cc6a..5536a65 100644
 +                  Jrates[:,ihoriz,1];
 +                  GV.Tn[ihoriz,1]; GV.Ti[ihoriz,1]; GV.Te[ihoriz,1];
 +                  M[1, ihoriz]; E[ihoriz][1]]
-+
-+        argvec = convert(Array{ftype_chem}, argvec)
+ 
+-    # iterate through other altitudes in the lower atmosphere
+-    for ialt in 2:(GV.num_layers-1)
+-        argvec = [nmat_shortlived[:,ialt]; nmat_longlived[:, ialt]; nmat_inactive[:, ialt]; Jrates[:, ialt]; GV.Tn[ialt]; GV.Ti[ialt]; GV.Te[ialt]; M[ialt]; E[ialt]] # E FIX ATTEMPT
+         argvec = convert(Array{ftype_chem}, argvec)
+-        new_densities[:,ialt] .= set_concentrations_local(argvec...)
+-        # dist_zero[ialt] = check_zero_distance([nmat_shortlived[:,ialt]; nmat_longlived[:, ialt]; nmat_inactive[:, ialt]; Jrates[:, ialt]; Tn[ialt]; Ti[ialt]; Te[ialt]]...)
 +        new_densities[:,1,ihoriz] .= set_concentrations_local(argvec...)
 +
 +        # iterate through other altitudes in the lower atmosphere
@@ -714,13 +719,8 @@ index 744cc6a..5536a65 100644
 +                  Jrates[:,ihoriz,end];
 +                  GV.Tn[ihoriz,end]; GV.Ti[ihoriz,end]; GV.Te[ihoriz,end];
 +                  M[end, ihoriz]; E[ihoriz][end]]
- 
--    # iterate through other altitudes in the lower atmosphere
--    for ialt in 2:(GV.num_layers-1)
--        argvec = [nmat_shortlived[:,ialt]; nmat_longlived[:, ialt]; nmat_inactive[:, ialt]; Jrates[:, ialt]; GV.Tn[ialt]; GV.Ti[ialt]; GV.Te[ialt]; M[ialt]; E[ialt]] # E FIX ATTEMPT
-         argvec = convert(Array{ftype_chem}, argvec)
--        new_densities[:,ialt] .= set_concentrations_local(argvec...)
--        # dist_zero[ialt] = check_zero_distance([nmat_shortlived[:,ialt]; nmat_longlived[:, ialt]; nmat_inactive[:, ialt]; Jrates[:, ialt]; Tn[ialt]; Ti[ialt]; Te[ialt]]...)
++
++        argvec = convert(Array{ftype_chem}, argvec)
 +        new_densities[:,end,ihoriz] .= set_concentrations_local(argvec...)
      end
  
@@ -799,7 +799,7 @@ index 744cc6a..5536a65 100644
  
      # ensure Jrates are included in n_current
 -    update_Jrates!(n_current; GV.Jratelist, GV.crosssection, GV.num_layers, GV.absorber, GV.dz, GV.solarflux)
-+    update_Jrates!(n_current, n_horiz; GV.Jratelist, GV.crosssection, GV.num_layers, GV.absorber, GV.dz, GV.solarflux)
++    update_Jrates!(n_current, n_horiz; GV.Jratelist, GV.crosssection, GV.num_layers, GV.absorber, GV.dz, GV.solarflux, enable_horiz_transport=GV.enable_horiz_transport)
 +
 +    # Optionally adjust Jrates per horizontal column (commented out)
 +    # solarflux_multipliers = [1.0, 0.5, 2.0]
@@ -851,23 +851,24 @@ index 744cc6a..5536a65 100644
  
  #                          Set up the water profile                             #
  #===============================================================================#
-@@ -1131,13 +1205,13 @@ if reinitialize_water_profile
+@@ -1131,14 +1205,13 @@ if reinitialize_water_profile
                                          hygropause_alt=hygropause_alt, excess_water_in=water_loc, 
                                          all_species, alt, DH, num_layers, non_bdy_layers, n_alt_index, planet, plot_grid,
                                          H2O_excess, HDO_excess,  H2Osat, water_mixing_ratio,  results_dir, 
 -                                        sim_folder_name, speciescolor, speciesstyle, upper_lower_bdy_i, monospace_choice, sansserif_choice)
-+                                        sim_folder_name, speciescolor, speciesstyle, upper_lower_bdy_i, monospace_choice, sansserif_choice, n_horiz)
++                                        sim_folder_name, speciescolor, speciesstyle, upper_lower_bdy_i, monospace_choice, sansserif_choice, n_horiz, enable_horiz_transport)
      elseif planet=="Mars"
          setup_water_profile!(n_current; dust_storm_on=dust_storm_on, water_amt=water_case, ffac=f_fac_opts[water_case], ealt=add_water_alt_opts[water_case], 
                                          hygropause_alt=hygropause_alt, excess_water_in=water_loc, 
                                          all_species, alt, DH, num_layers, non_bdy_layers, n_alt_index, planet, plot_grid,
                                          H2O_excess, HDO_excess,  H2Osat, water_mixing_ratio,  results_dir, 
 -                                        sim_folder_name, speciescolor, speciesstyle, upper_lower_bdy_i, monospace_choice, sansserif_choice)
-+                                        sim_folder_name, speciescolor, speciesstyle, upper_lower_bdy_i, monospace_choice, sansserif_choice, n_horiz)
- 
+-
++                                        sim_folder_name, speciescolor, speciesstyle, upper_lower_bdy_i, monospace_choice, sansserif_choice, n_horiz, enable_horiz_transport)
      end
  end
-@@ -1149,14 +1223,20 @@ if update_water_profile
+ 
+@@ -1149,14 +1222,20 @@ if update_water_profile
      if water_case!="standard"
          if water_loc=="loweratmo"
  
@@ -893,7 +894,7 @@ index 744cc6a..5536a65 100644
          else 
              # Create the new multipliers to change the profiles
              multiplier = water_tanh_prof(non_bdy_layers./1e5; f=f_fac_opts[water_case], z0=add_water_alt_opts[water_case])
-@@ -1175,36 +1255,49 @@ if update_water_profile
+@@ -1175,36 +1254,49 @@ if update_water_profile
          end
  
          # Make the plot
@@ -956,7 +957,7 @@ index 744cc6a..5536a65 100644
  
  #           Define storage for species/Jrates not solved for actively           #
  #===============================================================================#
-@@ -1212,9 +1305,10 @@ HDOprum = precip_microns(:HDO, [n_current[:HDO][1]; n_current[:HDO]; n_current[:
+@@ -1212,9 +1304,10 @@ HDOprum = precip_microns(:HDO, [n_current[:HDO][1]; n_current[:HDO]; n_current[:
  # outside of the primary ODE solver. Inactive species never change during simulation.
  # Jrates must be stored here because they have to be updated alongside evolution
  # of the atmospheric densities--the solver doesn't handle their values currently.
@@ -969,7 +970,7 @@ index 744cc6a..5536a65 100644
  
  # **************************************************************************** #
  #                                                                              #
-@@ -1237,7 +1331,7 @@ println("$(Dates.format(now(), "(HH:MM:SS)")) Setting up transport network, chem
+@@ -1237,7 +1330,7 @@ println("$(Dates.format(now(), "(HH:MM:SS)")) Setting up transport network, chem
  
  #                               Transport network                               #
  #===============================================================================#
@@ -978,7 +979,7 @@ index 744cc6a..5536a65 100644
  const upeqns = [Any[Any[[s], [Symbol(string(s)*"_above")],Symbol("t"*string(s)*"_up")],
                      Any[[Symbol(string(s)*"_above")],[s],Symbol("t"*string(s)*"_above_down")]]
                      for s in transport_species];
-@@ -1253,24 +1347,47 @@ const local_transport_rates = [[[Symbol("t"*string(s)*"_up") for s in transport_
+@@ -1253,24 +1346,47 @@ const local_transport_rates = [[[Symbol("t"*string(s)*"_up") for s in transport_
  
  const transportnet = [[upeqns...;]; [downeqns...;]];
  
@@ -1034,7 +1035,7 @@ index 744cc6a..5536a65 100644
  
  # **************************************************************************** #
  #                                                                              #
-@@ -1280,10 +1397,17 @@ const active_longlived_species_rates, short_lived_density_eqn,
+@@ -1280,10 +1396,17 @@ const active_longlived_species_rates, short_lived_density_eqn,
  
  #          Arguments and expressions for metaprogramming functions              #
  #===============================================================================#
@@ -1055,7 +1056,7 @@ index 744cc6a..5536a65 100644
  const set_concentration_arglist_typed = [:($s::ftype_chem) for s in set_concentration_arglist];
  
  # This can be used if you want to calculate M, E at computation
-@@ -1310,9 +1434,9 @@ const set_concentration_arglist_typed = [:($s::ftype_chem) for s in set_concentr
+@@ -1310,9 +1433,9 @@ const set_concentration_arglist_typed = [:($s::ftype_chem) for s in set_concentr
          =#
  
          # M and E are calculated here to ensure that the right number of ions/electrons
@@ -1067,7 +1068,7 @@ index 744cc6a..5536a65 100644
  
          # stack overflow - answer (Cite)
          # create a result array for evaluating the production and loss expressions
-@@ -1380,8 +1504,8 @@ end
+@@ -1380,8 +1503,8 @@ end
          =#
  
          # M = $Mexpr
@@ -1078,7 +1079,7 @@ index 744cc6a..5536a65 100644
          # Make a result array in which to store evaluated expressions 
          density_result = map(_ -> 0., $short_lived_density_eqn)  # will hold evaluated expressions.
          evaluated_inputs = map(_ -> 0., $shortlived_density_inputs) 
-@@ -1439,7 +1563,7 @@ end
+@@ -1439,7 +1562,7 @@ end
          #=
          Generates a matrix of I, J, and V values for a sparse matrix, for the 
          local layer, for influences from the layer above, and influences 
@@ -1087,7 +1088,7 @@ index 744cc6a..5536a65 100644
          =#
  
          # M = $Mexpr 
-@@ -1457,10 +1581,21 @@ end
+@@ -1457,10 +1580,21 @@ end
          belowchemJj = $(chemJ_below[2])
          belowchemJval = convert(Array{ftype_ncur}, $(Expr(:vcat, chemJ_below[3]...)))
  
@@ -1110,7 +1111,7 @@ index 744cc6a..5536a65 100644
      end
  end
  
-@@ -1471,7 +1606,7 @@ end
+@@ -1471,7 +1605,7 @@ end
  # **************************************************************************** #
  println("$(Dates.format(now(), "(HH:MM:SS)")) Populating cross section dictionary...")
  
@@ -1119,7 +1120,7 @@ index 744cc6a..5536a65 100644
  
  # **************************************************************************** #
  #                                                                              #
-@@ -1482,12 +1617,25 @@ solarflux = readdlm(code_dir*solarfile,'\t', Float64, comments=true, comment_cha
+@@ -1482,12 +1616,26 @@ solarflux = readdlm(code_dir*solarfile,'\t', Float64, comments=true, comment_cha
  solarflux[:,2] = solarflux[:,2] * cosd(SZA)  # Adjust the flux according to specified SZA
  
  # pad all cross-sections to solar
@@ -1138,7 +1139,8 @@ index 744cc6a..5536a65 100644
 +               num_layers=num_layers,
 +               absorber=absorber,
 +               dz=dz,
-+               solarflux=solarflux)
++               solarflux=solarflux,
++               enable_horiz_transport=enable_horiz_transport)
 +# NOTE: The stored Jrates will have units of #/s.
 +const external_storage = Dict{Symbol, Vector{Array{Float64}}}(
 +    [j => n_current[j] for j in union(short_lived_species, inactive_species, Jratelist)

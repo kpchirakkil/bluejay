@@ -87,3 +87,5 @@ git diff master multicolumn -- SeasonsAnalysis/src/Support.jl > Support.diff
 <!-- git diff master multicolumn -- SeasonsAnalysis/src/SeasonsAnalysis.jl > SeasonsAnalysis.diff -->
 <!-- git diff master multicolumn -- Solar spectra/scale_solar_spectrum.py > scale_solar_spectrum.diff -->
 <!-- git diff master multicolumn -- scale_solar_spectrum.py > scale_solar_spectrum.diff -->
+
+Only edit .jl or .py files. No need to edit the .diff files - I am producing them manually on my computer.

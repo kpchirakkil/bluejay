@@ -1628,7 +1628,8 @@ update_Jrates!(n_current, n_horiz;
                num_layers=num_layers,
                absorber=absorber,
                dz=dz,
-               solarflux=solarflux)
+               solarflux=solarflux,
+               enable_horiz_transport=enable_horiz_transport)
 # NOTE: The stored Jrates will have units of #/s.
 const external_storage = Dict{Symbol, Vector{Array{Float64}}}(
     [j => n_current[j] for j in union(short_lived_species, inactive_species, Jratelist)
