@@ -205,8 +205,9 @@ function meanmass(atmdict::Dict{Symbol, Vector{Array{ftype_ncur}}}, n_horiz::Int
     end
 
     # Gets the atmosphere as a matrix with rows = altitudes, cols = species, and the third dimension as vertical columns
-    # so we can do matrix multiplication.
-    n_mat = permutedims(atm_dict_to_matrix(atmdict, GV.all_species, n_horiz),(2,1,3))
+    # so we can do matrix multiplication. Only counted species are included so
+    # that ignored species do not contribute to the mean.
+    n_mat = permutedims(atm_dict_to_matrix(trimmed_atmdict, counted_species, n_horiz), (2, 1, 3))
 
     m = [GV.molmass[sp] for sp in counted_species] # this will always be 1D
 
@@ -2799,7 +2800,7 @@ function setup_water_profile!(atmdict; constfrac=1, dust_storm_on=false, make_sa
     # ================================================================================================================
     # Currently this doesn't change behavior based on planet. 5/15/24
     # H2Oinitfrac, H2Osatfrac = set_h2oinitfrac_bySVP(atmdict, hygropause_alt; globvars...)
-    # H2Oinitfrac, H2Osatfrac = set_h2oinitfrac_bySVP(atmdict, hygropause_alt; ihoriz=1, globvars...)
+
     H2Oinitfrac_all = Vector{Vector{ftype_ncur}}(undef, GV.n_horiz)
     H2Osatfrac_all = Vector{Vector{ftype_ncur}}(undef, GV.n_horiz)
 

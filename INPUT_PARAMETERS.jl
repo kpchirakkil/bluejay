@@ -14,13 +14,13 @@
 
 # Set the planet 
 # =======================================================================================================
-const planet = "Mars"
+const planet = "Venus"
     # OPTIONS: "Mars", "Venus"
 
 # Input and output files, directory
 # =======================================================================================================
 const results_dir = code_dir*"../Results_$(planet)/"
-const initial_atm_file = "$(planet)-Inputs/INITIAL_GUESS_MARS_bxz4YnHk.h5"  # File to use to initialize the atmosphere.
+const initial_atm_file = "$(planet)-Inputs/INITIAL_GUESS_VENUS_oUT0ZbGN.h5"  # File to use to initialize the atmosphere.
     # OPTIONS: 
     # INITIAL_GUESS_MARS.h5 --> Basic Mars starting file.
     # INITIAL_GUESS_MARS_bxz4YnHk.h5 --> A Mars atmosphere that includes N2O, NO2, and their ions;
@@ -195,7 +195,7 @@ const use_ambipolar = true # Toggle ambipolar diffusion for ions.
 const use_molec_diff = true # Toggle molecular diffusion. If turned off, eddy diffusion remains active.
 
 # Number of vertical columns in the simulation. Set this to 1 for a single-column run or >1 for a multicolumn model.
-const n_horiz = 1
+const n_horiz = 3
 
 # Default horizontal wind speed in cm/s used to initialize wind profiles in
 # `MODEL_SETUP.jl`. Set to zero for no horizontal advection.
