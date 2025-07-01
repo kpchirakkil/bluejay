@@ -1147,17 +1147,17 @@ function update_Jrates!(n_cur_densities::Dict{Symbol, Vector{Array{ftype_ncur}}}
         end
     end
 
-    # # Verify identical Jrates when horizontal transport is disabled
-    # if n_horiz > 1 && !GV.enable_horiz_transport
-    #     for j in GV.Jratelist
-    #         if haskey(n_cur_densities, j)
-    #             first = n_cur_densities[j][1]
-    #             for col in n_cur_densities[j][2:end]
-    #                 @assert col == first "Jrate mismatch across columns for $(j)"
-    #             end
-    #         end
-    #     end
-    # end
+    # Verify identical Jrates when horizontal transport is disabled
+    if n_horiz > 1 && !GV.enable_horiz_transport
+        for j in GV.Jratelist
+            if haskey(n_cur_densities, j)
+                first = n_cur_densities[j][1]
+                for col in n_cur_densities[j][2:end]
+                    @assert isapprox(col, first; rtol=1e-8, atol=0.0) "Jrate mismatch across columns for $(j)"
+                end
+            end
+        end
+    end
 end
 
 #===============================================================================#

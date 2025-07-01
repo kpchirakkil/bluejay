@@ -1,5 +1,5 @@
 diff --git a/Photochemistry/src/Core.jl b/Photochemistry/src/Core.jl
-index 5128abd..63d34a6 100644
+index 5128abd..fb4331b 100644
 --- a/Photochemistry/src/Core.jl
 +++ b/Photochemistry/src/Core.jl
 @@ -88,60 +88,103 @@ function electron_density(atmdict; globvars...)
@@ -645,7 +645,11 @@ index 5128abd..63d34a6 100644
 +    # Calculate optical depth (now 2-D)
 +    solarabs = optical_depth(n_cur_densities; n_horiz=n_horiz, globvars...)
 +    # solarabs now records the total optical depth of the atmosphere at each wavelength and altitude
-+
+ 
+-    # actinic flux at each wavelength is solar flux diminished by total
+-    # optical depth
+-    for ialt in [1:GV.num_layers;]
+-        solarabs[ialt] = GV.solarflux[:,2] .* exp.(-solarabs[ialt])
 +     # Determine whether solar flux is provided per column.  If a single array is
 +    # given, replicate it for all columns to maintain backwards compatibility.
 +    flux_per_column = if GV.solarflux isa Vector
@@ -653,11 +657,7 @@ index 5128abd..63d34a6 100644
 +    else
 +        [GV.solarflux for _ in 1:n_horiz]
 +    end
- 
--    # actinic flux at each wavelength is solar flux diminished by total
--    # optical depth
--    for ialt in [1:GV.num_layers;]
--        solarabs[ialt] = GV.solarflux[:,2] .* exp.(-solarabs[ialt])
++
 +    # Actinic flux at each wavelength and each horizontal column is the solar
 +    # flux for that column diminished by the integrated optical depth above that
 +    # layer.
@@ -669,7 +669,7 @@ index 5128abd..63d34a6 100644
      end
  
      # You can uncomment these to plot the extinction at each atmospheric level, but you have to feed it a specific Jrate
-@@ -993,12 +1128,36 @@ function update_Jrates!(n_cur_densities::Dict{Symbol, Array{ftype_ncur, 1}}; nla
+@@ -993,10 +1128,34 @@ function update_Jrates!(n_cur_densities::Dict{Symbol, Array{ftype_ncur, 1}}; nla
      # altitude times the actinic flux.
      # BLAS.dot includes an integration (sum) across wavelengths, i.e:
      # (a·b) = aa + ab + ab + bb etc that kind of thing
@@ -692,23 +692,21 @@ index 5128abd..63d34a6 100644
 +                    BLAS.dot(nlambda, solarabs[ihoriz][ialt], 1, GV.crosssection[j][ihoriz][ialt+1], 1) # updated update_Jrates! so Jrates integrate column-specific cross sections
 +                )
 +            end
++        end
++    end
++
++    # Verify identical Jrates when horizontal transport is disabled
++    if n_horiz > 1 && !GV.enable_horiz_transport
++        for j in GV.Jratelist
++            if haskey(n_cur_densities, j)
++                first = n_cur_densities[j][1]
++                for col in n_cur_densities[j][2:end]
++                    @assert isapprox(col, first; rtol=1e-8, atol=0.0) "Jrate mismatch across columns for $(j)"
++                end
++            end
          end
      end
-+
-+    # # Verify identical Jrates when horizontal transport is disabled
-+    # if n_horiz > 1 && !GV.enable_horiz_transport
-+    #     for j in GV.Jratelist
-+    #         if haskey(n_cur_densities, j)
-+    #             first = n_cur_densities[j][1]
-+    #             for col in n_cur_densities[j][2:end]
-+    #                 @assert col == first "Jrate mismatch across columns for $(j)"
-+    #             end
-+    #         end
-+    #     end
-+    # end
  end
- 
- #===============================================================================#
 @@ -1032,7 +1191,7 @@ function effusion_velocity(Texo, m; globvars...)
  end
  

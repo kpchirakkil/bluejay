@@ -1,5 +1,5 @@
 diff --git a/converge_new_file.jl b/converge_new_file.jl
-index 744cc6a..66bf53e 100644
+index 744cc6a..a48bf40 100644
 --- a/converge_new_file.jl
 +++ b/converge_new_file.jl
 @@ -6,8 +6,8 @@
@@ -820,7 +820,7 @@ index 744cc6a..66bf53e 100644
  
      # new_zmax = parse(Int64, input("Enter the new top of the atmosphere in km: "))
      # extra_entries = Int64((new_zmax - (zmax / 1e5))/(dz/1e5))
-@@ -1004,15 +1076,17 @@ if make_new_alt_grid==true
+@@ -1004,15 +1076,18 @@ if make_new_alt_grid==true
      # const max_alt = new_zmax*1e5
  elseif make_new_alt_grid==false 
      println("$(Dates.format(now(), "(HH:MM:SS)")) Loading atmosphere")
@@ -838,11 +838,12 @@ index 744cc6a..66bf53e 100644
 +for ihoriz in 1:n_horiz
 +    H2Osatfrac[:, ihoriz] = H2Osat[2:end-1] ./ map(z -> n_tot(n_current, z, ihoriz; all_species, n_alt_index), alt[2:end-1]) # get SVP as fraction of total atmo
 +end
++# interior altitude grid is used in multicolumn
 +const upper_lower_bdy = alt[2:end-1][something(findfirst(isequal(minimum(H2Osatfrac[:, 1])), H2Osatfrac[:, 1]), 0)] # in cm
  const upper_lower_bdy_i = n_alt_index[upper_lower_bdy]  # the uppermost layer at which water will be fixed, in cm
  # Control whether the removal of rates etc at "Fixed altitudes" runs. If the boundary is 
  # the bottom of the atmosphere, we shouldn't do it at all.
-@@ -1114,7 +1188,7 @@ end
+@@ -1114,7 +1189,7 @@ end
  
  #                        Initialize electron profile                            #
  #===============================================================================#
@@ -851,7 +852,7 @@ index 744cc6a..66bf53e 100644
  
  #                          Set up the water profile                             #
  #===============================================================================#
-@@ -1131,14 +1205,13 @@ if reinitialize_water_profile
+@@ -1131,14 +1206,13 @@ if reinitialize_water_profile
                                          hygropause_alt=hygropause_alt, excess_water_in=water_loc, 
                                          all_species, alt, DH, num_layers, non_bdy_layers, n_alt_index, planet, plot_grid,
                                          H2O_excess, HDO_excess,  H2Osat, water_mixing_ratio,  results_dir, 
@@ -868,7 +869,7 @@ index 744cc6a..66bf53e 100644
      end
  end
  
-@@ -1149,14 +1222,20 @@ if update_water_profile
+@@ -1149,14 +1223,20 @@ if update_water_profile
      if water_case!="standard"
          if water_loc=="loweratmo"
  
@@ -894,7 +895,7 @@ index 744cc6a..66bf53e 100644
          else 
              # Create the new multipliers to change the profiles
              multiplier = water_tanh_prof(non_bdy_layers./1e5; f=f_fac_opts[water_case], z0=add_water_alt_opts[water_case])
-@@ -1175,36 +1254,49 @@ if update_water_profile
+@@ -1175,36 +1255,49 @@ if update_water_profile
          end
  
          # Make the plot
@@ -957,7 +958,7 @@ index 744cc6a..66bf53e 100644
  
  #           Define storage for species/Jrates not solved for actively           #
  #===============================================================================#
-@@ -1212,9 +1304,10 @@ HDOprum = precip_microns(:HDO, [n_current[:HDO][1]; n_current[:HDO]; n_current[:
+@@ -1212,9 +1305,10 @@ HDOprum = precip_microns(:HDO, [n_current[:HDO][1]; n_current[:HDO]; n_current[:
  # outside of the primary ODE solver. Inactive species never change during simulation.
  # Jrates must be stored here because they have to be updated alongside evolution
  # of the atmospheric densities--the solver doesn't handle their values currently.
@@ -970,7 +971,7 @@ index 744cc6a..66bf53e 100644
  
  # **************************************************************************** #
  #                                                                              #
-@@ -1237,7 +1330,7 @@ println("$(Dates.format(now(), "(HH:MM:SS)")) Setting up transport network, chem
+@@ -1237,7 +1331,7 @@ println("$(Dates.format(now(), "(HH:MM:SS)")) Setting up transport network, chem
  
  #                               Transport network                               #
  #===============================================================================#
@@ -979,7 +980,7 @@ index 744cc6a..66bf53e 100644
  const upeqns = [Any[Any[[s], [Symbol(string(s)*"_above")],Symbol("t"*string(s)*"_up")],
                      Any[[Symbol(string(s)*"_above")],[s],Symbol("t"*string(s)*"_above_down")]]
                      for s in transport_species];
-@@ -1253,24 +1346,47 @@ const local_transport_rates = [[[Symbol("t"*string(s)*"_up") for s in transport_
+@@ -1253,24 +1347,47 @@ const local_transport_rates = [[[Symbol("t"*string(s)*"_up") for s in transport_
  
  const transportnet = [[upeqns...;]; [downeqns...;]];
  
@@ -1035,7 +1036,7 @@ index 744cc6a..66bf53e 100644
  
  # **************************************************************************** #
  #                                                                              #
-@@ -1280,10 +1396,17 @@ const active_longlived_species_rates, short_lived_density_eqn,
+@@ -1280,10 +1397,17 @@ const active_longlived_species_rates, short_lived_density_eqn,
  
  #          Arguments and expressions for metaprogramming functions              #
  #===============================================================================#
@@ -1056,7 +1057,7 @@ index 744cc6a..66bf53e 100644
  const set_concentration_arglist_typed = [:($s::ftype_chem) for s in set_concentration_arglist];
  
  # This can be used if you want to calculate M, E at computation
-@@ -1310,9 +1433,9 @@ const set_concentration_arglist_typed = [:($s::ftype_chem) for s in set_concentr
+@@ -1310,9 +1434,9 @@ const set_concentration_arglist_typed = [:($s::ftype_chem) for s in set_concentr
          =#
  
          # M and E are calculated here to ensure that the right number of ions/electrons
@@ -1068,7 +1069,7 @@ index 744cc6a..66bf53e 100644
  
          # stack overflow - answer (Cite)
          # create a result array for evaluating the production and loss expressions
-@@ -1380,8 +1503,8 @@ end
+@@ -1380,8 +1504,8 @@ end
          =#
  
          # M = $Mexpr
@@ -1079,7 +1080,7 @@ index 744cc6a..66bf53e 100644
          # Make a result array in which to store evaluated expressions 
          density_result = map(_ -> 0., $short_lived_density_eqn)  # will hold evaluated expressions.
          evaluated_inputs = map(_ -> 0., $shortlived_density_inputs) 
-@@ -1439,7 +1562,7 @@ end
+@@ -1439,7 +1563,7 @@ end
          #=
          Generates a matrix of I, J, and V values for a sparse matrix, for the 
          local layer, for influences from the layer above, and influences 
@@ -1088,7 +1089,7 @@ index 744cc6a..66bf53e 100644
          =#
  
          # M = $Mexpr 
-@@ -1457,10 +1580,21 @@ end
+@@ -1457,10 +1581,21 @@ end
          belowchemJj = $(chemJ_below[2])
          belowchemJval = convert(Array{ftype_ncur}, $(Expr(:vcat, chemJ_below[3]...)))
  
@@ -1111,7 +1112,7 @@ index 744cc6a..66bf53e 100644
      end
  end
  
-@@ -1471,7 +1605,7 @@ end
+@@ -1471,7 +1606,7 @@ end
  # **************************************************************************** #
  println("$(Dates.format(now(), "(HH:MM:SS)")) Populating cross section dictionary...")
  
@@ -1120,7 +1121,7 @@ index 744cc6a..66bf53e 100644
  
  # **************************************************************************** #
  #                                                                              #
-@@ -1482,12 +1616,26 @@ solarflux = readdlm(code_dir*solarfile,'\t', Float64, comments=true, comment_cha
+@@ -1482,12 +1617,26 @@ solarflux = readdlm(code_dir*solarfile,'\t', Float64, comments=true, comment_cha
  solarflux[:,2] = solarflux[:,2] * cosd(SZA)  # Adjust the flux according to specified SZA
  
  # pad all cross-sections to solar
@@ -1150,7 +1151,7 @@ index 744cc6a..66bf53e 100644
  
  # **************************************************************************** #
  #                                                                              #
-@@ -1499,9 +1647,29 @@ println("$(Dates.format(now(), "(HH:MM:SS)")) Creating the simulation log file..
+@@ -1499,9 +1648,29 @@ println("$(Dates.format(now(), "(HH:MM:SS)")) Creating the simulation log file..
  
  # Boundary condition write out messages
  bc_type = Dict("n"=>"density", "f"=>"thermal flux", "v"=>"velocity", "ntf"=>"nonthermal flux")
@@ -1183,7 +1184,7 @@ index 744cc6a..66bf53e 100644
      end
  end
  
-@@ -1528,7 +1696,7 @@ write_to_log(logfile, ["Description: $(optional_logging_note)"], mode="w")
+@@ -1528,7 +1697,7 @@ write_to_log(logfile, ["Description: $(optional_logging_note)"], mode="w")
  # n_current[:D] = map(x->1e5*exp(-((x-184)/20)^2), non_bdy_layers/1e5) + n_current[:D]
  
  # write initial atmospheric state ==============================================
@@ -1192,7 +1193,7 @@ index 744cc6a..66bf53e 100644
  
  # Plot initial temperature and water profiles ==================================
  plot_temp_prof(Tn_arr; savepath=results_dir*sim_folder_name, Tprof_2=Ti_arr, Tprof_3=Te_arr, alt, monospace_choice, sansserif_choice)
-@@ -1536,16 +1704,21 @@ plot_temp_prof(Tn_arr; savepath=results_dir*sim_folder_name, Tprof_2=Ti_arr, Tpr
+@@ -1536,16 +1705,21 @@ plot_temp_prof(Tn_arr; savepath=results_dir*sim_folder_name, Tprof_2=Ti_arr, Tpr
  # Absolute tolerance
  if problem_type == "Gear"
      const atol = 1e-12 # absolute tolerance in ppm, used by Gear solver # NOTE: I think this is actually #/cm³ not ppm, because n_i+1 - n_i is compared against it.--Eryn
@@ -1218,7 +1219,7 @@ index 744cc6a..66bf53e 100644
           t="initial state", neutral_species, ion_species, plot_grid, speciescolor, speciesstyle, zmax, hrshortcode, rshortcode,
           monospace_choice, sansserif_choice) 
  
-@@ -1585,22 +1758,26 @@ if ftype_ncur==Double64
+@@ -1585,22 +1759,26 @@ if ftype_ncur==Double64
      println("$(Dates.format(now(), "(HH:MM:SS)")) Compiling and calling the chemical jacobian outside evolve_atmosphere (this will take ~45 min)...")
      write_to_log(logfile, "$(Dates.format(now(), "(HH:MM:SS)")) Started first chemical jacobian compile")
  
@@ -1254,7 +1255,7 @@ index 744cc6a..66bf53e 100644
      t_after_jac = time()
  
      write_to_log(logfile, "$(Dates.format(now(), "(HH:MM:SS)")) Finished first chemical jacobian compile")
-@@ -1618,18 +1795,19 @@ println("Time to beginning convergence is $(format_sec_or_min(time()-t1))\n\n")
+@@ -1618,18 +1796,19 @@ println("Time to beginning convergence is $(format_sec_or_min(time()-t1))\n\n")
  #                                                                              #
  # **************************************************************************** #
  
@@ -1279,7 +1280,7 @@ index 744cc6a..66bf53e 100644
                              "Solver" => PARAMETERS_SOLVER
                              )
  xlsx_parameter_log = "$(results_dir)$(sim_folder_name)/PARAMETERS.xlsx"
-@@ -1637,7 +1815,7 @@ xlsx_parameter_log = "$(results_dir)$(sim_folder_name)/PARAMETERS.xlsx"
+@@ -1637,7 +1816,7 @@ xlsx_parameter_log = "$(results_dir)$(sim_folder_name)/PARAMETERS.xlsx"
  ti = time()
  println("$(Dates.format(now(), "(HH:MM:SS)")) Beginning convergence")
  
@@ -1288,7 +1289,7 @@ index 744cc6a..66bf53e 100644
  
  atm_soln = Dict()
  
-@@ -1645,23 +1823,25 @@ try
+@@ -1645,23 +1824,25 @@ try
      global atm_soln, sim_time = evolve_atmosphere(n_current, mindt, maxdt; t_to_save=times_to_save, abstol=atol, reltol=rel_tol, 
                                   # glob vars from here.  
                                   absorber, active_species, active_longlived, active_shortlived, all_species, alt, 
@@ -1317,7 +1318,7 @@ index 744cc6a..66bf53e 100644
  
  write_to_log(logfile, "Finished!\nSimulation active convergence runtime $(format_sec_or_min(tf-ti))", mode="a")
  
-@@ -1677,11 +1857,11 @@ println("$(Dates.format(now(), "(HH:MM:SS)")) Simulation active convergence runt
+@@ -1677,11 +1858,11 @@ println("$(Dates.format(now(), "(HH:MM:SS)")) Simulation active convergence runt
  if problem_type == "SS"
      # Update short-lived species one more time
      println("One last update of short-lived species")
@@ -1331,7 +1332,7 @@ index 744cc6a..66bf53e 100644
  
      println("Plotting final atmosphere, writing out state")
      # Make final atmosphere plot
-@@ -1692,12 +1872,19 @@ if problem_type == "SS"
+@@ -1692,12 +1873,19 @@ if problem_type == "SS"
      write_final_state(nc_all, results_dir, sim_folder_name, final_atm_file; alt, num_layers, hrshortcode, Jratedict=Jrates, rshortcode, external_storage)
      write_to_log(logfile, "$(Dates.format(now(), "(HH:MM:SS)")) Making production/loss plots", mode="a")
      println("Making production/loss plots (this tends to take several minutes)")
@@ -1357,7 +1358,7 @@ index 744cc6a..66bf53e 100644
  elseif problem_type == "ODE"
  
      L = length(atm_soln.u)
-@@ -1710,16 +1897,16 @@ elseif problem_type == "ODE"
+@@ -1710,16 +1898,16 @@ elseif problem_type == "ODE"
              # Currently there's no workaround for this and you just have to remember NOT TO TRUST Jrates
              # at any timestep except the very last. 
              # TODO: Fix this so we just don't write Jrates in these iterations...
@@ -1377,7 +1378,7 @@ index 744cc6a..66bf53e 100644
  
              # Make final atmosphere plot
              println("Plotting final atmosphere, writing out state")
-@@ -1729,12 +1916,19 @@ elseif problem_type == "ODE"
+@@ -1729,12 +1917,19 @@ elseif problem_type == "ODE"
              write_final_state(nc_all, results_dir, sim_folder_name, final_atm_file; alt, num_layers, hrshortcode, Jratedict=Jrates, rshortcode, external_storage)
              write_to_log(logfile, "$(Dates.format(now(), "(HH:MM:SS)")) Making production/loss plots", mode="a")
              println("Making production/loss plots (this tends to take several minutes)")
@@ -1403,7 +1404,7 @@ index 744cc6a..66bf53e 100644
  
          end
          global i += 1 
-@@ -1742,31 +1936,41 @@ elseif problem_type == "ODE"
+@@ -1742,31 +1937,41 @@ elseif problem_type == "ODE"
  elseif problem_type == "Gear"
      # Plot the final atmospheric state
      println("Plotting final atmosphere, writing out state")
