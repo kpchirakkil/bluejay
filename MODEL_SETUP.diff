@@ -1,5 +1,5 @@
 diff --git a/MODEL_SETUP.jl b/MODEL_SETUP.jl
-index 2a315a9..72b5017 100644
+index 2a315a9..b11e4e7 100644
 --- a/MODEL_SETUP.jl
 +++ b/MODEL_SETUP.jl
 @@ -6,8 +6,8 @@
@@ -92,7 +92,7 @@ index 2a315a9..72b5017 100644
  
  #                                      Water profile settings
  # =======================================================================================================
-@@ -329,86 +350,87 @@ const H2Oi = findfirst(x->x==:H2O, active_longlived)
+@@ -329,86 +350,90 @@ const H2Oi = findfirst(x->x==:H2O, active_longlived)
  const HDOi = findfirst(x->x==:HDO, active_longlived)
  
  # Altitude at which water transitions from fixed to freely solved for
@@ -114,15 +114,19 @@ index 2a315a9..72b5017 100644
  #                              Species-specific scale heights
  # =======================================================================================================
 -const Hs_dict = Dict{Symbol, Vector{Float64}}([sp=>scaleH(alt, sp, Tprof_for_Hs[charge_type(sp)]; molmass, M_P, R_P) for sp in all_species])
+-
 +const Hs_dict = Dict{Symbol, Vector{Vector{Float64}}}([sp => [scaleH(alt, sp, Tprof_for_Hs[charge_type(sp)][ihoriz, :]; molmass, M_P, R_P) for ihoriz in 1:n_horiz] for sp in all_species])
  
--
 -#                                     Boundary conditions
 +#                                     Boundary conditions (lower and upper)
  # =======================================================================================================
- # "n": density boundary condition; "f": flux bc; "v": velocity bc; 
+-# "n": density boundary condition; "f": flux bc; "v": velocity bc; 
++# "n": density boundary condition; "f": flux bc; "v": velocity bc;
  # "see boundaryconditions()" -- nonthermal escape depends on the dynamic density of the
  # atmosphere, so it can't be imposed as a constant here and is calculated on the fly.
++# The default lists below give every column the same lower/upper values. Modify
++# `speciesbclist[sp][bc][ihoriz]` if a particular column should use different
++# boundary values.
  if planet=="Mars"
 -    const speciesbclist=Dict(:CO2=>Dict("n"=>[2.1e17, NaN], "f"=>[NaN, 0.]),
 -                        :Ar=>Dict("n"=>[2.0e-2*2.1e17, NaN], "f"=>[NaN, 0.]),
@@ -217,7 +221,7 @@ index 2a315a9..72b5017 100644
                                      #           "ntf"=>[NaN, "see boundaryconditions()"]),
  
                                      # unusued neutral boundary conditions
-@@ -417,8 +439,8 @@ elseif planet=="Venus"
+@@ -417,8 +442,8 @@ elseif planet=="Venus"
                                      #:NO=>Dict("v"=>[-KoverH_lowerbdy, NaN], #="n"=>[3e8, NaN],=# #="n"=>[5.5e-9*ntot_at_lowerbdy, NaN], =# "f"=>[NaN, 0.]),
  
                                      # assume no ion loss, appropriate for global average and small observed rates
@@ -228,7 +232,7 @@ index 2a315a9..72b5017 100644
                                      #:Opl=>Dict("v"=>[-KoverH_lowerbdy, 2e5], ), # "f"=>[NaN, 2.1e8] # tends to cause hollowing out of atmosphere
                                      );
  
-@@ -428,13 +450,43 @@ elseif planet=="Venus"
+@@ -428,13 +453,44 @@ elseif planet=="Venus"
          if sp in keys(manual_speciesbclist)
              auto_speciesbclist[sp] = manual_speciesbclist[sp]
          else
@@ -252,7 +256,8 @@ index 2a315a9..72b5017 100644
 +# boundaries, but you can modify the values below (or in a separate script)
 +# to impose an influx or outflux for any species.  Each entry contains two
 +# vectors of length `num_layers` giving the flux [#/cm²/s] at the back and front
-+# edges respectively.
++# edges respectively. Edit `speciesbclist_horiz[sp]["f"][edge]` to override the
++# profile on either edge.
 +
 +# add in zero flux edge boundary conditions on both edges for all species
 +auto_speciesbclist_horiz = Dict()
@@ -273,7 +278,7 @@ index 2a315a9..72b5017 100644
  # ***************************************************************************************************** #
  #                                                                                                       #
  #                         Set up simulation filenames and define input files                            #
-@@ -618,7 +670,10 @@ PARAMETERS_SPLISTS = DataFrame(AllSpecies=[[string(a) for a in all_species]...,
+@@ -618,7 +674,10 @@ PARAMETERS_SPLISTS = DataFrame(AllSpecies=[[string(a) for a in all_species]...,
                                 Jratelist=[[string(j) for j in Jratelist]..., ["" for i in 1:L-length(Jratelist)]...]);
  PARAMETERS_SOLVER = DataFrame(Field=[], Value=[]);
  PARAMETERS_XSECTS = DataFrame(Species=[], Description=[], Filename=[]);
