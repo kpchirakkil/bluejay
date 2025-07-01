@@ -120,7 +120,7 @@ function evolve_atmosphere(atm_init::Dict{Symbol, Vector{Array{ftype_ncur}}}, lo
                                    :neutral_species, :non_bdy_layers, :num_layers, :plot_grid, :polarizability, :q, :R_P, :reaction_network, 
                                    :season_length_in_sec, :sol_in_sec, :solarflux, :speciesbclist, :speciesbclist_horiz, :speciescolor, :speciesstyle, 
                                    :Te, :Ti, :Tn, :Tp, :Tprof_for_diffusion, :transport_species, 
-                                   :upper_lower_bdy_i, :zmax, :horiz_wind_v, :enable_horiz_diffusion])
+                                   :upper_lower_bdy_i, :zmax, :horiz_wind_v, :enable_horiz_transport])
         
 
     println("$(Dates.format(now(), "(HH:MM:SS)")) Setting up initial state")
@@ -529,7 +529,7 @@ function converge(n_current::Dict{Symbol, Vector{Array{ftype_ncur}}}, log_t_star
                                    :n_all_layers, :n_alt_index, :n_inactive, :n_steps, :neutral_species, :non_bdy_layers, :num_layers, 
                                    :plot_grid, :polarizability, :q, :reaction_network, :season_length_in_sec, :sol_in_sec, :solarflux, :speciesbclist, :speciesbclist_horiz,
                                    :speciescolor, :speciesstyle, 
-                                   :Te, :Ti, :Tn, :Tp, :timestep_type, :Tprof_for_diffusion, :upper_lower_bdy_i, :zmax, :horiz_wind_v, :enable_horiz_diffusion])
+                                   :Te, :Ti, :Tn, :Tp, :timestep_type, :Tprof_for_diffusion, :upper_lower_bdy_i, :zmax, :horiz_wind_v, :enable_horiz_transport])
     
     # A combination of log timesteps when simulation time is low, and linear after - used to simulate a single season, mainly.
     if GV.timestep_type=="log-linear"
@@ -680,7 +680,7 @@ function get_rates_and_jacobian(n, p, t; globvars...)
                                    :inactive_species, :ion_species,  :Jratelist,
                                    :molmass, :neutral_species, :non_bdy_layers, :num_layers, :n_all_layers, :n_alt_index, :n_inactive, 
                                    :plot_grid, :polarizability, :q, :reaction_network, :solarflux, :speciesbclist, :speciesbclist_horiz, :speciescolor, :speciesstyle,
-                                   :Tn, :Ti, :Te, :Tp, :Tprof_for_diffusion, :transport_species, :upper_lower_bdy_i, :zmax, :horiz_wind_v, :enable_horiz_diffusion])
+                                   :Tn, :Ti, :Te, :Tp, :Tprof_for_diffusion, :transport_species, :upper_lower_bdy_i, :zmax, :horiz_wind_v, :enable_horiz_transport])
 
     # Unpack the parameters ---------------------------------------------------------------
     D_arr, M, E = p 
@@ -759,7 +759,7 @@ function next_timestep(nstart, params, t, dt; reltol=1e-2, abstol=1e-12, verbose
                                    :inactive_species, :ion_species,  :Jratelist, :logfile, :molmass, 
                                    :n_all_layers, :n_alt_index, :n_inactive, :neutral_species, :non_bdy_layers, :num_layers, 
                                    :plot_grid, :polarizability, :q, :reaction_network,  :speciesbclist, :speciesbclist_horiz, :speciescolor, :speciesstyle,
-                                   :Te, :Ti, :Tn, :Tp, :Tprof_for_diffusion, :upper_lower_bdy_i, :zmax, :horiz_wind_v, :enable_horiz_diffusion])
+                                   :Te, :Ti, :Tn, :Tp, :Tprof_for_diffusion, :upper_lower_bdy_i, :zmax, :horiz_wind_v, :enable_horiz_transport])
 
     # absolute and relative tolerance on rate update
     f_abstol = 1e-2
@@ -991,7 +991,7 @@ function update!(n_current::Dict{Symbol, Vector{Array{ftype_ncur}}}, t, dt; abst
                                    :inactive_species, :ion_species, :Jratelist, :logfile, :molmass, 
                                    :n_all_layers, :n_alt_index, :n_inactive, :neutral_species, :non_bdy_layers, :num_layers, 
                                    :plot_grid, :polarizability, :q, :reaction_network, :solarflux, :speciesbclist, :speciesbclist_horiz, :speciescolor, :speciesstyle,
-                                   :Te, :Ti, :Tn, :Tp, :Tprof_for_diffusion, :upper_lower_bdy_i, :zmax, :horiz_wind_v, :enable_horiz_diffusion])
+                                   :Te, :Ti, :Tn, :Tp, :Tprof_for_diffusion, :upper_lower_bdy_i, :zmax, :horiz_wind_v, :enable_horiz_transport])
 
     # MULTICOL UPDATE: calculate total atmospheric density for each horizontal column separately
     M = zeros(GV.num_layers, n_horiz)
@@ -1831,7 +1831,7 @@ try
                                  neutral_species, non_bdy_layers, num_layers, n_all_layers, n_alt_index, n_inactive, n_steps, 
                                  polarizability, planet, plot_grid, q, R_P, reaction_network, rshortcode, 
                                  season_length_in_sec, sol_in_sec, solarflux, speciesbclist, speciesbclist_horiz, speciescolor, speciesstyle, horiz_wind_v,
-                                 enable_horiz_diffusion,
+                                 enable_horiz_transport,
                                  Tn=Tn_arr, Ti=Ti_arr, Te=Te_arr, Tp=Tplasma_arr, Tprof_for_diffusion, transport_species, opt="",
                                  upper_lower_bdy_i, use_ambipolar, use_molec_diff, zmax)
 catch y

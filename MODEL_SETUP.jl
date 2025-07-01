@@ -290,12 +290,11 @@ const Tprof_for_Hs = Dict("neutral"=>Tn_arr, "ion"=>Ti_arr)
 # Construct horizontal wind profiles for each column.  Each profile is an
 # array over altitude with values in cm/s.  The wind speed is taken from the
 # user-configurable parameter `horiz_wind_speed` in `INPUT_PARAMETERS.jl`.
-# Setting that value to zero disables horizontal transport.
+# Setting that value to zero disables horizontal advection.
 const horiz_wind_v = [fill(horiz_wind_speed, length(alt)) for ihoriz in 1:n_horiz]
 
-# Toggle cross-column diffusion.  When disabled the horizontal transport
-# routines will return zero coefficients so that each column evolves
-# independently.
+# Toggle cross-column mixing `enable_horiz_transport`.  When disabled the horizontal transport
+# routines will return zero coefficients so that each column evolves independently.
 
 #                                      Water profile settings
 # =======================================================================================================

@@ -58,10 +58,31 @@ Note that this is a simplified version with 4 species and 7 altitude bins.
 - Verification of Jacobian and Rate Functions: To verify that the multicolumn model keeps a consistent ordering of species, altitude, and horizontal columns when building transport matrices.
 - Horizontal boundary conditions are stored separately per altitude with bc_dict_horiz[sp][ialt][row, col] and populated consistently inside the loop over ialt
 - Make sure the horizontal transport coefficients are placed correctly in the transport matrices (chemical Jacobian and rate functions)
-- Focus on important model files (such as but not limited to): converge_new_file.jl, MODEL_SETUP.jl, INPUT_PARAMETERS.jl, ReactionNetwork.jl, Plotting.jl, Core.jl, AnalyzeChemAndTransport.jl, Crosssections.jl
 
-## Put all the species and altitudes back in
+## Merging multicolumn with master
 
 - Make sure the 2-D multicolumn framework is working in the full set-up (all species and altitudes) with horizontal transport implemented.
 - Make sure the multicolumn branch is working for both Mars and Venus. Master branch (1-D single column) is working for both Mars and Venus.
 - Merge multicolumn branch with master branch.
+
+## Create diff files
+
+git diff master multicolumn -- Photochemistry/src/Core.jl > Core.diff
+git diff master multicolumn -- Photochemistry/src/AnalyzeChemAndTransport.jl > AnalyzeChemAndTransport.diff
+git diff master multicolumn -- Photochemistry/src/BasicUtilities.jl > BasicUtilities.diff
+git diff master multicolumn -- Photochemistry/src/Crosssections.jl > Crosssections.diff
+git diff master multicolumn -- Photochemistry/src/FileIO.jl > FileIO.diff
+git diff master multicolumn -- Photochemistry/src/JuliaODEsolver.jl > JuliaODEsolver.diff
+git diff master multicolumn -- Photochemistry/src/Photochemistry.jl > Photochemistry.diff
+git diff master multicolumn -- Photochemistry/src/Plotting.jl > Plotting.diff
+git diff master multicolumn -- Photochemistry/src/ReactionNetwork.jl > ReactionNetwork.diff
+git diff master multicolumn -- Photochemistry/src/UnitConversions.jl > UnitConversions.diff
+git diff master multicolumn -- CONSTANTS.jl > CONSTANTS.diff
+git diff master multicolumn -- MODEL_SETUP.jl > MODEL_SETUP.diff
+git diff master multicolumn -- converge_new_file.jl > converge_new_file.diff
+git diff master multicolumn -- PLOT_STYLES.jl > PLOT_STYLES.diff
+git diff master multicolumn -- INPUT_PARAMETERS.jl > INPUT_PARAMETERS.diff
+git diff master multicolumn -- SeasonsAnalysis/src/MakePlots.jl > MakePlots.diff
+git diff master multicolumn -- SeasonsAnalysis/src/SeasonsAnalysis.jl > SeasonsAnalysis.diff
+git diff master multicolumn -- SeasonsAnalysis/src/Support.jl > Support.diff
+git diff master multicolumn -- Solar spectra/scale_solar_spectrum.py > scale_solar_spectrum.diff

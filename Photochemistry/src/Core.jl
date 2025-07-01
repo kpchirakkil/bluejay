@@ -2269,7 +2269,7 @@ function fluxcoefs_horiz(
     globvars...
 )
     GV = values(globvars)
-    required = [:dx, :n_all_layers, :enable_horiz_diffusion]
+    required = [:dx, :n_all_layers, :enable_horiz_transport]
     check_requirements(keys(GV), required)
     
     # the return dictionary: Each species has 2 entries for every layer of the atmosphere.
@@ -2292,7 +2292,7 @@ function fluxcoefs_horiz(
                 diff_back = 0.0
                 diff_front = 0.0
 
-                if GV.enable_horiz_diffusion
+                if GV.enable_horiz_transport
                     if behind_idx >= 1
                         K_back = (K[ihoriz][ialt] + K[behind_idx][ialt]) / 2
                         D_back = (D[s][ihoriz][ialt] + D[s][behind_idx][ialt]) / 2
@@ -2316,7 +2316,7 @@ function fluxcoefs_horiz(
 
                 adv_front = 0.0
                 adv_back  = 0.0
-                if GV.enable_horiz_diffusion
+                if GV.enable_horiz_transport
                     adv_front = (v_local > 0 ? v_local : 0.0) / GV.dx +
                                 (v_front < 0 ? -v_front : 0.0) / GV.dx
                     adv_back  = (v_local < 0 ? -v_local : 0.0) / GV.dx +
@@ -2612,7 +2612,7 @@ function update_horiz_transport_coefficients(species_list, atmdict::Dict{Symbol,
                :hot_H2_network, :hot_H2_rc_funcs, :hot_HD_network, :hot_HD_rc_funcs, :Hs_dict,
                :ion_species, :M_P, :molmass, :neutral_species, :non_bdy_layers, :num_layers, :n_all_layers, :n_alt_index,
                :polarizability, :q, :R_P, :Tn, :Ti, :Te, :Tp, :Tprof_for_diffusion, :transport_species,
-               :use_ambipolar, :use_molec_diff, :zmax, :horiz_wind_v, :enable_horiz_diffusion]
+               :use_ambipolar, :use_molec_diff, :zmax, :horiz_wind_v, :enable_horiz_transport]
     check_requirements(keys(GV), required)
 
     # Get flux coefficients
@@ -2866,7 +2866,6 @@ function setup_water_profile!(atmdict; constfrac=1, dust_storm_on=false, make_sa
     # Plot the water profile 
     # ===========================================================================================================
     if make_sat_curve
-        # satarray = H2Osatfrac
         satarray = H2Osatfrac_all[1]
     else
         satarray = nothing 

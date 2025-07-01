@@ -191,17 +191,17 @@ const use_nonzero_initial_profiles = true
     # OPTIONS: 
     # true -- uses initial guess densities for species based on previous model output.
     # false -- sets species to zero density and lets the chemistry and transport build them up.
-
-# Number of vertical columns in the simulation. Set this to 1 for a single-column run or >1 for a multicolumn model.
-const n_horiz = 3
 const use_ambipolar = true # Toggle ambipolar diffusion for ions.
 const use_molec_diff = true # Toggle molecular diffusion. If turned off, eddy diffusion remains active.
 
+# Number of vertical columns in the simulation. Set this to 1 for a single-column run or >1 for a multicolumn model.
+const n_horiz = 3
+
 # Default horizontal wind speed in cm/s used to initialize wind profiles in
-# `MODEL_SETUP.jl`. Set to zero for no horizontal transport.
+# `MODEL_SETUP.jl`. Set to zero for no horizontal advection.
 const horiz_wind_speed = 0.0
 
-# Whether to allow horizontal diffusion between columns. When set to `false`
+# Whether to allow horizontal transport between columns. When set to `false`
 # the model does not compute any cross-column mixing, matching the behaviour of
 # the single-column set-up even when multiple columns are present.
-const enable_horiz_diffusion = false
+const enable_horiz_transport = false
