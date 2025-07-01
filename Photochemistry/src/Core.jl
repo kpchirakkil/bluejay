@@ -1094,7 +1094,7 @@ function update_Jrates!(n_cur_densities::Dict{Symbol, Vector{Array{ftype_ncur}}}
     =#
 
     GV = values(globvars)
-    required = [:absorber, :dz, :crosssection, :Jratelist, :num_layers, :solarflux]
+    required = [:absorber, :dz, :crosssection, :Jratelist, :num_layers, :solarflux, :enable_horiz_transport]
     check_requirements(keys(GV), required)
 
     # Calculate optical depth (now 2-D)
@@ -1144,6 +1144,18 @@ function update_Jrates!(n_cur_densities::Dict{Symbol, Vector{Array{ftype_ncur}}}
                 n_cur_densities[j][ihoriz][ialt] = ftype_ncur(
                     BLAS.dot(nlambda, solarabs[ihoriz][ialt], 1, GV.crosssection[j][ihoriz][ialt+1], 1) # updated update_Jrates! so Jrates integrate column-specific cross sections
                 )
+            end
+        end
+    end
+
+    # Verify identical Jrates when horizontal transport is disabled
+    if n_horiz > 1 && !GV.enable_horiz_transport
+        for j in GV.Jratelist
+            if haskey(n_cur_densities, j)
+                first = n_cur_densities[j][1]
+                for col in n_cur_densities[j][2:end]
+                    @assert col == first "Jrate mismatch across columns for $(j)"
+                end
             end
         end
     end
@@ -2476,6 +2488,19 @@ function update_diffusion_and_scaleH(
         Dcoef_dict[s] = deepcopy(D_coefs_for_s)
     end
 
+    # ------------------------------------------------------------------
+    # Validate shapes
+    # ------------------------------------------------------------------
+    expected_alt_len = GV.n_all_layers
+    @assert length(K) == n_horiz
+    @assert all(length(k) == expected_alt_len for k in K)
+    @assert all(length(h) == expected_alt_len for h in H0_dict["neutral"])
+    @assert all(length(h) == expected_alt_len for h in H0_dict["ion"])
+    for s in species_list
+        @assert length(Dcoef_dict[s]) == n_horiz
+        @assert all(length(vec) == expected_alt_len for vec in Dcoef_dict[s])
+    end
+
     return K, H0_dict, Dcoef_dict
 end
 
@@ -2655,6 +2680,14 @@ function update_horiz_transport_coefficients(species_list, atmdict::Dict{Symbol,
         end
     end
 
+    # Validate horizontal coefficient shapes
+    expected_flux_shape = (GV.n_all_layers, 2)
+    @assert all(all(size(mat) == expected_flux_shape for mat in mats)
+                for mats in values(fluxcoefs_horiz_all))
+    expected_tb_shape = (n_horiz, GV.num_layers, length(species_list))
+    @assert size(tforwards) == expected_tb_shape
+    @assert size(tbackwards) == expected_tb_shape
+
     bc_dict_horiz = boundaryconditions_horiz(atmdict, GV.horiz_wind_v, n_horiz; cyclic=cyclic, globvars...)
 
     # transport coefficients for boundaries
@@ -2794,7 +2827,7 @@ function setup_water_profile!(atmdict; constfrac=1, dust_storm_on=false, make_sa
     =#
 
     GV = values(globvars)
-    check_requirements(keys(GV), [:all_species, :DH, :n_alt_index, :n_horiz, :planet, :plot_grid, :results_dir, :sim_folder_name])
+    check_requirements(keys(GV), [:all_species, :DH, :n_alt_index, :n_horiz, :planet, :plot_grid, :results_dir, :sim_folder_name, :enable_horiz_transport])
 
     # Set the initial fraction of the atmosphere for water to take up, plus the saturation fraction
     # ================================================================================================================
@@ -2824,11 +2857,11 @@ function setup_water_profile!(atmdict; constfrac=1, dust_storm_on=false, make_sa
             a = 1
             b = toplim_dict[excess_water_in]
             # H2Oinitfrac[a:b] = H2Oinitfrac[a:b] .* water_tanh_prof(GV.non_bdy_layers./1e5; z0=GV.ealt, f=GV.ffac)[a:b]
-    for ihoriz in 1:GV.n_horiz
-        prof = H2Oinitfrac_all[ihoriz]
-        prof[a:b] .= prof[a:b] .* water_tanh_prof(GV.non_bdy_layers./1e5; z0=GV.ealt, f=GV.ffac)[a:b]
-        H2Oinitfrac_all[ihoriz] = prof
-    end
+            for ihoriz in 1:GV.n_horiz
+                prof = H2Oinitfrac_all[ihoriz]
+                prof[a:b] .= prof[a:b] .* water_tanh_prof(GV.non_bdy_layers./1e5; z0=GV.ealt, f=GV.ffac)[a:b]
+                H2Oinitfrac_all[ihoriz] = prof
+            end
 
             # Set the upper atmo to be a constant mixing ratio, wherever the disturbance ends
             if excess_water_in=="everywhere"
@@ -2893,7 +2926,22 @@ function setup_water_profile!(atmdict; constfrac=1, dust_storm_on=false, make_sa
     end
 
     plot_water_profile(atmdict, GV.results_dir*GV.sim_folder_name; watersat=satarray, H2Oinitf=H2Oinitfrac_all[1], plot_grid=GV.plot_grid, showonly=showonly, globvars...)
-end 
+
+    # ----------------------------------------------------------------------
+    # Consistency checks when horizontal transport is disabled
+    # ----------------------------------------------------------------------
+    if !GV.enable_horiz_transport && GV.n_horiz > 1
+        base_H2O = atmdict[:H2O][1]
+        base_HDO = atmdict[:HDO][1]
+
+        for ih in 2:GV.n_horiz
+            @assert size(atmdict[:H2O][ih]) == size(base_H2O) "H2O profile shape mismatch across columns"
+            @assert size(atmdict[:HDO][ih]) == size(base_HDO) "HDO profile shape mismatch across columns"
+            @assert all(atmdict[:H2O][ih] .== base_H2O) "H2O profiles differ across columns with horizontal transport disabled"
+            @assert all(atmdict[:HDO][ih] .== base_HDO) "HDO profiles differ across columns with horizontal transport disabled"
+        end
+    end
+end
 
 function water_tanh_prof(z; f=10, z0=62, dz=11)
     #=

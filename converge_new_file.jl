@@ -704,7 +704,7 @@ function get_rates_and_jacobian(n, p, t; globvars...)
     # Update Jrates
     n_cur_all = compile_ncur_all(n, n_horiz, n_short, GV.n_inactive; GV.active_longlived, GV.active_shortlived, GV.inactive_species, GV.num_layers)
 
-    update_Jrates!(n_cur_all, n_horiz; GV.Jratelist, GV.crosssection, GV.num_layers, GV.absorber, GV.dz, GV.solarflux)
+    update_Jrates!(n_cur_all, n_horiz; GV.Jratelist, GV.crosssection, GV.num_layers, GV.absorber, GV.dz, GV.solarflux, enable_horiz_transport=GV.enable_horiz_transport)
 
     # copy all the Jrates into an external dictionary for storage
     for jr in GV.Jratelist                # time for this is ~0.000005 s
@@ -1015,7 +1015,7 @@ function update!(n_current::Dict{Symbol, Vector{Array{ftype_ncur}}}, t, dt; abst
     n_current = compile_ncur_all(nend, n_horiz, n_short, GV.n_inactive; GV.active_longlived, GV.active_shortlived, GV.inactive_species, GV.num_layers)
 
     # ensure Jrates are included in n_current
-    update_Jrates!(n_current, n_horiz; GV.Jratelist, GV.crosssection, GV.num_layers, GV.absorber, GV.dz, GV.solarflux)
+    update_Jrates!(n_current, n_horiz; GV.Jratelist, GV.crosssection, GV.num_layers, GV.absorber, GV.dz, GV.solarflux, enable_horiz_transport=GV.enable_horiz_transport)
 
     # Optionally adjust Jrates per horizontal column (commented out)
     # solarflux_multipliers = [1.0, 0.5, 2.0]
@@ -1205,14 +1205,13 @@ if reinitialize_water_profile
                                         hygropause_alt=hygropause_alt, excess_water_in=water_loc, 
                                         all_species, alt, DH, num_layers, non_bdy_layers, n_alt_index, planet, plot_grid,
                                         H2O_excess, HDO_excess,  H2Osat, water_mixing_ratio,  results_dir, 
-                                        sim_folder_name, speciescolor, speciesstyle, upper_lower_bdy_i, monospace_choice, sansserif_choice, n_horiz)
+                                        sim_folder_name, speciescolor, speciesstyle, upper_lower_bdy_i, monospace_choice, sansserif_choice, n_horiz, enable_horiz_transport)
     elseif planet=="Mars"
         setup_water_profile!(n_current; dust_storm_on=dust_storm_on, water_amt=water_case, ffac=f_fac_opts[water_case], ealt=add_water_alt_opts[water_case], 
                                         hygropause_alt=hygropause_alt, excess_water_in=water_loc, 
                                         all_species, alt, DH, num_layers, non_bdy_layers, n_alt_index, planet, plot_grid,
                                         H2O_excess, HDO_excess,  H2Osat, water_mixing_ratio,  results_dir, 
-                                        sim_folder_name, speciescolor, speciesstyle, upper_lower_bdy_i, monospace_choice, sansserif_choice, n_horiz)
-
+                                        sim_folder_name, speciescolor, speciesstyle, upper_lower_bdy_i, monospace_choice, sansserif_choice, n_horiz, enable_horiz_transport)
     end
 end
 
