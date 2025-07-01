@@ -25,7 +25,7 @@ function make_jacobian(n, p, t)
     #                                ])
 
     # get the concentrations of species assumed to be in photochemical equilibrium. 
-    n_short = flatten_atm(external_storage, GV.active_shortlived; GV.num_layers)  # retrieve the shortlived species from their storage and flatten them
+    n_short = flatten_atm(external_storage, GV.active_shortlived, n_horiz; GV.num_layers)  # retrieve the shortlived species from their storage and flatten them
 
     # Update Jrates
     n_cur_all = compile_ncur_all(n, n_short, GV.n_inactive; GV.active_longlived, GV.active_shortlived, GV.inactive_species, GV.num_layers)
@@ -99,7 +99,7 @@ function PnL_eqn(dndt, n, p, t)
     end
 
     # retrieve the shortlived species from their storage and flatten them
-    n_short = flatten_atm(external_storage, GV.active_shortlived; GV.num_layers)
+    n_short = flatten_atm(external_storage, GV.active_shortlived, n_horiz; GV.num_layers)
 
     # Retrieve the Jrates
     Jrates = deepcopy(ftype_ncur[external_storage[jr][ialt] for jr in GV.Jratelist, ialt in 1:GV.num_layers])

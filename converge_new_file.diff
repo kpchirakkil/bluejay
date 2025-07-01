@@ -1,5 +1,5 @@
 diff --git a/converge_new_file.jl b/converge_new_file.jl
-index 744cc6a..2666125 100644
+index 744cc6a..66bf53e 100644
 --- a/converge_new_file.jl
 +++ b/converge_new_file.jl
 @@ -6,8 +6,8 @@
@@ -1232,7 +1232,8 @@ index 744cc6a..2666125 100644
 +    end
 +    E = electron_density(n_current; e_profile_type, non_bdy_layers, ion_species, n_horiz)
  
-     nstart = flatten_atm(n_current, active_longlived; num_layers)
+-    nstart = flatten_atm(n_current, active_longlived; num_layers)
++    nstart = flatten_atm(n_current, active_longlived, n_horiz; num_layers)
      find_nonfinites(nstart, collec_name="nstart")
  
 -    # Set up parameters    
@@ -1356,7 +1357,7 @@ index 744cc6a..2666125 100644
  elseif problem_type == "ODE"
  
      L = length(atm_soln.u)
-@@ -1710,7 +1897,7 @@ elseif problem_type == "ODE"
+@@ -1710,16 +1897,16 @@ elseif problem_type == "ODE"
              # Currently there's no workaround for this and you just have to remember NOT TO TRUST Jrates
              # at any timestep except the very last. 
              # TODO: Fix this so we just don't write Jrates in these iterations...
@@ -1365,7 +1366,9 @@ index 744cc6a..2666125 100644
              write_atmosphere(nc_all, results_dir*sim_folder_name*"/atm_state_t_$(timestep).h5"; alt, num_layers, hrshortcode, rshortcode) 
          elseif i == L
              # Update short-lived species one more time
-@@ -1719,7 +1906,7 @@ elseif problem_type == "ODE"
+             println("One last update of short-lived species")
+-            local n_short = flatten_atm(external_storage, active_shortlived; num_layers)
++            local n_short = flatten_atm(external_storage, active_shortlived, n_horiz; num_layers)
              local Jrates = deepcopy(Float64[external_storage[jr][ialt] for jr in Jratelist, ialt in 1:num_layers])
              set_concentrations!(external_storage, atm_state, n_short, inactive, Jrates; active_longlived, active_shortlived, 
                                 inactive_species, Tn=Tn_arr, Ti=Ti_arr, Te=Te_arr, num_layers)

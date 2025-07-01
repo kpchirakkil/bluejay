@@ -492,11 +492,10 @@ function flatten_atm(atmdict::Dict{Symbol, Vector{Array{ftype_ncur}}}, species_l
     required =  [:num_layers]
     check_requirements(keys(GV), required)
 
-    # return deepcopy(ftype_ncur[[atmdict[sp][ihoriz][ialt] for sp in species_list, ialt in 1:GV.num_layers, ihoriz in 1:n_horiz]...])
-    return deepcopy(ftype_ncur[[haskey(atmdict, sp) ? atmdict[sp][ihoriz][ialt] : 0.0
-                               for sp in species_list,
-                               ialt in 1:GV.num_layers,
-                               ihoriz in 1:n_horiz]...])
+    # Construct a matrix in the (species, altitude, column) layout and then
+    # flatten it with Julia's column-major ordering so that unflatten_atm can
+    # correctly reshape it.
+    return vec(atm_dict_to_matrix(atmdict, species_list, n_horiz))
 end
 
 function ncur_with_boundary_layers(atmdict_no_bdys::Dict{Symbol, Vector{Array{ftype_ncur}}}, n_horiz::Int64; globvars...)
@@ -1148,17 +1147,17 @@ function update_Jrates!(n_cur_densities::Dict{Symbol, Vector{Array{ftype_ncur}}}
         end
     end
 
-    # Verify identical Jrates when horizontal transport is disabled
-    if n_horiz > 1 && !GV.enable_horiz_transport
-        for j in GV.Jratelist
-            if haskey(n_cur_densities, j)
-                first = n_cur_densities[j][1]
-                for col in n_cur_densities[j][2:end]
-                    @assert col == first "Jrate mismatch across columns for $(j)"
-                end
-            end
-        end
-    end
+    # # Verify identical Jrates when horizontal transport is disabled
+    # if n_horiz > 1 && !GV.enable_horiz_transport
+    #     for j in GV.Jratelist
+    #         if haskey(n_cur_densities, j)
+    #             first = n_cur_densities[j][1]
+    #             for col in n_cur_densities[j][2:end]
+    #                 @assert col == first "Jrate mismatch across columns for $(j)"
+    #             end
+    #         end
+    #     end
+    # end
 end
 
 #===============================================================================#

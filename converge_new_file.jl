@@ -1765,7 +1765,7 @@ if ftype_ncur==Double64
     end
     E = electron_density(n_current; e_profile_type, non_bdy_layers, ion_species, n_horiz)
 
-    nstart = flatten_atm(n_current, active_longlived; num_layers)
+    nstart = flatten_atm(n_current, active_longlived, n_horiz; num_layers)
     find_nonfinites(nstart, collec_name="nstart")
 
     # Set up parameters
@@ -1902,7 +1902,7 @@ elseif problem_type == "ODE"
         elseif i == L
             # Update short-lived species one more time
             println("One last update of short-lived species")
-            local n_short = flatten_atm(external_storage, active_shortlived; num_layers)
+            local n_short = flatten_atm(external_storage, active_shortlived, n_horiz; num_layers)
             local Jrates = deepcopy(Float64[external_storage[jr][ialt] for jr in Jratelist, ialt in 1:num_layers])
             set_concentrations!(external_storage, atm_state, n_short, inactive, Jrates; active_longlived, active_shortlived, 
                                inactive_species, Tn=Tn_arr, Ti=Ti_arr, Te=Te_arr, num_layers)
