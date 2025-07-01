@@ -1,0 +1,13 @@
+diff --git a/Photochemistry/src/BasicUtilities.jl b/Photochemistry/src/BasicUtilities.jl
+index 92c385d..576ce9b 100644
+--- a/Photochemistry/src/BasicUtilities.jl
++++ b/Photochemistry/src/BasicUtilities.jl
+@@ -22,7 +22,7 @@ end
+ function deletefirst(A, v)
+     #=
+     returns: list A with its first element equal to v removed. Used to make the derivative for 
+-    the chemical jacboian 
++    the chemical jacobian 
+     =#
+     index = something(findfirst(isequal(v), A), 0)  # this horrible syntax introduced by Julia devs
+     keep = setdiff([1:length(A);],index)

@@ -195,7 +195,7 @@ const use_ambipolar = true # Toggle ambipolar diffusion for ions.
 const use_molec_diff = true # Toggle molecular diffusion. If turned off, eddy diffusion remains active.
 
 # Number of vertical columns in the simulation. Set this to 1 for a single-column run or >1 for a multicolumn model.
-const n_horiz = 3
+const n_horiz = 1
 
 # Default horizontal wind speed in cm/s used to initialize wind profiles in
 # `MODEL_SETUP.jl`. Set to zero for no horizontal advection.

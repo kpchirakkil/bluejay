@@ -367,9 +367,12 @@ const Hs_dict = Dict{Symbol, Vector{Vector{Float64}}}([sp => [scaleH(alt, sp, Tp
 
 #                                     Boundary conditions (lower and upper)
 # =======================================================================================================
-# "n": density boundary condition; "f": flux bc; "v": velocity bc; 
+# "n": density boundary condition; "f": flux bc; "v": velocity bc;
 # "see boundaryconditions()" -- nonthermal escape depends on the dynamic density of the
 # atmosphere, so it can't be imposed as a constant here and is calculated on the fly.
+# The default lists below give every column the same lower/upper values. Modify
+# `speciesbclist[sp][bc][ihoriz]` if a particular column should use different
+# boundary values.
 if planet=="Mars"
     const speciesbclist = Dict(
                         :CO2=>Dict("n"=>[[2.1e17, NaN] for _ in 1:n_horiz], "f"=>[[NaN, 0.] for _ in 1:n_horiz]),
@@ -469,7 +472,8 @@ end
 # boundaries, but you can modify the values below (or in a separate script)
 # to impose an influx or outflux for any species.  Each entry contains two
 # vectors of length `num_layers` giving the flux [#/cm²/s] at the back and front
-# edges respectively.
+# edges respectively. Edit `speciesbclist_horiz[sp]["f"][edge]` to override the
+# profile on either edge.
 
 # add in zero flux edge boundary conditions on both edges for all species
 auto_speciesbclist_horiz = Dict()

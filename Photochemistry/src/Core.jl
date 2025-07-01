@@ -2329,6 +2329,11 @@ function fluxcoefs_horiz(
         end
     end
 
+    # if !GV.enable_horiz_transport && all(all(v .== 0.0) for v in horiz_wind_v)
+    #     maxval = maximum(abs, vcat([vec(mat) for col in values(fluxcoef_dict) for mat in col]...))
+    #     println("DEBUG: horiz transport disabled, max coefficient = ", maxval)
+    # end
+
     # return fluxcoef_dict_horiz
     return fluxcoef_dict
 end
@@ -2660,6 +2665,17 @@ function update_horiz_transport_coefficients(species_list, atmdict::Dict{Symbol,
     expected_edge_shape = (length(GV.transport_species), 2)
     @assert all(size(mat) == expected_edge_shape for mat in tbackedge) "horizontal back edge shape mismatch"
     @assert all(size(mat) == expected_edge_shape for mat in tfrontedge) "horizontal front edge shape mismatch"
+
+    # if !GV.enable_horiz_transport && all(all(v .== 0.0) for v in GV.horiz_wind_v)
+    #     max_for  = maximum(abs, tforwards)
+    #     max_back = maximum(abs, tbackwards)
+    #     max_backedge = maximum(abs, vcat([vec(m) for m in tbackedge]...))
+    #     max_frontedge = maximum(abs, vcat([vec(m) for m in tfrontedge]...))
+    #     println("DEBUG: horiz transport disabled -- max forward=", max_for,
+    #             " max backward=", max_back,
+    #             " back edge=", max_backedge,
+    #             " front edge=", max_frontedge)
+    # end    
 
     return tbackedge, tforwards, tbackwards, tfrontedge
 end

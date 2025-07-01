@@ -1,0 +1,15 @@
+diff --git a/Photochemistry/src/UnitConversions.jl b/Photochemistry/src/UnitConversions.jl
+index fd2d34f..a1397e3 100644
+--- a/Photochemistry/src/UnitConversions.jl
++++ b/Photochemistry/src/UnitConversions.jl
+@@ -100,8 +100,8 @@ function prum_to_ppm(sp, prum, atmdict; globvars...)
+     check_requirements(keys(GV), required)
+ 
+     colabund = colabund_from_prum(sp, prum; globvars...)
+-    nt_sum = sum(n_tot(atmdict; GV.all_species) ) * dz # get total inventory of whole atmosphere, flat
+-
++    nt_sum = sum(n_tot(atmdict, ihoriz; GV.all_species) for ihoriz in 1:n_horiz) * dz
++    
+     return (colabund/nt_sum) / 1e-6 # return ppm
+ end
+ 

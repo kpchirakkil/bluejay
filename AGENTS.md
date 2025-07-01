@@ -83,6 +83,7 @@ git diff master multicolumn -- converge_new_file.jl > converge_new_file.diff
 git diff master multicolumn -- PLOT_STYLES.jl > PLOT_STYLES.diff
 git diff master multicolumn -- INPUT_PARAMETERS.jl > INPUT_PARAMETERS.diff
 git diff master multicolumn -- SeasonsAnalysis/src/MakePlots.jl > MakePlots.diff
-git diff master multicolumn -- SeasonsAnalysis/src/SeasonsAnalysis.jl > SeasonsAnalysis.diff
 git diff master multicolumn -- SeasonsAnalysis/src/Support.jl > Support.diff
-git diff master multicolumn -- Solar spectra/scale_solar_spectrum.py > scale_solar_spectrum.diff
+<!-- git diff master multicolumn -- SeasonsAnalysis/src/SeasonsAnalysis.jl > SeasonsAnalysis.diff -->
+<!-- git diff master multicolumn -- Solar spectra/scale_solar_spectrum.py > scale_solar_spectrum.diff -->
+<!-- git diff master multicolumn -- scale_solar_spectrum.py > scale_solar_spectrum.diff -->
