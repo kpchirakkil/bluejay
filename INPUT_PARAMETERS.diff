@@ -1,8 +1,8 @@
 diff --git a/INPUT_PARAMETERS.jl b/INPUT_PARAMETERS.jl
-index 509fab7..ce5ef64 100644
+index 509fab7..ad9451f 100644
 --- a/INPUT_PARAMETERS.jl
 +++ b/INPUT_PARAMETERS.jl
-@@ -8,19 +8,19 @@
+@@ -8,8 +8,8 @@
  # 
  # Eryn Cangi
  # Created April 2024
@@ -13,19 +13,6 @@ index 509fab7..ce5ef64 100644
  ################################################################################
  
  # Set the planet 
- # =======================================================================================================
--const planet = "Mars"
-+const planet = "Venus"
-     # OPTIONS: "Mars", "Venus"
- 
- # Input and output files, directory
- # =======================================================================================================
- const results_dir = code_dir*"../Results_$(planet)/"
--const initial_atm_file = "$(planet)-Inputs/INITIAL_GUESS_MARS_bxz4YnHk.h5"  # File to use to initialize the atmosphere.
-+const initial_atm_file = "$(planet)-Inputs/INITIAL_GUESS_VENUS_oUT0ZbGN.h5"  # File to use to initialize the atmosphere.
-     # OPTIONS: 
-     # INITIAL_GUESS_MARS.h5 --> Basic Mars starting file.
-     # INITIAL_GUESS_MARS_bxz4YnHk.h5 --> A Mars atmosphere that includes N2O, NO2, and their ions;
 @@ -193,3 +193,15 @@ const use_nonzero_initial_profiles = true
      # false -- sets species to zero density and lets the chemistry and transport build them up.
  const use_ambipolar = true # Toggle ambipolar diffusion for ions.

@@ -1,5 +1,5 @@
 diff --git a/Photochemistry/src/Core.jl b/Photochemistry/src/Core.jl
-index 5128abd..f8bd8c2 100644
+index 5128abd..29d8304 100644
 --- a/Photochemistry/src/Core.jl
 +++ b/Photochemistry/src/Core.jl
 @@ -88,60 +88,103 @@ function electron_density(atmdict; globvars...)
@@ -1644,14 +1644,14 @@ index 5128abd..f8bd8c2 100644
 +        upperatm = findall(z .> 60e5)
 +
 +        # Assign constant Keddy below 60 km altitude (lower atmosphere)
-+        k[z .<= 60e5] .= 1e7
++        k[z .<= 60e5] .= 1e6
 +
 +        # Upper atmosphere (>60 km), altitude-dependent Keddy
 +        if ndims(nt) == 1  # Single-column case
-+            k[upperatm] .= 1e13 ./ nt[upperatm]
++            k[upperatm] .= 2e13 ./ sqrt.(nt[upperatm])
 +        elseif ndims(nt) == 2  # Multi-column case
 +            @assert !isnothing(ihoriz) "ihoriz must be specified for multi-column simulations."
-+            k[upperatm] .= 1e13 ./ nt[ihoriz, upperatm]
++            k[upperatm] .= 2e13 ./ sqrt.(nt[ihoriz, upperatm])
 +        else
 +            throw("Invalid dimensions for nt. Expecting Vector or Matrix.")
 +        end
@@ -1659,14 +1659,14 @@ index 5128abd..f8bd8c2 100644
 +    elseif GV.planet == "Venus"
 +        # Venus: just an altitude-dependent eddy diffusion
 +        if ndims(nt) == 1  # Single-column case
-+            k .= 1e13 ./ sqrt.(nt)
++            k .= 8e12 .* (nt .^ -0.5)
 +        else  # Multi-column case
-+            k .= 1e13 ./ sqrt.(nt[ihoriz, :])
++            k .= 8e12 .* (nt[ihoriz, :] .^ -0.5)
 +        end
      end
  
      return k
-@@ -1967,41 +2393,202 @@ thermaldiff(sp) = get(Dict(:H=>-0.25, :H2=>-0.25, :D=>-0.25, :HD=>-0.25,
+@@ -1967,41 +2393,206 @@ thermaldiff(sp) = get(Dict(:H=>-0.25, :H2=>-0.25, :D=>-0.25, :HD=>-0.25,
                                  :Hpl=>-0.25, :H2pl=>-0.25, :Dpl=>-0.25, :HDpl=>-0.25,
                                  :Hepl=>-0.25), sp, 0)
  
@@ -1711,8 +1711,12 @@ index 5128abd..f8bd8c2 100644
 +
 +    # 1) Eddy diffusion, explicitly calculated for each column
 +    K = [
-+        Keddy(GV.alt, n_tot(ncur_with_bdys, ihoriz; GV.all_species, GV.n_alt_index);
-+              ihoriz=ihoriz, planet=GV.planet)
++        Keddy(
++            GV.alt,
++            n_tot(ncur_with_bdys, ihoriz; GV.all_species, GV.n_alt_index);
++            ihoriz = ihoriz,
++            globvars...
++        )
 +        for ihoriz in 1:n_horiz
 +    ]
 +
@@ -1894,7 +1898,7 @@ index 5128abd..f8bd8c2 100644
      #=
      Input:
          species_list: Species which will have transport coefficients updated
-@@ -2013,43 +2600,84 @@ function update_transport_coefficients(species_list, atmdict::Dict{Symbol, Vecto
+@@ -2013,43 +2604,84 @@ function update_transport_coefficients(species_list, atmdict::Dict{Symbol, Vecto
          species_list: Species for which to generate molecular diffusion coefficients. This allows the code to only do it for
                   transport species during the main simulation run, and for all species when trying to plot 
                   rate balances after the run.
@@ -2004,7 +2008,7 @@ index 5128abd..f8bd8c2 100644
  end
  
  #===============================================================================#
-@@ -2111,7 +2739,8 @@ Psat(T) = (1e-6 ./ (kB_MKS .* T)) .* (10 .^ (-2663.5 ./ T .+ 12.537))
+@@ -2111,7 +2743,8 @@ Psat(T) = (1e-6 ./ (kB_MKS .* T)) .* (10 .^ (-2663.5 ./ T .+ 12.537))
  # However, this function is defined on the offchance someone studies HDO.
  Psat_HDO(T) = (1e-6/(kB_MKS * T))*(10^(-2663.5/T + 12.537))
  
@@ -2014,7 +2018,7 @@ index 5128abd..f8bd8c2 100644
      #=
      Calculates the initial fraction of H2O in the atmosphere, based on the supplied mixing ratio (global variable)
      and the saturation vapor pressure of water.
-@@ -2127,8 +2756,7 @@ function set_h2oinitfrac_bySVP(atmdict, h_alt; globvars...)
+@@ -2127,8 +2760,7 @@ function set_h2oinitfrac_bySVP(atmdict, h_alt; globvars...)
                 :H2Osat, :water_mixing_ratio]
      check_requirements(keys(GV), required)
  
@@ -2024,7 +2028,7 @@ index 5128abd..f8bd8c2 100644
      # set H2O SVP fraction to minimum for all alts above first time min is reached
      H2Oinitfrac = H2Osatfrac[1:something(findfirst(isequal(minimum(H2Osatfrac)), H2Osatfrac), 0)]
      H2Oinitfrac = [H2Oinitfrac;   # ensures no supersaturation
-@@ -2161,12 +2789,20 @@ function setup_water_profile!(atmdict; constfrac=1, dust_storm_on=false, make_sa
+@@ -2161,12 +2793,20 @@ function setup_water_profile!(atmdict; constfrac=1, dust_storm_on=false, make_sa
      =#
  
      GV = values(globvars)
@@ -2047,7 +2051,7 @@ index 5128abd..f8bd8c2 100644
  
      if GV.planet=="Mars"
          required = [:alt, :H2Osat, :n_alt_index, :non_bdy_layers, :num_layers, :speciescolor, :speciesstyle, :upper_lower_bdy_i, :water_mixing_ratio,]
-@@ -2182,56 +2818,76 @@ function setup_water_profile!(atmdict; constfrac=1, dust_storm_on=false, make_sa
+@@ -2182,56 +2822,76 @@ function setup_water_profile!(atmdict; constfrac=1, dust_storm_on=false, make_sa
              toplim_dict = Dict("mesosphere"=>GV.upper_lower_bdy_i, "everywhere"=>GV.n_alt_index[GV.alt[end]])
              a = 1
              b = toplim_dict[excess_water_in]
@@ -2144,7 +2148,7 @@ index 5128abd..f8bd8c2 100644
  end 
  
  function water_tanh_prof(z; f=10, z0=62, dz=11)
-@@ -2456,7 +3112,9 @@ function linear_in_species_density(sp, lossnet)
+@@ -2456,7 +3116,9 @@ function linear_in_species_density(sp, lossnet)
      return true 
  end
  
@@ -2155,7 +2159,7 @@ index 5128abd..f8bd8c2 100644
      #=
      Output
          active_longlived_species_rates: rate expressions for species which are actively solved for.
-@@ -2480,7 +3138,14 @@ function setup_photochemical_equilibrium(; globvars...)
+@@ -2480,7 +3142,14 @@ function setup_photochemical_equilibrium(; globvars...)
      # transport production, transport loss, in that order.
      active_longlived_species_rates = Array{Array{Expr}}(undef, length(GV.active_longlived), 4)
      for (i, sp) in enumerate(GV.active_longlived)
@@ -2171,7 +2175,7 @@ index 5128abd..f8bd8c2 100644
      end
  
      # ------------------ Short-lived species expression array ----------------------- #
-@@ -2577,4 +3242,4 @@ function setup_photochemical_equilibrium(; globvars...)
+@@ -2577,4 +3246,4 @@ function setup_photochemical_equilibrium(; globvars...)
      end
  
      return active_longlived_species_rates, short_lived_density_eqn, shortlived_density_inputs, equilibrium_eqn_terms

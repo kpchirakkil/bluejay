@@ -2363,14 +2363,14 @@ function Keddy(z::Vector, nt; ihoriz=nothing, globvars...)
         upperatm = findall(z .> 60e5)
 
         # Assign constant Keddy below 60 km altitude (lower atmosphere)
-        k[z .<= 60e5] .= 1e7
+        k[z .<= 60e5] .= 1e6
 
         # Upper atmosphere (>60 km), altitude-dependent Keddy
         if ndims(nt) == 1  # Single-column case
-            k[upperatm] .= 1e13 ./ nt[upperatm]
+            k[upperatm] .= 2e13 ./ sqrt.(nt[upperatm])
         elseif ndims(nt) == 2  # Multi-column case
             @assert !isnothing(ihoriz) "ihoriz must be specified for multi-column simulations."
-            k[upperatm] .= 1e13 ./ nt[ihoriz, upperatm]
+            k[upperatm] .= 2e13 ./ sqrt.(nt[ihoriz, upperatm])
         else
             throw("Invalid dimensions for nt. Expecting Vector or Matrix.")
         end
@@ -2378,9 +2378,9 @@ function Keddy(z::Vector, nt; ihoriz=nothing, globvars...)
     elseif GV.planet == "Venus"
         # Venus: just an altitude-dependent eddy diffusion
         if ndims(nt) == 1  # Single-column case
-            k .= 1e13 ./ sqrt.(nt)
+            k .= 8e12 .* (nt .^ -0.5)
         else  # Multi-column case
-            k .= 1e13 ./ sqrt.(nt[ihoriz, :])
+            k .= 8e12 .* (nt[ihoriz, :] .^ -0.5)
         end
     end
 
@@ -2433,8 +2433,12 @@ function update_diffusion_and_scaleH(
 
     # 1) Eddy diffusion, explicitly calculated for each column
     K = [
-        Keddy(GV.alt, n_tot(ncur_with_bdys, ihoriz; GV.all_species, GV.n_alt_index);
-              ihoriz=ihoriz, planet=GV.planet)
+        Keddy(
+            GV.alt,
+            n_tot(ncur_with_bdys, ihoriz; GV.all_species, GV.n_alt_index);
+            ihoriz = ihoriz,
+            globvars...
+        )
         for ihoriz in 1:n_horiz
     ]
 
