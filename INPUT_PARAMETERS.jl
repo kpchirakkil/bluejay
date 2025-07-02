@@ -163,7 +163,7 @@ const conv_ions = Dict("Mars"=>[:Arpl, :ArHpl, :ArDpl,
 
 # More specific settings for controling the modeling of species
 # -------------------------------------------------------------------
-const dont_compute_chemistry = [:Ar] #  :Ar for Mars has been used historically
+const dont_compute_chemistry = [] #  :Ar for Mars has been used historically
 const dont_compute_transport = []
 const dont_compute_either_chem_or_transport = []  # Chemical species which should never update their densities, but may participate in chem+transport.
     # OPTIONS: Any species included in the model. 

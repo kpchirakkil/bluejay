@@ -1,5 +1,5 @@
 diff --git a/converge_new_file.jl b/converge_new_file.jl
-index 744cc6a..aeab1da 100644
+index 744cc6a..32b9a55 100644
 --- a/converge_new_file.jl
 +++ b/converge_new_file.jl
 @@ -6,8 +6,8 @@
@@ -40,7 +40,7 @@ index 744cc6a..aeab1da 100644
 +    """
 +    sample_alts = [alt[1], alt[Int(cld(length(alt), 2))], alt[end]]
 +    for z in sample_alts
-+        totals = [n_tot(atmdict, z, ih; all_species, n_alt_index) for ih in 1:n_horiz]
++        totals = [n_tot(atmdict, z, ihoriz; all_species, n_alt_index) for ihoriz in 1:n_horiz]
 +        println("n_tot at $(z/1e5) km across columns = $(totals)")
 +        if !enable_horiz_transport
 +            ref = totals[1]

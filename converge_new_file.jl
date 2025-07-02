@@ -109,7 +109,7 @@ function check_n_tot_consistency(atmdict)
     """
     sample_alts = [alt[1], alt[Int(cld(length(alt), 2))], alt[end]]
     for z in sample_alts
-        totals = [n_tot(atmdict, z, ih; all_species, n_alt_index) for ih in 1:n_horiz]
+        totals = [n_tot(atmdict, z, ihoriz; all_species, n_alt_index) for ihoriz in 1:n_horiz]
         println("n_tot at $(z/1e5) km across columns = $(totals)")
         if !enable_horiz_transport
             ref = totals[1]

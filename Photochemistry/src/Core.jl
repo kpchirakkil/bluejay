@@ -101,8 +101,8 @@ function electron_density(atmdict; globvars...)
         # Handle both the legacy single column format and the new multicolumn
         # format.
         if atmdict[GV.ion_species[1]] isa Vector
-            return [sum(atmdict[sp][ih] for sp in GV.ion_species)
-                    for ih in 1:n_horiz]
+            return [sum(atmdict[sp][ihoriz] for sp in GV.ion_species)
+                    for ihoriz in 1:n_horiz]
         else
             return [sum(atmdict[sp] for sp in GV.ion_species)]
         end
@@ -2510,7 +2510,7 @@ function update_transport_coefficients(
     M::Matrix{Float64},  # now explicitly 2D: num_layers × n_horiz
     n_horiz::Int;
     calc_nonthermal=true,
-    debug=true,
+    debug=false,
     globvars...
 )
     # Call the real function that doesn't expect D_coefs
@@ -2531,7 +2531,7 @@ function update_transport_coefficients(
     M::Matrix{ftype_ncur},  # now explicitly 2D: num_layers × n_horiz
     n_horiz::Int64;
     calc_nonthermal=true,
-    debug=true,
+    debug=false,
     globvars...
 )
     #=
@@ -2619,17 +2619,17 @@ function update_transport_coefficients(
     if debug
         println("[update_transport_coefficients] vertical transport coefficients:")
         nprint = min(3, GV.num_layers)
-        for ih in 1:n_horiz
-            println("  column ", ih, " tup[1:" , nprint, "] = ",
-                    tup[ih, 1:nprint, :])
-            println("  column ", ih, " tdown[1:" , nprint, "] = ",
-                    tdown[ih, 1:nprint, :])
+        for ihoriz in 1:n_horiz
+            println("  column ", ihoriz, " tup[1:" , nprint, "] = ",
+                    tup[ihoriz, 1:nprint, :])
+            println("  column ", ihoriz, " tdown[1:" , nprint, "] = ",
+                    tdown[ihoriz, 1:nprint, :])
         end
         if !GV.enable_horiz_transport && n_horiz > 1
             identical = all(
-                arrays_equal_with_nan(tup[ih, :, :], tup[1, :, :]) &&
-                arrays_equal_with_nan(tdown[ih, :, :], tdown[1, :, :])
-                for ih in 2:n_horiz)
+                arrays_equal_with_nan(tup[ihoriz, :, :], tup[1, :, :]) &&
+                arrays_equal_with_nan(tdown[ihoriz, :, :], tdown[1, :, :])
+                for ihoriz in 2:n_horiz)
             println("  identical across columns? ", identical)
         end
     end
@@ -2638,7 +2638,7 @@ function update_transport_coefficients(
 end
 
 function update_horiz_transport_coefficients(species_list, atmdict::Dict{Symbol, Vector{Array{ftype_ncur}}}, D_coefs, M, n_horiz::Int64;
-                                       calc_nonthermal=true, cyclic=true, debug=true, globvars...)
+                                       calc_nonthermal=true, cyclic=true, debug=false, globvars...)
     #=
     Input:
         species_list: Species which will have transport coefficients updated
@@ -2738,11 +2738,11 @@ function update_horiz_transport_coefficients(species_list, atmdict::Dict{Symbol,
     if debug
         println("[update_horiz_transport_coefficients] horizontal transport coefficients:")
         nprint = min(3, GV.num_layers)
-        for ih in 1:n_horiz
-            println("  column ", ih, " forwards[1:" , nprint, "] = ",
-                    tforwards[ih, 1:nprint, :])
-            println("  column ", ih, " backwards[1:" , nprint, "] = ",
-                    tbackwards[ih, 1:nprint, :])
+        for ihoriz in 1:n_horiz
+            println("  column ", ihoriz, " forwards[1:" , nprint, "] = ",
+                    tforwards[ihoriz, 1:nprint, :])
+            println("  column ", ihoriz, " backwards[1:" , nprint, "] = ",
+                    tbackwards[ihoriz, 1:nprint, :])
         end
         if !GV.enable_horiz_transport
             max_for  = maximum(abs, tforwards)
@@ -2971,11 +2971,11 @@ function setup_water_profile!(atmdict; constfrac=1, dust_storm_on=false, make_sa
         base_H2O = atmdict[:H2O][1]
         base_HDO = atmdict[:HDO][1]
 
-        for ih in 2:GV.n_horiz
-            @assert size(atmdict[:H2O][ih]) == size(base_H2O) "H2O profile shape mismatch across columns"
-            @assert size(atmdict[:HDO][ih]) == size(base_HDO) "HDO profile shape mismatch across columns"
-            @assert all(atmdict[:H2O][ih] .== base_H2O) "H2O profiles differ across columns with horizontal transport disabled"
-            @assert all(atmdict[:HDO][ih] .== base_HDO) "HDO profiles differ across columns with horizontal transport disabled"
+        for ihoriz in 2:GV.n_horiz
+            @assert size(atmdict[:H2O][ihoriz]) == size(base_H2O) "H2O profile shape mismatch across columns"
+            @assert size(atmdict[:HDO][ihoriz]) == size(base_HDO) "HDO profile shape mismatch across columns"
+            @assert all(atmdict[:H2O][ihoriz] .== base_H2O) "H2O profiles differ across columns with horizontal transport disabled"
+            @assert all(atmdict[:HDO][ihoriz] .== base_HDO) "HDO profiles differ across columns with horizontal transport disabled"
         end
     end
 end
