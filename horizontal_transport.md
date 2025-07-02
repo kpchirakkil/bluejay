@@ -68,6 +68,14 @@ $$
 \text{adv back} = \frac{\max(-v_{local},0) + \max(v_{back},0)}{\Delta x}
 $$
 
+### Scaling of Horizontal Transport Coefficients
+
+Horizontal transport coefficients are constructed using standard finite‑difference formulas. Diffusion terms arise from discretizing the second spatial derivative in Fick’s law: \$\partial n/\partial t \propto (K+D),\partial^{2}n/\partial x^{2}\$. A centered second derivative contributes a factor of \$\Delta x^{2}\$ in the denominator, so the discrete diffusion coefficient becomes \$(K+D)/\Delta x^{2}\$.
+
+Advection represents the first‑derivative term, \$\partial n/\partial t = -v,\partial n/\partial x\$. Its finite‑difference form introduces only one power of \$\Delta x\$ in the denominator, leading to an advection coefficient of \$v/\Delta x\$.
+
+Consequently **diffusion scales with \$1/\Delta x^{2}\$ whereas advection scales with \$1/\Delta x\$.**
+
 ### 4. `update_horiz_transport_coefficients`
 
 This high-level function:
@@ -154,7 +162,7 @@ Tsai *et al.* (2024) introduce the 2‑dimensional (horizontal and vertical) ph
 
 ## Model Formulation
 ### Continuity Equation
-VULCAN 2D solves the continuity equation in 2D Cartesian coordinates (horizontal $x$ and vertical $z$):
+VULCAN 2D solves the continuity equation in 2-D Cartesian coordinates (horizontal $`x`$ and vertical $`z`$):
 
 $$
 \frac{\partial n(x,z,t)}{\partial t}=P-L-\frac{\partial \phi_z}{\partial z}-\frac{\partial \phi_x}{\partial x}.
@@ -200,8 +208,8 @@ Horizontal diffusion is implemented but primarily relevant for meridional (north
 
 ## Key Results and Insights
 * **Validation** – model outputs are consistent with analytical solutions and previous pseudo‑2D/3D‑GCM studies.  
-* **Mixing regimes** – horizontal transport dominates below $\sim0.1\,$mbar, whereas vertical mixing dominates above this level.  
-* **Chemical gradients** – photochemically active species (CH$_4$, NH$_3$, HCN) show strong longitudinal gradients; relatively inert species (H$_2$O, CO) remain nearly uniform.  
+* **Mixing regimes** – horizontal transport dominates below $`\sim0.1\,\text{mbar}`$, whereas vertical mixing dominates above this level.  
+* **Chemical gradients** – photochemically active species ($`\mathrm{CH}_4`$, $`\mathrm{NH}_3`$, $`\mathrm{HCN}`$) show strong longitudinal gradients; relatively inert species ($`\mathrm{H_2O}`$, $`\mathrm{CO}`$) remain nearly uniform.
 * **Limb asymmetry** – horizontal transport drives significant morning–evening limb composition differences, especially in carbon‑rich atmospheres (e.g. HD 209458 b with supersolar C/O).  
 
 ## Limitations of Pseudo‑2D Models

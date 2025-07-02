@@ -2510,7 +2510,7 @@ function update_transport_coefficients(
     M::Matrix{Float64},  # now explicitly 2D: num_layers × n_horiz
     n_horiz::Int;
     calc_nonthermal=true,
-    debug=false,
+    debug=true,
     globvars...
 )
     # Call the real function that doesn't expect D_coefs
@@ -2531,7 +2531,7 @@ function update_transport_coefficients(
     M::Matrix{ftype_ncur},  # now explicitly 2D: num_layers × n_horiz
     n_horiz::Int64;
     calc_nonthermal=true,
-    debug=false,
+    debug=true,
     globvars...
 )
     #=
@@ -2626,9 +2626,10 @@ function update_transport_coefficients(
                     tdown[ih, 1:nprint, :])
         end
         if !GV.enable_horiz_transport && n_horiz > 1
-            identical = all(all(tup[ih, :, :] .== tup[1, :, :]) &&
-                            all(tdown[ih, :, :] .== tdown[1, :, :])
-                            for ih in 2:n_horiz)
+            identical = all(
+                arrays_equal_with_nan(tup[ih, :, :], tup[1, :, :]) &&
+                arrays_equal_with_nan(tdown[ih, :, :], tdown[1, :, :])
+                for ih in 2:n_horiz)
             println("  identical across columns? ", identical)
         end
     end
@@ -2637,7 +2638,7 @@ function update_transport_coefficients(
 end
 
 function update_horiz_transport_coefficients(species_list, atmdict::Dict{Symbol, Vector{Array{ftype_ncur}}}, D_coefs, M, n_horiz::Int64;
-                                       calc_nonthermal=true, cyclic=true, debug=false, globvars...)
+                                       calc_nonthermal=true, cyclic=true, debug=true, globvars...)
     #=
     Input:
         species_list: Species which will have transport coefficients updated

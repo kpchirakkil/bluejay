@@ -14,13 +14,13 @@
 
 # Set the planet 
 # =======================================================================================================
-const planet = "Venus"
+const planet = "Mars"
     # OPTIONS: "Mars", "Venus"
 
 # Input and output files, directory
 # =======================================================================================================
 const results_dir = code_dir*"../Results_$(planet)/"
-const initial_atm_file = "$(planet)-Inputs/INITIAL_GUESS_VENUS_oUT0ZbGN.h5"  # File to use to initialize the atmosphere.
+const initial_atm_file = "$(planet)-Inputs/INITIAL_GUESS_MARS_bxz4YnHk.h5"  # File to use to initialize the atmosphere.
     # OPTIONS: 
     # INITIAL_GUESS_MARS.h5 --> Basic Mars starting file.
     # INITIAL_GUESS_MARS_bxz4YnHk.h5 --> A Mars atmosphere that includes N2O, NO2, and their ions;
@@ -163,7 +163,7 @@ const conv_ions = Dict("Mars"=>[:Arpl, :ArHpl, :ArDpl,
 
 # More specific settings for controling the modeling of species
 # -------------------------------------------------------------------
-const dont_compute_chemistry = [] #  :Ar for Venus has been used historically
+const dont_compute_chemistry = [:Ar] #  :Ar for Mars has been used historically
 const dont_compute_transport = []
 const dont_compute_either_chem_or_transport = []  # Chemical species which should never update their densities, but may participate in chem+transport.
     # OPTIONS: Any species included in the model. 

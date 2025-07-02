@@ -1,5 +1,5 @@
 diff --git a/Photochemistry/src/Photochemistry.jl b/Photochemistry/src/Photochemistry.jl
-index 1b03b28..4f39540 100644
+index 1b03b28..55d47fe 100644
 --- a/Photochemistry/src/Photochemistry.jl
 +++ b/Photochemistry/src/Photochemistry.jl
 @@ -82,7 +82,8 @@ export
@@ -12,3 +12,19 @@ index 1b03b28..4f39540 100644
  
      ## Water
      precip_microns, 
+@@ -117,10 +118,11 @@ export
+     get_counts,
+     getpos, 
+     input, 
+-    logrange, 
+-    nans_present, 
+-    next_in_loop, 
+-    searchsortednearest, 
++    logrange,
++    nans_present,
++    arrays_equal_with_nan,
++    next_in_loop,
++    searchsortednearest,
+ 
+     ## String Manipulation
+     decompose_chemistry_string, 

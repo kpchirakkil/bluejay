@@ -118,10 +118,11 @@ export
     get_counts,
     getpos, 
     input, 
-    logrange, 
-    nans_present, 
-    next_in_loop, 
-    searchsortednearest, 
+    logrange,
+    nans_present,
+    arrays_equal_with_nan,
+    next_in_loop,
+    searchsortednearest,
 
     ## String Manipulation
     decompose_chemistry_string, 

@@ -219,6 +219,9 @@ function evolve_atmosphere(atm_init::Dict{Symbol, Vector{Array{ftype_ncur}}}, lo
         push!(PARAMETERS_SOLVER, ("TIMESTEP_MANAGEMENT", timestep_type))
         push!(PARAMETERS_SOLVER, ("N_STEPS", n_steps))
         push!(PARAMETERS_SOLVER, ("DT_INCR", dt_incr_factor))
+        # Use a smaller timestep growth factor to avoid divergence
+        # dt_incr_local = min(dt_incr_factor, 1.2)
+        # push!(PARAMETERS_SOLVER, ("DT_INCR", dt_incr_local))
         push!(PARAMETERS_SOLVER, ("DT_DECR", dt_decr_factor))
         push!(PARAMETERS_SOLVER, ("ERROR_SCHEME", error_checking_scheme))
         push!(PARAMETERS_SOLVER, ("ABSTOL", abstol))
@@ -656,6 +659,8 @@ function converge(n_current::Dict{Symbol, Vector{Array{ftype_ncur}}}, log_t_star
         total_time = 0.0
         goodsteps = 0
         goodstep_limit = 1 # Need at least this many successful iterations before increasing timestep
+        # goodstep_limit = 3 # Require more consecutive successes before increasing timestep
+        # dt_incr_local = min(GV.dt_incr_factor, 1.2)
        
         # the first clause before the & will help prevent the simulation stalling out if it has to reduce dt too much.
         while (dt < 10.0^log_t_end) & (total_time <= GV.season_length_in_sec)
@@ -667,6 +672,7 @@ function converge(n_current::Dict{Symbol, Vector{Array{ftype_ncur}}}, log_t_star
                 goodsteps += 1
                 if goodsteps >= goodstep_limit
                     dt *= GV.dt_incr_factor
+                    # dt *= dt_incr_local
                     goodsteps = 0
                 end
             catch e
