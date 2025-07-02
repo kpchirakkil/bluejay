@@ -142,6 +142,99 @@ Horizontal transport is implemented using an upwind numerical scheme for advecti
 
 4. **Planetary Atmosphere Modeling Examples**
    - Krasnopolsky, V. A. (2019). "Spectroscopy and Photochemistry of Planetary Atmospheres and Ionospheres: Mars, Venus, Titan, Triton and Pluto." *Cambridge Planetary Science, Series Number 23* (Reviews photochemical modeling frameworks used specifically for Venus, Mars, and other planetary atmospheres, including transport considerations.)
-   - Lefèvre, F., Lebonnois, S., Montmessin, F., & Forget, F. (2004). "Three-dimensional modeling of ozone on Mars." *Journal of Geophysical Research: Planets, 109*(E7), E07004. <https://doi.org/10.1029/2004JE002268> (A practical example of implementing horizontal transport with advection-diffusion schemes on Mars.)
+   - Lefèvre, F., Lebonnois, S., Montmessin, F., & Forget, F. (2004). "Three-dimensional modeling of ozone on Mars." *Journal of Geophysical Research: Planets, 109*(E7), E07004. <https://doi.org/10.1029/2004JE002268>
+   <!-- (A practical example of implementing horizontal transport with advection-diffusion schemes on Mars.) -->
    <!-- - Montmessin, F. et al., (2011). "A layer of ozone detected in the nightside upper atmosphere of Venus." *Icarus, 216*, 82-85. <https://doi.org/10.1016/j.icarus.2011.08.010>
    - Montmessin, F., & Lefèvre, F. (2013). "Transport-driven formation of a polar ozone layer on Mars." *Nature Geoscience, 6*, 930–933. <https://doi.org/10.1038/ngeo1957> (Detailed application of horizontal transport modeling including wind-driven advection and diffusion on Mars.) -->
+
+# Summary of Tsai et al. (2024): Global Chemical Transport on Hot Jupiters
+
+## Overview
+Tsai et al. (2024) introduce the 2-dimensional (horizontal and vertical) photochemical transport model, **VULCAN 2D**, designed to analyze global chemical transport dynamics in tidally locked hot Jupiter atmospheres. Their model addresses shortcomings in previous pseudo-2D models by accommodating non-uniform horizontal (zonal) winds derived from General Circulation Models (GCMs).
+
+## Model Formulation
+### Continuity Equation
+VULCAN 2D solves the continuity equation in 2D Cartesian coordinates (horizontal \( x \) and vertical \( z \)):
+
+\[
+\frac{\partial n(x,z,t)}{\partial t} = P - L - \frac{\partial \phi_z}{\partial z} - \frac{\partial \phi_x}{\partial x}
+\]
+
+- \( n \) is the species number density.
+- \( P \) and \( L \) are the chemical production and loss rates.
+- \( \phi_z \) and \( \phi_x \) represent vertical and horizontal fluxes, respectively.
+
+### Vertical Transport Flux \( (\phi_z) \)
+Vertical flux includes:
+- Vertical advection
+- Eddy diffusion
+- Molecular diffusion
+
+### Horizontal Advection Flux (Upwind Scheme)
+Horizontal fluxes use a **first-order upwind difference scheme** for numerical stability and accuracy:
+
+\[
+\phi_{x-1/2} = \begin{cases}
+v_{k-1/2} n_{k-1}, & v_{k-1/2} > 0\\[6pt]
+v_{k-1/2} n_k, & v_{k-1/2} < 0
+\end{cases}
+\quad,
+\quad
+\phi_{x+1/2} = \begin{cases}
+-v_{k+1/2} n_k, & v_{k+1/2} > 0\\[6pt]
+-v_{k+1/2} n_{k+1}, & v_{k+1/2} < 0
+\end{cases}
+\]
+
+- \( v_{k\pm1/2} \) are the horizontal wind velocities at cell interfaces.
+
+### Horizontal Diffusion
+Horizontal diffusion is implemented but primarily used for meridional (north-south) transport on giant planets. In the zonal (east-west) direction for exoplanet modeling, horizontal advection dominates due to strong winds.
+
+## Key Results and Insights
+- **Validation**: Extensively validated against analytical solutions and previous pseudo-2D and 3D GCM results.
+- **Mixing Regimes**:
+  - Horizontal transport dominates below \( \sim 0.1 \) mbar.
+  - Vertical mixing dominates above \( \sim 0.1 \) mbar.
+- **Chemical Gradients**:
+  - Photochemically active species (CH4, NH3, HCN) show significant longitudinal variations.
+  - Uniform species (H2O, CO) have minimal longitudinal variations.
+- **Limb Asymmetry**:
+  - Horizontal transport significantly affects morning-evening limb composition asymmetry, particularly in carbon-rich atmospheres (e.g., HD 209458 b with supersolar C/O).
+
+## Limitations of Pseudo-2D Models
+Tsai et al. emphasize the limitations of pseudo-2D models (which assume uniform zonal winds), demonstrating that significant inaccuracies arise under conditions of strong day-to-night flow or significant horizontal wind variability.
+
+## Lessons for bluejay Model
+The current horizontal transport implementation is robust and aligns closely with the approach described by Tsai et al. However, the following enhancements and clarifications can be made based on insights from their work:
+
+### Potential Changes
+
+1. **Explicit Interface Flux Formulation**:
+   - Clarify horizontal advection fluxes explicitly at cell interfaces:
+     \[
+     \phi_{x-1/2} = v_{x-1/2} n_{\text{upwind}}
+     \]
+
+2. **Adoption of Isobaric Coordinates**:
+   - Clearly define horizontal flux computations at constant-pressure (isobaric) levels for physical accuracy:
+     \[
+     z = -H \ln\left(\frac{p}{P_s}\right)
+     \]
+   - This approach better aligns with standard practice in planetary atmospheric modeling.
+
+3. **De-emphasis of Horizontal Diffusion**:
+   - Reduce emphasis on explicit horizontal diffusion in zonal directions unless meridional mixing or specific conditions necessitate it, as strong advection typically dominates.
+
+4. **Integration Step Optimization**:
+   - Follow the CFL condition for numerical stability:
+     \[
+     dt < \text{min}\left(\frac{dx}{v_x}\right)
+     \]
+
+## Conclusion
+The current model framework is fundamentally sound. Implementing explicit interface flux definitions and clarifying the coordinate system (isobaric) are minor refinements that enhance clarity and ensure alignment with robust, peer-reviewed modeling practices presented by Tsai et al. (2024).
+
+## Reference
+
+- Tsai, S.-M., Parmentier, V., Mendonça, J. M., Tan, X., Deitrick, R., Hammond, M., Savel, A. B., Zhang, X., Pierrehumbert, R. T., & Schwieterman, E. W. (2024). Global Chemical Transport on Hot Jupiters: Insights from the 2D VULCAN Photochemical Model. *The Astrophysical Journal, 963*(1), 41. [https://doi.org/10.3847/1538-4357/ad1600](https://doi.org/10.3847/1538-4357/ad1600).

@@ -2505,30 +2505,33 @@ end
 
 function update_transport_coefficients(
     species_list,
-    atmdict::Dict{Symbol, Vector{Array{Float64}}}, 
+    atmdict::Dict{Symbol, Vector{Array{Float64}}},
     D_coefs::Vector{Matrix{Float64}},  # Unused
     M::Matrix{Float64},  # now explicitly 2D: num_layers × n_horiz
-    n_horiz::Int; 
+    n_horiz::Int;
     calc_nonthermal=true,
+    debug=false,
     globvars...
 )
     # Call the real function that doesn't expect D_coefs
     return update_transport_coefficients(
-        species_list, 
-        atmdict, 
-        M, 
-        n_horiz; 
+        species_list,
+        atmdict,
+        M,
+        n_horiz;
         calc_nonthermal=calc_nonthermal,
+        debug=debug,
         globvars...
     )
 end
 
 function update_transport_coefficients(
     species_list,
-    atmdict::Dict{Symbol, Vector{Array{ftype_ncur}}}, 
+    atmdict::Dict{Symbol, Vector{Array{ftype_ncur}}},
     M::Matrix{ftype_ncur},  # now explicitly 2D: num_layers × n_horiz
     n_horiz::Int64;
     calc_nonthermal=true,
+    debug=false,
     globvars...
 )
     #=
@@ -2613,11 +2616,28 @@ function update_transport_coefficients(
         ]))
     end
 
+    if debug
+        println("[update_transport_coefficients] vertical transport coefficients:")
+        nprint = min(3, GV.num_layers)
+        for ih in 1:n_horiz
+            println("  column ", ih, " tup[1:" , nprint, "] = ",
+                    tup[ih, 1:nprint, :])
+            println("  column ", ih, " tdown[1:" , nprint, "] = ",
+                    tdown[ih, 1:nprint, :])
+        end
+        if !GV.enable_horiz_transport && n_horiz > 1
+            identical = all(all(tup[ih, :, :] .== tup[1, :, :]) &&
+                            all(tdown[ih, :, :] .== tdown[1, :, :])
+                            for ih in 2:n_horiz)
+            println("  identical across columns? ", identical)
+        end
+    end
+
     return tlower, tup, tdown, tupper
 end
 
 function update_horiz_transport_coefficients(species_list, atmdict::Dict{Symbol, Vector{Array{ftype_ncur}}}, D_coefs, M, n_horiz::Int64;
-                                       calc_nonthermal=true, cyclic=true, globvars...)
+                                       calc_nonthermal=true, cyclic=true, debug=false, globvars...)
     #=
     Input:
         species_list: Species which will have transport coefficients updated
@@ -2713,6 +2733,23 @@ function update_horiz_transport_coefficients(species_list, atmdict::Dict{Symbol,
     #             " back edge=", max_backedge,
     #             " front edge=", max_frontedge)
     # end    
+
+    if debug
+        println("[update_horiz_transport_coefficients] horizontal transport coefficients:")
+        nprint = min(3, GV.num_layers)
+        for ih in 1:n_horiz
+            println("  column ", ih, " forwards[1:" , nprint, "] = ",
+                    tforwards[ih, 1:nprint, :])
+            println("  column ", ih, " backwards[1:" , nprint, "] = ",
+                    tbackwards[ih, 1:nprint, :])
+        end
+        if !GV.enable_horiz_transport
+            max_for  = maximum(abs, tforwards)
+            max_back = maximum(abs, tbackwards)
+            println("  horizontal disabled -> max forward=", max_for,
+                    " max backward=", max_back)
+        end
+    end
 
     return tbackedge, tforwards, tbackwards, tfrontedge
 end

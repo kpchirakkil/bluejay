@@ -70,6 +70,14 @@ include(paramfile)
 # Perform the rest of the model set up
 include("MODEL_SETUP.jl")
 
+# Print the boundary index from MODEL_SETUP if it exists so we can compare
+ulb_modelsetup = nothing
+if @isdefined upper_lower_bdy_i
+    ulb_modelsetup = upper_lower_bdy_i
+    println("upper_lower_bdy_i from MODEL_SETUP.jl: ", ulb_modelsetup)
+else
+    println("upper_lower_bdy_i not defined in MODEL_SETUP.jl")
+end
 
 # **************************************************************************** #
 #                                                                              #
@@ -93,6 +101,25 @@ These functions are required to be in this file for one of two reasons:
 2) They reference external_storage or the PARAMETER dataframes. These could probably
    be changed so that they could be moved into the Core.jl module but I don't want to do it right now. (Feb 2023)
 =#
+
+function check_n_tot_consistency(atmdict)
+    """
+    Diagnostic to verify that total densities are identical across columns when
+    horizontal transport is disabled.
+    """
+    sample_alts = [alt[1], alt[Int(cld(length(alt), 2))], alt[end]]
+    for z in sample_alts
+        totals = [n_tot(atmdict, z, ih; all_species, n_alt_index) for ih in 1:n_horiz]
+        println("n_tot at $(z/1e5) km across columns = $(totals)")
+        if !enable_horiz_transport
+            ref = totals[1]
+            for d in totals[2:end]
+                @assert isapprox(d, ref; rtol=1e-8, atol=0.0)
+            end
+        end
+    end
+    return nothing
+end
 
 function evolve_atmosphere(atm_init::Dict{Symbol, Vector{Array{ftype_ncur}}}, log_t_start, log_t_end; t_to_save=[], abstol=1e-12, reltol=1e-6, globvars...)
     #=
@@ -882,6 +909,14 @@ function next_timestep(nstart, params, t, dt; reltol=1e-2, abstol=1e-12, verbose
             # Turning on the f error check seems to cause it to fail very very early in the run --6 April 
             converged = (all(check_n_relerr .|| check_n_abserr)) #&& all(check_f_abserr[.!check_n_abserr] .|| check_f_relerr[.!check_n_abserr]))
         end # new =====================================================================================
+        
+        norm_dndt_val = norm(dndt)
+        max_update_val = maximum(abs.(nthis - nold))
+        if verbose == true
+            msg = "norm(dndt) = $(norm_dndt_val), max \u0394n = $(max_update_val)"
+            println(msg)
+            write_to_log(GV.logfile, msg, mode="a")
+        end
 
         iter += 1
     end
@@ -1074,9 +1109,17 @@ if make_new_alt_grid==true
 
     # const alt = convert(Array, (0:dz:new_zmax*1e5))
     # const max_alt = new_zmax*1e5
-elseif make_new_alt_grid==false 
+elseif make_new_alt_grid==false
     println("$(Dates.format(now(), "(HH:MM:SS)")) Loading atmosphere")
     n_current = get_ncurrent(initial_atm_file, n_horiz)
+    if !enable_horiz_transport && n_horiz > 1
+        base_H2O = n_current[:H2O][1]
+        base_HDO = n_current[:HDO][1]
+        for ihoriz in 2:n_horiz
+            @assert all(n_current[:H2O][ihoriz] .== base_H2O) "Initial H2O profile in column $(ihoriz) differs from column 1 with horizontal transport disabled"
+            @assert all(n_current[:HDO][ihoriz] .== base_HDO) "Initial HDO profile in column $(ihoriz) differs from column 1 with horizontal transport disabled"
+        end
+    end
 end
 
 
@@ -1089,6 +1132,12 @@ end
 # interior altitude grid is used in multicolumn
 const upper_lower_bdy = alt[2:end-1][something(findfirst(isequal(minimum(H2Osatfrac[:, 1])), H2Osatfrac[:, 1]), 0)] # in cm
 const upper_lower_bdy_i = n_alt_index[upper_lower_bdy]  # the uppermost layer at which water will be fixed, in cm
+println("upper_lower_bdy_i from converge_new_file.jl: ", upper_lower_bdy_i)
+if ulb_modelsetup !== nothing
+    if size(ulb_modelsetup) != size(upper_lower_bdy_i) || any(ulb_modelsetup .!= upper_lower_bdy_i)
+        error("upper_lower_bdy_i mismatch between MODEL_SETUP.jl and converge_new_file.jl")
+    end
+end
 # Control whether the removal of rates etc at "Fixed altitudes" runs. If the boundary is 
 # the bottom of the atmosphere, we shouldn't do it at all.
 const remove_rates_flag = true
@@ -1203,18 +1252,29 @@ if reinitialize_water_profile
                                         venus_special_h2o_bot=h2o_vmr_low, venus_special_hdo_bot=hdo_vmr_low,
                                         venus_special_h2o_top=h2o_vmr_high, venus_special_hdo_top=hdo_vmr_high,
                                         dust_storm_on=dust_storm_on, water_amt=water_case, ffac=f_fac_opts[water_case], ealt=add_water_alt_opts[water_case], 
-                                        hygropause_alt=hygropause_alt, excess_water_in=water_loc, 
+                                        hygropause_alt=hygropause_alt, excess_water_in=water_loc,
                                         all_species, alt, DH, num_layers, non_bdy_layers, n_alt_index, planet, plot_grid,
                                         H2O_excess, HDO_excess,  H2Osat, water_mixing_ratio,  results_dir, 
                                         sim_folder_name, speciescolor, speciesstyle, upper_lower_bdy_i, monospace_choice, sansserif_choice, n_horiz, enable_horiz_transport)
     elseif planet=="Mars"
         setup_water_profile!(n_current; dust_storm_on=dust_storm_on, water_amt=water_case, ffac=f_fac_opts[water_case], ealt=add_water_alt_opts[water_case], 
-                                        hygropause_alt=hygropause_alt, excess_water_in=water_loc, 
+                                        hygropause_alt=hygropause_alt, excess_water_in=water_loc,
                                         all_species, alt, DH, num_layers, non_bdy_layers, n_alt_index, planet, plot_grid,
                                         H2O_excess, HDO_excess,  H2Osat, water_mixing_ratio,  results_dir, 
                                         sim_folder_name, speciescolor, speciesstyle, upper_lower_bdy_i, monospace_choice, sansserif_choice, n_horiz, enable_horiz_transport)
     end
+
+    if !enable_horiz_transport && n_horiz > 1
+        base_H2O = n_current[:H2O][1]
+        base_HDO = n_current[:HDO][1]
+        for ihoriz in 2:n_horiz
+            @assert all(n_current[:H2O][ihoriz] .== base_H2O) "Post-setup H2O profile in column $(ihoriz) differs from column 1 with horizontal transport disabled"
+            @assert all(n_current[:HDO][ihoriz] .== base_HDO) "Post-setup HDO profile in column $(ihoriz) differs from column 1 with horizontal transport disabled"
+        end
+    end
 end
+
+check_n_tot_consistency(n_current)
 
 # If you want to just modify the water profile, i.e. when running several simulations
 # in succession to simulate seasons: 
