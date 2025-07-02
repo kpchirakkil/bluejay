@@ -150,91 +150,81 @@ Horizontal transport is implemented using an upwind numerical scheme for advecti
 # Summary of Tsai et al. (2024): Global Chemical Transport on Hot Jupiters
 
 ## Overview
-Tsai et al. (2024) introduce the 2-dimensional (horizontal and vertical) photochemical transport model, **VULCAN 2D**, designed to analyze global chemical transport dynamics in tidally locked hot Jupiter atmospheres. Their model addresses shortcomings in previous pseudo-2D models by accommodating non-uniform horizontal (zonal) winds derived from General Circulation Models (GCMs).
+Tsai *et al.* (2024) introduce the 2‑dimensional (horizontal and vertical) photochemical transport model, **VULCAN 2D**, designed to analyze global chemical transport dynamics in tidally locked hot‑Jupiter atmospheres. Their model addresses shortcomings in previous pseudo‑2D models by accommodating non‑uniform horizontal (zonal) winds derived from General Circulation Models (GCMs).
 
 ## Model Formulation
 ### Continuity Equation
-VULCAN 2D solves the continuity equation in 2D Cartesian coordinates (horizontal \( x \) and vertical \( z \)):
+VULCAN 2D solves the continuity equation in 2D Cartesian coordinates (horizontal $x$ and vertical $z$):
 
-\[
-\frac{\partial n(x,z,t)}{\partial t} = P - L - \frac{\partial \phi_z}{\partial z} - \frac{\partial \phi_x}{\partial x}
-\]
+$$
+\frac{\partial n(x,z,t)}{\partial t}=P-L-\frac{\partial \phi_z}{\partial z}-\frac{\partial \phi_x}{\partial x}.
+$$
 
-- \( n \) is the species number density.
-- \( P \) and \( L \) are the chemical production and loss rates.
-- \( \phi_z \) and \( \phi_x \) represent vertical and horizontal fluxes, respectively.
+where
 
-### Vertical Transport Flux \( (\phi_z) \)
-Vertical flux includes:
-- Vertical advection
-- Eddy diffusion
-- Molecular diffusion
+* $n$ – species number density  
+* $P$ – chemical production rate  
+* $L$ – chemical loss rate  
+* $\phi_z$, $\phi_x$ – vertical and horizontal fluxes, respectively
 
-### Horizontal Advection Flux (Upwind Scheme)
-Horizontal fluxes use a **first-order upwind difference scheme** for numerical stability and accuracy:
+### Vertical Transport Flux ($\phi_z$)
+Vertical flux comprises
 
-\[
-\phi_{x-1/2} = \begin{cases}
-v_{k-1/2} n_{k-1}, & v_{k-1/2} > 0\\[6pt]
-v_{k-1/2} n_k, & v_{k-1/2} < 0
+* vertical advection  
+* eddy diffusion  
+* molecular diffusion  
+
+### Horizontal Advection Flux (upwind scheme)
+The first‑order upwind differencing used for horizontal advection is
+
+$$
+\phi_{x-\frac12} =
+\begin{cases}
+  v_{k-\frac12}\,n_{k-1}, & v_{k-\frac12}>0 \\
+  v_{k-\frac12}\,n_k, & v_{k-\frac12}<0
 \end{cases}
-\quad,
-\quad
-\phi_{x+1/2} = \begin{cases}
--v_{k+1/2} n_k, & v_{k+1/2} > 0\\[6pt]
--v_{k+1/2} n_{k+1}, & v_{k+1/2} < 0
-\end{cases}
-\]
+$$
 
-- \( v_{k\pm1/2} \) are the horizontal wind velocities at cell interfaces.
+$$
+\phi_{x+\frac12} =
+\begin{cases}
+  -\,v_{k+\frac12}\,n_k, & v_{k+\frac12}>0 \\
+  -\,v_{k+\frac12}\,n_{k+1}, & v_{k+\frac12}<0
+\end{cases}
+$$
+
+where $v_{k\pm\frac12}$ is the horizontal wind speed at the cell interface.
 
 ### Horizontal Diffusion
-Horizontal diffusion is implemented but primarily used for meridional (north-south) transport on giant planets. In the zonal (east-west) direction for exoplanet modeling, horizontal advection dominates due to strong winds.
+Horizontal diffusion is implemented but primarily relevant for meridional (north–south) transport on giant planets. In the zonal (east–west) direction of hot‑Jupiter atmospheres, strong advection usually dominates.
 
 ## Key Results and Insights
-- **Validation**: Extensively validated against analytical solutions and previous pseudo-2D and 3D GCM results.
-- **Mixing Regimes**:
-  - Horizontal transport dominates below \( \sim 0.1 \) mbar.
-  - Vertical mixing dominates above \( \sim 0.1 \) mbar.
-- **Chemical Gradients**:
-  - Photochemically active species (CH4, NH3, HCN) show significant longitudinal variations.
-  - Uniform species (H2O, CO) have minimal longitudinal variations.
-- **Limb Asymmetry**:
-  - Horizontal transport significantly affects morning-evening limb composition asymmetry, particularly in carbon-rich atmospheres (e.g., HD 209458 b with supersolar C/O).
+* **Validation** – model outputs are consistent with analytical solutions and previous pseudo‑2D/3D‑GCM studies.  
+* **Mixing regimes** – horizontal transport dominates below $\sim0.1\,$mbar, whereas vertical mixing dominates above this level.  
+* **Chemical gradients** – photochemically active species (CH$_4$, NH$_3$, HCN) show strong longitudinal gradients; relatively inert species (H$_2$O, CO) remain nearly uniform.  
+* **Limb asymmetry** – horizontal transport drives significant morning–evening limb composition differences, especially in carbon‑rich atmospheres (e.g. HD 209458 b with supersolar C/O).  
 
-## Limitations of Pseudo-2D Models
-Tsai et al. emphasize the limitations of pseudo-2D models (which assume uniform zonal winds), demonstrating that significant inaccuracies arise under conditions of strong day-to-night flow or significant horizontal wind variability.
+## Limitations of Pseudo‑2D Models
+Assuming uniform zonal winds can introduce large errors when day–night flows or wind variability are strong. Tsai *et al.* quantify these errors and demonstrate the need for true 2‑D treatment.
 
-## Lessons for bluejay Model
-The current horizontal transport implementation is robust and aligns closely with the approach described by Tsai et al. However, the following enhancements and clarifications can be made based on insights from their work:
+## Lessons for *bluejay* Model
+The current horizontal‑transport implementation is already robust, but the following refinements could improve clarity and maintainability:
 
-### Potential Changes
+1. **Explicit interface‑flux notation**  
+   $$\phi_{x-\frac12}=v_{x-\frac12}\,n_{\text{upwind}}$$  
 
-1. **Explicit Interface Flux Formulation**:
-   - Clarify horizontal advection fluxes explicitly at cell interfaces:
-     \[
-     \phi_{x-1/2} = v_{x-1/2} n_{\text{upwind}}
-     \]
+2. **Isobaric vertical coordinate**  
+   $$z=-H\ln\!\left(\frac{p}{P_s}\right)$$  
+   ensures fluxes are computed on constant‑pressure levels, matching common practice.
 
-2. **Adoption of Isobaric Coordinates**:
-   - Clearly define horizontal flux computations at constant-pressure (isobaric) levels for physical accuracy:
-     \[
-     z = -H \ln\left(\frac{p}{P_s}\right)
-     \]
-   - This approach better aligns with standard practice in planetary atmospheric modeling.
+3. **Reduced explicit horizontal diffusion** – rely on advection unless meridional mixing requires otherwise.
 
-3. **De-emphasis of Horizontal Diffusion**:
-   - Reduce emphasis on explicit horizontal diffusion in zonal directions unless meridional mixing or specific conditions necessitate it, as strong advection typically dominates.
-
-4. **Integration Step Optimization**:
-   - Follow the CFL condition for numerical stability:
-     \[
-     dt < \text{min}\left(\frac{dx}{v_x}\right)
-     \]
+4. **CFL‑limited timestep**  
+   $$\Delta t<\min\!\left(\frac{\Delta x}{v_x}\right)$$  
+   to preserve numerical stability.
 
 ## Conclusion
-The current model framework is fundamentally sound. Implementing explicit interface flux definitions and clarifying the coordinate system (isobaric) are minor refinements that enhance clarity and ensure alignment with robust, peer-reviewed modeling practices presented by Tsai et al. (2024).
+The present framework is sound. Minor tweaks—explicit flux notation and clear isobaric coordinates—will bring it fully in line with the methodology of Tsai *et al.* (2024).
 
 ## Reference
-
-- Tsai, S.-M., Parmentier, V., Mendonça, J. M., Tan, X., Deitrick, R., Hammond, M., Savel, A. B., Zhang, X., Pierrehumbert, R. T., & Schwieterman, E. W. (2024). Global Chemical Transport on Hot Jupiters: Insights from the 2D VULCAN Photochemical Model. *The Astrophysical Journal, 963*(1), 41. [https://doi.org/10.3847/1538-4357/ad1600](https://doi.org/10.3847/1538-4357/ad1600).
+Tsai, S.‑M. *et al.* (2024), “Global Chemical Transport on Hot Jupiters: Insights from the 2‑D VULCAN Photochemical Model,” *ApJ*, **963**, 41. <https://doi.org/10.3847/1538-4357/ad1600>
