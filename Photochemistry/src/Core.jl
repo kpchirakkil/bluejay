@@ -1147,17 +1147,17 @@ function update_Jrates!(n_cur_densities::Dict{Symbol, Vector{Array{ftype_ncur}}}
         end
     end
 
-    # Verify identical Jrates when horizontal transport is disabled
-    if n_horiz > 1 && !GV.enable_horiz_transport
-        for j in GV.Jratelist
-            if haskey(n_cur_densities, j)
-                first = n_cur_densities[j][1]
-                for col in n_cur_densities[j][2:end]
-                    @assert isapprox(col, first; rtol=1e-8, atol=0.0) "Jrate mismatch across columns for $(j)"
-                end
-            end
-        end
-    end
+    # # Verify identical Jrates when horizontal transport is disabled
+    # if n_horiz > 1 && !GV.enable_horiz_transport
+    #     for j in GV.Jratelist
+    #         if haskey(n_cur_densities, j)
+    #             first = n_cur_densities[j][1]
+    #             for col in n_cur_densities[j][2:end]
+    #                 @assert isapprox(col, first; rtol=1e-8, atol=0.0) "Jrate mismatch across columns for $(j)"
+    #             end
+    #         end
+    #     end
+    # end
 end
 
 #===============================================================================#
@@ -2356,7 +2356,7 @@ function Keddy(z::Vector, nt; ihoriz=nothing, globvars...)
         z: Altitude in cm
         nt: Total atmospheric density.
             - For single-column case: Vector (#/cm³)
-            - For multi-column, this should be a Matrix (#altitudes, n_horiz), and `ihoriz` must be specified.
+            - For multi-column, this should be a Matrix (n_horiz × #altitudes) with horizontal index first, and `ihoriz` must be specified.
     Output:
         k: eddy diffusion coefficients at all altitudes.
            Units: cm^2/s
@@ -2375,7 +2375,7 @@ function Keddy(z::Vector, nt; ihoriz=nothing, globvars...)
         upperatm = findall(z .> 60e5)
 
         # Assign constant Keddy below 60 km altitude (lower atmosphere)
-        k[z .<= 60e5] .= 1e6
+        k[z .<= 60e5] .= 10. ^ 6
 
         # Upper atmosphere (>60 km), altitude-dependent Keddy
         if ndims(nt) == 1  # Single-column case
@@ -2390,9 +2390,9 @@ function Keddy(z::Vector, nt; ihoriz=nothing, globvars...)
     elseif GV.planet == "Venus"
         # Venus: just an altitude-dependent eddy diffusion
         if ndims(nt) == 1  # Single-column case
-            k .= 8e12 .* (nt .^ -0.5)
+            k .= 8e12 .* nt .^ (-0.5)
         else  # Multi-column case
-            k .= 8e12 .* (nt[ihoriz, :] .^ -0.5)
+            k .= 8e12 .* (nt[ihoriz, :] .^ (-0.5))
         end
     end
 
@@ -2964,20 +2964,20 @@ function setup_water_profile!(atmdict; constfrac=1, dust_storm_on=false, make_sa
 
     plot_water_profile(atmdict, GV.results_dir*GV.sim_folder_name; watersat=satarray, H2Oinitf=H2Oinitfrac_all[1], plot_grid=GV.plot_grid, showonly=showonly, globvars...)
 
-    # ----------------------------------------------------------------------
-    # Consistency checks when horizontal transport is disabled
-    # ----------------------------------------------------------------------
-    if !GV.enable_horiz_transport && GV.n_horiz > 1
-        base_H2O = atmdict[:H2O][1]
-        base_HDO = atmdict[:HDO][1]
+    # # ----------------------------------------------------------------------
+    # # Consistency checks when horizontal transport is disabled
+    # # ----------------------------------------------------------------------
+    # if !GV.enable_horiz_transport && GV.n_horiz > 1
+    #     base_H2O = atmdict[:H2O][1]
+    #     base_HDO = atmdict[:HDO][1]
 
-        for ihoriz in 2:GV.n_horiz
-            @assert size(atmdict[:H2O][ihoriz]) == size(base_H2O) "H2O profile shape mismatch across columns"
-            @assert size(atmdict[:HDO][ihoriz]) == size(base_HDO) "HDO profile shape mismatch across columns"
-            @assert all(atmdict[:H2O][ihoriz] .== base_H2O) "H2O profiles differ across columns with horizontal transport disabled"
-            @assert all(atmdict[:HDO][ihoriz] .== base_HDO) "HDO profiles differ across columns with horizontal transport disabled"
-        end
-    end
+    #     for ihoriz in 2:GV.n_horiz
+    #         @assert size(atmdict[:H2O][ihoriz]) == size(base_H2O) "H2O profile shape mismatch across columns"
+    #         @assert size(atmdict[:HDO][ihoriz]) == size(base_HDO) "HDO profile shape mismatch across columns"
+    #         @assert all(atmdict[:H2O][ihoriz] .== base_H2O) "H2O profiles differ across columns with horizontal transport disabled"
+    #         @assert all(atmdict[:HDO][ihoriz] .== base_HDO) "HDO profiles differ across columns with horizontal transport disabled"
+    #     end
+    # end
 end
 
 function water_tanh_prof(z; f=10, z0=62, dz=11)

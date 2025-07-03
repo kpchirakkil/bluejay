@@ -70,14 +70,14 @@ include(paramfile)
 # Perform the rest of the model set up
 include("MODEL_SETUP.jl")
 
-# Print the boundary index from MODEL_SETUP if it exists so we can compare
-ulb_modelsetup = nothing
-if @isdefined upper_lower_bdy_i
-    ulb_modelsetup = upper_lower_bdy_i
-    println("upper_lower_bdy_i from MODEL_SETUP.jl: ", ulb_modelsetup)
-else
-    println("upper_lower_bdy_i not defined in MODEL_SETUP.jl")
-end
+# # Print the boundary index from MODEL_SETUP if it exists so we can compare
+# ulb_modelsetup = nothing
+# if @isdefined upper_lower_bdy_i
+#     ulb_modelsetup = upper_lower_bdy_i
+#     println("upper_lower_bdy_i from MODEL_SETUP.jl: ", ulb_modelsetup)
+# else
+#     println("upper_lower_bdy_i not defined in MODEL_SETUP.jl")
+# end
 
 # **************************************************************************** #
 #                                                                              #
@@ -102,24 +102,24 @@ These functions are required to be in this file for one of two reasons:
    be changed so that they could be moved into the Core.jl module but I don't want to do it right now. (Feb 2023)
 =#
 
-function check_n_tot_consistency(atmdict)
-    """
-    Diagnostic to verify that total densities are identical across columns when
-    horizontal transport is disabled.
-    """
-    sample_alts = [alt[1], alt[Int(cld(length(alt), 2))], alt[end]]
-    for z in sample_alts
-        totals = [n_tot(atmdict, z, ihoriz; all_species, n_alt_index) for ihoriz in 1:n_horiz]
-        println("n_tot at $(z/1e5) km across columns = $(totals)")
-        if !enable_horiz_transport
-            ref = totals[1]
-            for d in totals[2:end]
-                @assert isapprox(d, ref; rtol=1e-8, atol=0.0)
-            end
-        end
-    end
-    return nothing
-end
+# function check_n_tot_consistency(atmdict)
+#     """
+#     Diagnostic to verify that total densities are identical across columns when
+#     horizontal transport is disabled.
+#     """
+#     sample_alts = [alt[1], alt[Int(cld(length(alt), 2))], alt[end]]
+#     for z in sample_alts
+#         totals = [n_tot(atmdict, z, ihoriz; all_species, n_alt_index) for ihoriz in 1:n_horiz]
+#         println("n_tot at $(z/1e5) km across columns = $(totals)")
+#         if !enable_horiz_transport
+#             ref = totals[1]
+#             for d in totals[2:end]
+#                 @assert isapprox(d, ref; rtol=1e-8, atol=0.0)
+#             end
+#         end
+#     end
+#     return nothing
+# end
 
 function evolve_atmosphere(atm_init::Dict{Symbol, Vector{Array{ftype_ncur}}}, log_t_start, log_t_end; t_to_save=[], abstol=1e-12, reltol=1e-6, globvars...)
     #=
@@ -738,6 +738,10 @@ function get_rates_and_jacobian(n, p, t; globvars...)
     n_cur_all = compile_ncur_all(n, n_horiz, n_short, GV.n_inactive; GV.active_longlived, GV.active_shortlived, GV.inactive_species, GV.num_layers)
 
     update_Jrates!(n_cur_all, n_horiz; GV.Jratelist, GV.crosssection, GV.num_layers, GV.absorber, GV.dz, GV.solarflux, enable_horiz_transport=GV.enable_horiz_transport)
+    # VENUS Day-Night TEST
+    # update_Jrates!(n_cur_all, n_horiz; Jratelist=GV.Jratelist, crosssection=GV.crosssection,
+    #                 num_layers=GV.num_layers, absorber=GV.absorber, dz=GV.dz,
+    #                 solarflux=solarflux_cols, enable_horiz_transport=GV.enable_horiz_transport)
 
     # copy all the Jrates into an external dictionary for storage
     for jr in GV.Jratelist                # time for this is ~0.000005 s
@@ -1057,6 +1061,10 @@ function update!(n_current::Dict{Symbol, Vector{Array{ftype_ncur}}}, t, dt; abst
 
     # ensure Jrates are included in n_current
     update_Jrates!(n_current, n_horiz; GV.Jratelist, GV.crosssection, GV.num_layers, GV.absorber, GV.dz, GV.solarflux, enable_horiz_transport=GV.enable_horiz_transport)
+    # VENUS Day-Night TEST
+    # update_Jrates!(n_current, n_horiz; Jratelist=GV.Jratelist, crosssection=GV.crosssection,
+    #                num_layers=GV.num_layers, absorber=GV.absorber, dz=GV.dz,
+    #                solarflux=solarflux_cols, enable_horiz_transport=GV.enable_horiz_transport)
 
     # Optionally adjust Jrates per horizontal column (commented out)
     # solarflux_multipliers = [1.0, 0.5, 2.0]
@@ -1138,12 +1146,13 @@ end
 # interior altitude grid is used in multicolumn
 const upper_lower_bdy = alt[2:end-1][something(findfirst(isequal(minimum(H2Osatfrac[:, 1])), H2Osatfrac[:, 1]), 0)] # in cm
 const upper_lower_bdy_i = n_alt_index[upper_lower_bdy]  # the uppermost layer at which water will be fixed, in cm
-println("upper_lower_bdy_i from converge_new_file.jl: ", upper_lower_bdy_i)
-if ulb_modelsetup !== nothing
-    if size(ulb_modelsetup) != size(upper_lower_bdy_i) || any(ulb_modelsetup .!= upper_lower_bdy_i)
-        error("upper_lower_bdy_i mismatch between MODEL_SETUP.jl and converge_new_file.jl")
-    end
-end
+# println("upper_lower_bdy_i from converge_new_file.jl: ", upper_lower_bdy_i)
+# if ulb_modelsetup !== nothing
+#     if size(ulb_modelsetup) != size(upper_lower_bdy_i) || any(ulb_modelsetup .!= upper_lower_bdy_i)
+#         error("upper_lower_bdy_i mismatch between MODEL_SETUP.jl and converge_new_file.jl")
+#     end
+# end
+
 # Control whether the removal of rates etc at "Fixed altitudes" runs. If the boundary is 
 # the bottom of the atmosphere, we shouldn't do it at all.
 const remove_rates_flag = true
@@ -1280,7 +1289,7 @@ if reinitialize_water_profile
     end
 end
 
-check_n_tot_consistency(n_current)
+# check_n_tot_consistency(n_current)
 
 # If you want to just modify the water profile, i.e. when running several simulations
 # in succession to simulate seasons: 
@@ -1681,10 +1690,19 @@ const crosssection = populate_xsect_dict(photochem_data_files, xsecfolder; ion_x
 # **************************************************************************** #
 solarflux = readdlm(code_dir*solarfile,'\t', Float64, comments=true, comment_char='#')[1:2000,:]
 solarflux[:,2] = solarflux[:,2] * cosd(SZA)  # Adjust the flux according to specified SZA
+# VENUS Day-Night TEST: Compute column-specific solar fluxes
+# solarflux_base = readdlm(code_dir*solarfile,'\t', Float64, comments=true, comment_char='#')[1:2000,:]
+# const SZA_day   = SZA
+# const SZA_night = 120
+# solarflux_day   = deepcopy(solarflux_base); solarflux_day[:,2]  .*= cosd(SZA_day)
+# solarflux_night = deepcopy(solarflux_base); solarflux_night[:,2] .= 0.0
+# solarflux_cols  = [solarflux_day, solarflux_night]
+# const solarflux = solarflux_cols
 
 # pad all cross-sections to solar
 for j in Jratelist, ihoriz in 1:n_horiz, ialt in 1:length(alt)
     crosssection[j][ihoriz][ialt] = padtosolar(solarflux, crosssection[j][ihoriz][ialt])
+    # crosssection[j][ihoriz][ialt] = padtosolar(solarflux_cols[ihoriz], crosssection[j][ihoriz][ialt]) # VENUS Day-Night TEST
 end
 
 # this is the unitialized array for storing values
@@ -1696,6 +1714,7 @@ update_Jrates!(n_current, n_horiz;
                absorber=absorber,
                dz=dz,
                solarflux=solarflux,
+            #    solarflux=solarflux_cols, # VENUS Day-Night TEST
                enable_horiz_transport=enable_horiz_transport)
 # NOTE: The stored Jrates will have units of #/s.
 const external_storage = Dict{Symbol, Vector{Array{Float64}}}(

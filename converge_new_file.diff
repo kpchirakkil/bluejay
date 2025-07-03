@@ -1,5 +1,5 @@
 diff --git a/converge_new_file.jl b/converge_new_file.jl
-index 744cc6a..32b9a55 100644
+index 744cc6a..89116db 100644
 --- a/converge_new_file.jl
 +++ b/converge_new_file.jl
 @@ -6,8 +6,8 @@
@@ -17,14 +17,14 @@ index 744cc6a..32b9a55 100644
  # Perform the rest of the model set up
  include("MODEL_SETUP.jl")
  
-+# Print the boundary index from MODEL_SETUP if it exists so we can compare
-+ulb_modelsetup = nothing
-+if @isdefined upper_lower_bdy_i
-+    ulb_modelsetup = upper_lower_bdy_i
-+    println("upper_lower_bdy_i from MODEL_SETUP.jl: ", ulb_modelsetup)
-+else
-+    println("upper_lower_bdy_i not defined in MODEL_SETUP.jl")
-+end
++# # Print the boundary index from MODEL_SETUP if it exists so we can compare
++# ulb_modelsetup = nothing
++# if @isdefined upper_lower_bdy_i
++#     ulb_modelsetup = upper_lower_bdy_i
++#     println("upper_lower_bdy_i from MODEL_SETUP.jl: ", ulb_modelsetup)
++# else
++#     println("upper_lower_bdy_i not defined in MODEL_SETUP.jl")
++# end
  
  # **************************************************************************** #
  #                                                                              #
@@ -33,24 +33,24 @@ index 744cc6a..32b9a55 100644
  =#
  
 -function evolve_atmosphere(atm_init::Dict{Symbol, Array{ftype_ncur, 1}}, log_t_start, log_t_end; t_to_save=[], abstol=1e-12, reltol=1e-6, globvars...)
-+function check_n_tot_consistency(atmdict)
-+    """
-+    Diagnostic to verify that total densities are identical across columns when
-+    horizontal transport is disabled.
-+    """
-+    sample_alts = [alt[1], alt[Int(cld(length(alt), 2))], alt[end]]
-+    for z in sample_alts
-+        totals = [n_tot(atmdict, z, ihoriz; all_species, n_alt_index) for ihoriz in 1:n_horiz]
-+        println("n_tot at $(z/1e5) km across columns = $(totals)")
-+        if !enable_horiz_transport
-+            ref = totals[1]
-+            for d in totals[2:end]
-+                @assert isapprox(d, ref; rtol=1e-8, atol=0.0)
-+            end
-+        end
-+    end
-+    return nothing
-+end
++# function check_n_tot_consistency(atmdict)
++#     """
++#     Diagnostic to verify that total densities are identical across columns when
++#     horizontal transport is disabled.
++#     """
++#     sample_alts = [alt[1], alt[Int(cld(length(alt), 2))], alt[end]]
++#     for z in sample_alts
++#         totals = [n_tot(atmdict, z, ihoriz; all_species, n_alt_index) for ihoriz in 1:n_horiz]
++#         println("n_tot at $(z/1e5) km across columns = $(totals)")
++#         if !enable_horiz_transport
++#             ref = totals[1]
++#             for d in totals[2:end]
++#                 @assert isapprox(d, ref; rtol=1e-8, atol=0.0)
++#             end
++#         end
++#     end
++#     return nothing
++# end
 +
 +function evolve_atmosphere(atm_init::Dict{Symbol, Vector{Array{ftype_ncur}}}, log_t_start, log_t_end; t_to_save=[], abstol=1e-12, reltol=1e-6, globvars...)
      #=
@@ -622,7 +622,7 @@ index 744cc6a..32b9a55 100644
      # Unpack the parameters ---------------------------------------------------------------
      D_arr, M, E = p 
  
-@@ -658,35 +732,41 @@ function get_rates_and_jacobian(n, p, t; globvars...)
+@@ -658,35 +732,45 @@ function get_rates_and_jacobian(n, p, t; globvars...)
      end
  
      # retrieve the shortlived species from their storage and flatten them
@@ -634,6 +634,10 @@ index 744cc6a..32b9a55 100644
 +    n_cur_all = compile_ncur_all(n, n_horiz, n_short, GV.n_inactive; GV.active_longlived, GV.active_shortlived, GV.inactive_species, GV.num_layers)
 +
 +    update_Jrates!(n_cur_all, n_horiz; GV.Jratelist, GV.crosssection, GV.num_layers, GV.absorber, GV.dz, GV.solarflux, enable_horiz_transport=GV.enable_horiz_transport)
++    # VENUS Day-Night TEST
++    # update_Jrates!(n_cur_all, n_horiz; Jratelist=GV.Jratelist, crosssection=GV.crosssection,
++    #                 num_layers=GV.num_layers, absorber=GV.absorber, dz=GV.dz,
++    #                 solarflux=solarflux_cols, enable_horiz_transport=GV.enable_horiz_transport)
  
 -    update_Jrates!(n_cur_all; GV.Jratelist, GV.crosssection, GV.num_layers, GV.absorber, GV.dz, GV.solarflux)
      # copy all the Jrates into an external dictionary for storage
@@ -657,23 +661,23 @@ index 744cc6a..32b9a55 100644
      # Get the updated transport coefficients, taking into account short-lived species update
 -    tlower, tup, tdown, tupper = update_transport_coefficients(GV.transport_species, updated_ncur_all, D_arr, M; 
 +    tlower, tup, tdown, tupper = update_transport_coefficients(GV.transport_species, updated_ncur_all, D_arr, M, n_horiz; 
-+                                                               calc_nonthermal=nontherm, results_dir, sim_folder_name, 
-+                                                               Jratedict=Dict([j=>n_cur_all[j] for j in GV.Jratelist]), # Needed for nonthermal BCs
-+                                                               globvars...)
-+
-+    tbackedge, tforwards, tbackwards, tfrontedge = update_horiz_transport_coefficients(GV.transport_species, updated_ncur_all, D_arr, M, n_horiz; 
                                                                 calc_nonthermal=nontherm, results_dir, sim_folder_name, 
                                                                 Jratedict=Dict([j=>n_cur_all[j] for j in GV.Jratelist]), # Needed for nonthermal BCs
                                                                 globvars...)
  
 -    return (ratefn(n, n_short_updated, GV.n_inactive, Jrates, tup, tdown, tlower, tupper, M, E; globvars...), 
 -            chemJmat(n, n_short, GV.n_inactive, Jrates, tup, tdown, tlower, tupper, M, E; globvars...) ) 
++    tbackedge, tforwards, tbackwards, tfrontedge = update_horiz_transport_coefficients(GV.transport_species, updated_ncur_all, D_arr, M, n_horiz; 
++                                                               calc_nonthermal=nontherm, results_dir, sim_folder_name, 
++                                                               Jratedict=Dict([j=>n_cur_all[j] for j in GV.Jratelist]), # Needed for nonthermal BCs
++                                                               globvars...)
++
 +    return (ratefn(n, n_short_updated, GV.n_inactive, Jrates, tup, tdown, tlower, tupper, tforwards, tbackwards, tfrontedge, tbackedge, M, E; globvars...),
 +            chemJmat(n, n_short, GV.n_inactive, Jrates, tup, tdown, tlower, tupper, tforwards, tbackwards, tfrontedge, tbackedge, M, E; globvars...) )
  end
  
  function next_timestep(nstart, params, t, dt; reltol=1e-2, abstol=1e-12, verbose=false, globvars...)
-@@ -706,13 +786,13 @@ function next_timestep(nstart, params, t, dt; reltol=1e-2, abstol=1e-12, verbose
+@@ -706,13 +790,13 @@ function next_timestep(nstart, params, t, dt; reltol=1e-2, abstol=1e-12, verbose
  
      GV = values(globvars)
      @assert all(x->x in keys(GV), [:absorber, :active_species, :active_longlived, :active_shortlived, :all_species, :alt, 
@@ -690,7 +694,7 @@ index 744cc6a..32b9a55 100644
  
      # absolute and relative tolerance on rate update
      f_abstol = 1e-2
-@@ -835,6 +915,14 @@ function next_timestep(nstart, params, t, dt; reltol=1e-2, abstol=1e-12, verbose
+@@ -835,6 +919,14 @@ function next_timestep(nstart, params, t, dt; reltol=1e-2, abstol=1e-12, verbose
              # Turning on the f error check seems to cause it to fail very very early in the run --6 April 
              converged = (all(check_n_relerr .|| check_n_abserr)) #&& all(check_f_abserr[.!check_n_abserr] .|| check_f_relerr[.!check_n_abserr]))
          end # new =====================================================================================
@@ -705,7 +709,7 @@ index 744cc6a..32b9a55 100644
  
          iter += 1
      end
-@@ -844,16 +932,16 @@ end
+@@ -844,16 +936,16 @@ end
  
  function set_concentrations!(external_storage, n_active_long, n_active_short, n_inactive, Jrates, M, E; globvars...) 
      #=
@@ -727,7 +731,7 @@ index 744cc6a..32b9a55 100644
      Outputs:
          Updates the contents of external_storage.
  
-@@ -863,52 +951,71 @@ function set_concentrations!(external_storage, n_active_long, n_active_short, n_
+@@ -863,52 +955,71 @@ function set_concentrations!(external_storage, n_active_long, n_active_short, n_
  
      GV = values(globvars)
      @assert all(x->x in keys(GV), [:active_longlived, :active_shortlived, :inactive_species, :Tn, :Ti, :Te, :num_layers])
@@ -766,8 +770,13 @@ index 744cc6a..32b9a55 100644
 +                  Jrates[:,ihoriz,1];
 +                  GV.Tn[ihoriz,1]; GV.Ti[ihoriz,1]; GV.Te[ihoriz,1];
 +                  M[1, ihoriz]; E[ihoriz][1]]
-+
-+        argvec = convert(Array{ftype_chem}, argvec)
+ 
+-    # iterate through other altitudes in the lower atmosphere
+-    for ialt in 2:(GV.num_layers-1)
+-        argvec = [nmat_shortlived[:,ialt]; nmat_longlived[:, ialt]; nmat_inactive[:, ialt]; Jrates[:, ialt]; GV.Tn[ialt]; GV.Ti[ialt]; GV.Te[ialt]; M[ialt]; E[ialt]] # E FIX ATTEMPT
+         argvec = convert(Array{ftype_chem}, argvec)
+-        new_densities[:,ialt] .= set_concentrations_local(argvec...)
+-        # dist_zero[ialt] = check_zero_distance([nmat_shortlived[:,ialt]; nmat_longlived[:, ialt]; nmat_inactive[:, ialt]; Jrates[:, ialt]; Tn[ialt]; Ti[ialt]; Te[ialt]]...)
 +        new_densities[:,1,ihoriz] .= set_concentrations_local(argvec...)
 +
 +        # iterate through other altitudes in the lower atmosphere
@@ -790,13 +799,8 @@ index 744cc6a..32b9a55 100644
 +                  Jrates[:,ihoriz,end];
 +                  GV.Tn[ihoriz,end]; GV.Ti[ihoriz,end]; GV.Te[ihoriz,end];
 +                  M[end, ihoriz]; E[ihoriz][end]]
- 
--    # iterate through other altitudes in the lower atmosphere
--    for ialt in 2:(GV.num_layers-1)
--        argvec = [nmat_shortlived[:,ialt]; nmat_longlived[:, ialt]; nmat_inactive[:, ialt]; Jrates[:, ialt]; GV.Tn[ialt]; GV.Ti[ialt]; GV.Te[ialt]; M[ialt]; E[ialt]] # E FIX ATTEMPT
-         argvec = convert(Array{ftype_chem}, argvec)
--        new_densities[:,ialt] .= set_concentrations_local(argvec...)
--        # dist_zero[ialt] = check_zero_distance([nmat_shortlived[:,ialt]; nmat_longlived[:, ialt]; nmat_inactive[:, ialt]; Jrates[:, ialt]; Tn[ialt]; Ti[ialt]; Te[ialt]]...)
++
++        argvec = convert(Array{ftype_chem}, argvec)
 +        new_densities[:,end,ihoriz] .= set_concentrations_local(argvec...)
      end
  
@@ -830,7 +834,7 @@ index 744cc6a..32b9a55 100644
      #= 
      update n_current using the coupled reaction network, moving to the next timestep.
      Input:
-@@ -921,36 +1028,42 @@ function update!(n_current::Dict{Symbol, Array{ftype_ncur, 1}}, t, dt; abstol=1e
+@@ -921,36 +1032,46 @@ function update!(n_current::Dict{Symbol, Array{ftype_ncur, 1}}, t, dt; abstol=1e
  
      GV = values(globvars)
      @assert all(x->x in keys(GV), [:absorber, :active_species, :active_longlived, :active_shortlived, :all_species, :alt, :crosssection, 
@@ -876,6 +880,10 @@ index 744cc6a..32b9a55 100644
      # ensure Jrates are included in n_current
 -    update_Jrates!(n_current; GV.Jratelist, GV.crosssection, GV.num_layers, GV.absorber, GV.dz, GV.solarflux)
 +    update_Jrates!(n_current, n_horiz; GV.Jratelist, GV.crosssection, GV.num_layers, GV.absorber, GV.dz, GV.solarflux, enable_horiz_transport=GV.enable_horiz_transport)
++    # VENUS Day-Night TEST
++    # update_Jrates!(n_current, n_horiz; Jratelist=GV.Jratelist, crosssection=GV.crosssection,
++    #                num_layers=GV.num_layers, absorber=GV.absorber, dz=GV.dz,
++    #                solarflux=solarflux_cols, enable_horiz_transport=GV.enable_horiz_transport)
 +
 +    # Optionally adjust Jrates per horizontal column (commented out)
 +    # solarflux_multipliers = [1.0, 0.5, 2.0]
@@ -887,7 +895,7 @@ index 744cc6a..32b9a55 100644
  
  
  # **************************************************************************** #
-@@ -990,7 +1103,7 @@ const hot_HD_rc_funcs = Dict([rxn => mk_function(:((Tn, Ti, Te, M) -> $(rxn[3]))
+@@ -990,7 +1111,7 @@ const hot_HD_rc_funcs = Dict([rxn => mk_function(:((Tn, Ti, Te, M) -> $(rxn[3]))
  if make_new_alt_grid==true
      throw("The code for extending the altitude grid needs to be redone.")
      # const alt = convert(Array, (0:2e5:200e5))
@@ -896,7 +904,7 @@ index 744cc6a..32b9a55 100644
  
      # new_zmax = parse(Int64, input("Enter the new top of the atmosphere in km: "))
      # extra_entries = Int64((new_zmax - (zmax / 1e5))/(dz/1e5))
-@@ -1002,18 +1115,35 @@ if make_new_alt_grid==true
+@@ -1002,18 +1123,36 @@ if make_new_alt_grid==true
  
      # const alt = convert(Array, (0:dz:new_zmax*1e5))
      # const max_alt = new_zmax*1e5
@@ -928,16 +936,17 @@ index 744cc6a..32b9a55 100644
 +# interior altitude grid is used in multicolumn
 +const upper_lower_bdy = alt[2:end-1][something(findfirst(isequal(minimum(H2Osatfrac[:, 1])), H2Osatfrac[:, 1]), 0)] # in cm
  const upper_lower_bdy_i = n_alt_index[upper_lower_bdy]  # the uppermost layer at which water will be fixed, in cm
-+println("upper_lower_bdy_i from converge_new_file.jl: ", upper_lower_bdy_i)
-+if ulb_modelsetup !== nothing
-+    if size(ulb_modelsetup) != size(upper_lower_bdy_i) || any(ulb_modelsetup .!= upper_lower_bdy_i)
-+        error("upper_lower_bdy_i mismatch between MODEL_SETUP.jl and converge_new_file.jl")
-+    end
-+end
++# println("upper_lower_bdy_i from converge_new_file.jl: ", upper_lower_bdy_i)
++# if ulb_modelsetup !== nothing
++#     if size(ulb_modelsetup) != size(upper_lower_bdy_i) || any(ulb_modelsetup .!= upper_lower_bdy_i)
++#         error("upper_lower_bdy_i mismatch between MODEL_SETUP.jl and converge_new_file.jl")
++#     end
++# end
++
  # Control whether the removal of rates etc at "Fixed altitudes" runs. If the boundary is 
  # the bottom of the atmosphere, we shouldn't do it at all.
  const remove_rates_flag = true
-@@ -1114,7 +1244,7 @@ end
+@@ -1114,7 +1253,7 @@ end
  
  #                        Initialize electron profile                            #
  #===============================================================================#
@@ -946,7 +955,7 @@ index 744cc6a..32b9a55 100644
  
  #                          Set up the water profile                             #
  #===============================================================================#
-@@ -1128,20 +1258,30 @@ if reinitialize_water_profile
+@@ -1128,20 +1267,30 @@ if reinitialize_water_profile
                                          venus_special_h2o_bot=h2o_vmr_low, venus_special_hdo_bot=hdo_vmr_low,
                                          venus_special_h2o_top=h2o_vmr_high, venus_special_hdo_top=hdo_vmr_high,
                                          dust_storm_on=dust_storm_on, water_amt=water_case, ffac=f_fac_opts[water_case], ealt=add_water_alt_opts[water_case], 
@@ -976,12 +985,12 @@ index 744cc6a..32b9a55 100644
      end
  end
  
-+check_n_tot_consistency(n_current)
++# check_n_tot_consistency(n_current)
 +
  # If you want to just modify the water profile, i.e. when running several simulations
  # in succession to simulate seasons: 
  if update_water_profile
-@@ -1149,14 +1289,20 @@ if update_water_profile
+@@ -1149,14 +1298,20 @@ if update_water_profile
      if water_case!="standard"
          if water_loc=="loweratmo"
  
@@ -1007,7 +1016,7 @@ index 744cc6a..32b9a55 100644
          else 
              # Create the new multipliers to change the profiles
              multiplier = water_tanh_prof(non_bdy_layers./1e5; f=f_fac_opts[water_case], z0=add_water_alt_opts[water_case])
-@@ -1175,36 +1321,49 @@ if update_water_profile
+@@ -1175,36 +1330,49 @@ if update_water_profile
          end
  
          # Make the plot
@@ -1070,7 +1079,7 @@ index 744cc6a..32b9a55 100644
  
  #           Define storage for species/Jrates not solved for actively           #
  #===============================================================================#
-@@ -1212,9 +1371,10 @@ HDOprum = precip_microns(:HDO, [n_current[:HDO][1]; n_current[:HDO]; n_current[:
+@@ -1212,9 +1380,10 @@ HDOprum = precip_microns(:HDO, [n_current[:HDO][1]; n_current[:HDO]; n_current[:
  # outside of the primary ODE solver. Inactive species never change during simulation.
  # Jrates must be stored here because they have to be updated alongside evolution
  # of the atmospheric densities--the solver doesn't handle their values currently.
@@ -1083,7 +1092,7 @@ index 744cc6a..32b9a55 100644
  
  # **************************************************************************** #
  #                                                                              #
-@@ -1237,7 +1397,7 @@ println("$(Dates.format(now(), "(HH:MM:SS)")) Setting up transport network, chem
+@@ -1237,7 +1406,7 @@ println("$(Dates.format(now(), "(HH:MM:SS)")) Setting up transport network, chem
  
  #                               Transport network                               #
  #===============================================================================#
@@ -1092,7 +1101,7 @@ index 744cc6a..32b9a55 100644
  const upeqns = [Any[Any[[s], [Symbol(string(s)*"_above")],Symbol("t"*string(s)*"_up")],
                      Any[[Symbol(string(s)*"_above")],[s],Symbol("t"*string(s)*"_above_down")]]
                      for s in transport_species];
-@@ -1253,24 +1413,47 @@ const local_transport_rates = [[[Symbol("t"*string(s)*"_up") for s in transport_
+@@ -1253,24 +1422,47 @@ const local_transport_rates = [[[Symbol("t"*string(s)*"_up") for s in transport_
  
  const transportnet = [[upeqns...;]; [downeqns...;]];
  
@@ -1148,7 +1157,7 @@ index 744cc6a..32b9a55 100644
  
  # **************************************************************************** #
  #                                                                              #
-@@ -1280,10 +1463,17 @@ const active_longlived_species_rates, short_lived_density_eqn,
+@@ -1280,10 +1472,17 @@ const active_longlived_species_rates, short_lived_density_eqn,
  
  #          Arguments and expressions for metaprogramming functions              #
  #===============================================================================#
@@ -1169,7 +1178,7 @@ index 744cc6a..32b9a55 100644
  const set_concentration_arglist_typed = [:($s::ftype_chem) for s in set_concentration_arglist];
  
  # This can be used if you want to calculate M, E at computation
-@@ -1310,9 +1500,9 @@ const set_concentration_arglist_typed = [:($s::ftype_chem) for s in set_concentr
+@@ -1310,9 +1509,9 @@ const set_concentration_arglist_typed = [:($s::ftype_chem) for s in set_concentr
          =#
  
          # M and E are calculated here to ensure that the right number of ions/electrons
@@ -1181,7 +1190,7 @@ index 744cc6a..32b9a55 100644
  
          # stack overflow - answer (Cite)
          # create a result array for evaluating the production and loss expressions
-@@ -1380,8 +1570,8 @@ end
+@@ -1380,8 +1579,8 @@ end
          =#
  
          # M = $Mexpr
@@ -1192,7 +1201,7 @@ index 744cc6a..32b9a55 100644
          # Make a result array in which to store evaluated expressions 
          density_result = map(_ -> 0., $short_lived_density_eqn)  # will hold evaluated expressions.
          evaluated_inputs = map(_ -> 0., $shortlived_density_inputs) 
-@@ -1439,7 +1629,7 @@ end
+@@ -1439,7 +1638,7 @@ end
          #=
          Generates a matrix of I, J, and V values for a sparse matrix, for the 
          local layer, for influences from the layer above, and influences 
@@ -1201,7 +1210,7 @@ index 744cc6a..32b9a55 100644
          =#
  
          # M = $Mexpr 
-@@ -1457,10 +1647,21 @@ end
+@@ -1457,10 +1656,21 @@ end
          belowchemJj = $(chemJ_below[2])
          belowchemJval = convert(Array{ftype_ncur}, $(Expr(:vcat, chemJ_below[3]...)))
  
@@ -1224,7 +1233,7 @@ index 744cc6a..32b9a55 100644
      end
  end
  
-@@ -1471,7 +1672,7 @@ end
+@@ -1471,7 +1681,7 @@ end
  # **************************************************************************** #
  println("$(Dates.format(now(), "(HH:MM:SS)")) Populating cross section dictionary...")
  
@@ -1233,14 +1242,25 @@ index 744cc6a..32b9a55 100644
  
  # **************************************************************************** #
  #                                                                              #
-@@ -1482,12 +1683,26 @@ solarflux = readdlm(code_dir*solarfile,'\t', Float64, comments=true, comment_cha
+@@ -1480,14 +1690,38 @@ const crosssection = populate_xsect_dict(photochem_data_files, xsecfolder; ion_x
+ # **************************************************************************** #
+ solarflux = readdlm(code_dir*solarfile,'\t', Float64, comments=true, comment_char='#')[1:2000,:]
  solarflux[:,2] = solarflux[:,2] * cosd(SZA)  # Adjust the flux according to specified SZA
++# VENUS Day-Night TEST: Compute column-specific solar fluxes
++# solarflux_base = readdlm(code_dir*solarfile,'\t', Float64, comments=true, comment_char='#')[1:2000,:]
++# const SZA_day   = SZA
++# const SZA_night = 120
++# solarflux_day   = deepcopy(solarflux_base); solarflux_day[:,2]  .*= cosd(SZA_day)
++# solarflux_night = deepcopy(solarflux_base); solarflux_night[:,2] .= 0.0
++# solarflux_cols  = [solarflux_day, solarflux_night]
++# const solarflux = solarflux_cols
  
  # pad all cross-sections to solar
 -for j in Jratelist, ialt in 1:length(alt)
 -    crosssection[j][ialt] = padtosolar(solarflux, crosssection[j][ialt])
 +for j in Jratelist, ihoriz in 1:n_horiz, ialt in 1:length(alt)
 +    crosssection[j][ihoriz][ialt] = padtosolar(solarflux, crosssection[j][ihoriz][ialt])
++    # crosssection[j][ihoriz][ialt] = padtosolar(solarflux_cols[ihoriz], crosssection[j][ihoriz][ialt]) # VENUS Day-Night TEST
  end
  
  # this is the unitialized array for storing values
@@ -1253,6 +1273,7 @@ index 744cc6a..32b9a55 100644
 +               absorber=absorber,
 +               dz=dz,
 +               solarflux=solarflux,
++            #    solarflux=solarflux_cols, # VENUS Day-Night TEST
 +               enable_horiz_transport=enable_horiz_transport)
 +# NOTE: The stored Jrates will have units of #/s.
 +const external_storage = Dict{Symbol, Vector{Array{Float64}}}(
@@ -1263,7 +1284,7 @@ index 744cc6a..32b9a55 100644
  
  # **************************************************************************** #
  #                                                                              #
-@@ -1499,9 +1714,29 @@ println("$(Dates.format(now(), "(HH:MM:SS)")) Creating the simulation log file..
+@@ -1499,9 +1733,29 @@ println("$(Dates.format(now(), "(HH:MM:SS)")) Creating the simulation log file..
  
  # Boundary condition write out messages
  bc_type = Dict("n"=>"density", "f"=>"thermal flux", "v"=>"velocity", "ntf"=>"nonthermal flux")
@@ -1296,7 +1317,7 @@ index 744cc6a..32b9a55 100644
      end
  end
  
-@@ -1528,7 +1763,7 @@ write_to_log(logfile, ["Description: $(optional_logging_note)"], mode="w")
+@@ -1528,7 +1782,7 @@ write_to_log(logfile, ["Description: $(optional_logging_note)"], mode="w")
  # n_current[:D] = map(x->1e5*exp(-((x-184)/20)^2), non_bdy_layers/1e5) + n_current[:D]
  
  # write initial atmospheric state ==============================================
@@ -1305,7 +1326,7 @@ index 744cc6a..32b9a55 100644
  
  # Plot initial temperature and water profiles ==================================
  plot_temp_prof(Tn_arr; savepath=results_dir*sim_folder_name, Tprof_2=Ti_arr, Tprof_3=Te_arr, alt, monospace_choice, sansserif_choice)
-@@ -1536,16 +1771,21 @@ plot_temp_prof(Tn_arr; savepath=results_dir*sim_folder_name, Tprof_2=Ti_arr, Tpr
+@@ -1536,16 +1790,21 @@ plot_temp_prof(Tn_arr; savepath=results_dir*sim_folder_name, Tprof_2=Ti_arr, Tpr
  # Absolute tolerance
  if problem_type == "Gear"
      const atol = 1e-12 # absolute tolerance in ppm, used by Gear solver # NOTE: I think this is actually #/cm³ not ppm, because n_i+1 - n_i is compared against it.--Eryn
@@ -1331,7 +1352,7 @@ index 744cc6a..32b9a55 100644
           t="initial state", neutral_species, ion_species, plot_grid, speciescolor, speciesstyle, zmax, hrshortcode, rshortcode,
           monospace_choice, sansserif_choice) 
  
-@@ -1585,22 +1825,26 @@ if ftype_ncur==Double64
+@@ -1585,22 +1844,26 @@ if ftype_ncur==Double64
      println("$(Dates.format(now(), "(HH:MM:SS)")) Compiling and calling the chemical jacobian outside evolve_atmosphere (this will take ~45 min)...")
      write_to_log(logfile, "$(Dates.format(now(), "(HH:MM:SS)")) Started first chemical jacobian compile")
  
@@ -1367,7 +1388,7 @@ index 744cc6a..32b9a55 100644
      t_after_jac = time()
  
      write_to_log(logfile, "$(Dates.format(now(), "(HH:MM:SS)")) Finished first chemical jacobian compile")
-@@ -1618,18 +1862,19 @@ println("Time to beginning convergence is $(format_sec_or_min(time()-t1))\n\n")
+@@ -1618,18 +1881,19 @@ println("Time to beginning convergence is $(format_sec_or_min(time()-t1))\n\n")
  #                                                                              #
  # **************************************************************************** #
  
@@ -1392,7 +1413,7 @@ index 744cc6a..32b9a55 100644
                              "Solver" => PARAMETERS_SOLVER
                              )
  xlsx_parameter_log = "$(results_dir)$(sim_folder_name)/PARAMETERS.xlsx"
-@@ -1637,7 +1882,7 @@ xlsx_parameter_log = "$(results_dir)$(sim_folder_name)/PARAMETERS.xlsx"
+@@ -1637,7 +1901,7 @@ xlsx_parameter_log = "$(results_dir)$(sim_folder_name)/PARAMETERS.xlsx"
  ti = time()
  println("$(Dates.format(now(), "(HH:MM:SS)")) Beginning convergence")
  
@@ -1401,7 +1422,7 @@ index 744cc6a..32b9a55 100644
  
  atm_soln = Dict()
  
-@@ -1645,23 +1890,25 @@ try
+@@ -1645,23 +1909,25 @@ try
      global atm_soln, sim_time = evolve_atmosphere(n_current, mindt, maxdt; t_to_save=times_to_save, abstol=atol, reltol=rel_tol, 
                                   # glob vars from here.  
                                   absorber, active_species, active_longlived, active_shortlived, all_species, alt, 
@@ -1430,7 +1451,7 @@ index 744cc6a..32b9a55 100644
  
  write_to_log(logfile, "Finished!\nSimulation active convergence runtime $(format_sec_or_min(tf-ti))", mode="a")
  
-@@ -1677,11 +1924,11 @@ println("$(Dates.format(now(), "(HH:MM:SS)")) Simulation active convergence runt
+@@ -1677,11 +1943,11 @@ println("$(Dates.format(now(), "(HH:MM:SS)")) Simulation active convergence runt
  if problem_type == "SS"
      # Update short-lived species one more time
      println("One last update of short-lived species")
@@ -1444,7 +1465,7 @@ index 744cc6a..32b9a55 100644
  
      println("Plotting final atmosphere, writing out state")
      # Make final atmosphere plot
-@@ -1692,12 +1939,19 @@ if problem_type == "SS"
+@@ -1692,12 +1958,19 @@ if problem_type == "SS"
      write_final_state(nc_all, results_dir, sim_folder_name, final_atm_file; alt, num_layers, hrshortcode, Jratedict=Jrates, rshortcode, external_storage)
      write_to_log(logfile, "$(Dates.format(now(), "(HH:MM:SS)")) Making production/loss plots", mode="a")
      println("Making production/loss plots (this tends to take several minutes)")
@@ -1470,7 +1491,7 @@ index 744cc6a..32b9a55 100644
  elseif problem_type == "ODE"
  
      L = length(atm_soln.u)
-@@ -1710,16 +1964,16 @@ elseif problem_type == "ODE"
+@@ -1710,16 +1983,16 @@ elseif problem_type == "ODE"
              # Currently there's no workaround for this and you just have to remember NOT TO TRUST Jrates
              # at any timestep except the very last. 
              # TODO: Fix this so we just don't write Jrates in these iterations...
@@ -1490,7 +1511,7 @@ index 744cc6a..32b9a55 100644
  
              # Make final atmosphere plot
              println("Plotting final atmosphere, writing out state")
-@@ -1729,12 +1983,19 @@ elseif problem_type == "ODE"
+@@ -1729,12 +2002,19 @@ elseif problem_type == "ODE"
              write_final_state(nc_all, results_dir, sim_folder_name, final_atm_file; alt, num_layers, hrshortcode, Jratedict=Jrates, rshortcode, external_storage)
              write_to_log(logfile, "$(Dates.format(now(), "(HH:MM:SS)")) Making production/loss plots", mode="a")
              println("Making production/loss plots (this tends to take several minutes)")
@@ -1516,7 +1537,7 @@ index 744cc6a..32b9a55 100644
  
          end
          global i += 1 
-@@ -1742,31 +2003,41 @@ elseif problem_type == "ODE"
+@@ -1742,31 +2022,41 @@ elseif problem_type == "ODE"
  elseif problem_type == "Gear"
      # Plot the final atmospheric state
      println("Plotting final atmosphere, writing out state")

@@ -1,5 +1,5 @@
 diff --git a/MODEL_SETUP.jl b/MODEL_SETUP.jl
-index 2a315a9..b11e4e7 100644
+index 2a315a9..64809e9 100644
 --- a/MODEL_SETUP.jl
 +++ b/MODEL_SETUP.jl
 @@ -6,8 +6,8 @@
@@ -21,7 +21,22 @@ index 2a315a9..b11e4e7 100644
  const zmax = 250e5  # Top altitude (cm)
  const alt = convert(Array, (zmin:dz:zmax)) # These are the layer centers.
  const n_all_layers = length(alt)
-@@ -235,29 +236,39 @@ end
+@@ -224,6 +225,14 @@ const Texo_inclusive_opts = Dict("inclusive-ap"=>175.,
+ const Tsurf = Dict("Mars"=>230., "Venus"=>735.)
+ const Tmeso = Dict("Mars"=>130., "Venus"=>170.)
+ 
++# VENUS Day-Night TEST: Day/night control temperatures for Venus columns
++# const Tsurf_day   = Tsurf[planet]
++# const Tmeso_day   = Tmeso[planet]
++# const Texo_day    = Texo_opts[planet]["mean"]
++# const Tsurf_night = Tsurf[planet]
++# const Tmeso_night = Tmeso[planet]
++# const Texo_night  = Texo_opts[planet]["min"]
++
+ # Create the temperature profile control array
+ const controltemps = [Tsurf[planet], Tmeso[planet], Texo_opts[planet]["mean"]]
+ if planet=="Venus"
+@@ -235,29 +244,63 @@ end
  
  # Modify the settings if doing a special isothermal atmosphere.
  if temp_scenario=="isothermal"
@@ -68,14 +83,38 @@ index 2a315a9..b11e4e7 100644
 -const Tn_arr = T_array_dict["neutrals"]
 -const Ti_arr = T_array_dict["ions"]
 -const Te_arr = T_array_dict["electrons"]
++# VENUS Day-Night TEST: Construct separate day and night temperature profiles
++# local T_day_dict
++# local T_night_dict
++# if planet == "Mars"
++#     T_day_dict   = T_Mars(controltemps[1], controltemps[2], controltemps[3]; alt=alt)
++#     T_night_dict = T_day_dict
++# elseif planet == "Venus"
++#     T_day_dict   = T_Venus(Tsurf_day, Tmeso_day, Texo_day,
++#                            "Venus-Inputs/FoxandSung2001_temps_mike.txt"; alt=alt)
++#     T_night_dict = T_Venus(Tsurf_night, Tmeso_night, Texo_night,
++#                            "Venus-Inputs/FoxandSung2001_temps_mike.txt"; alt=alt)
++# end
++
 +# Build 2-D temperature arrays by repeating the single-column profile across columns
 +const Tn_arr = repeat(T_array_dict["neutrals"]', n_horiz, 1)
 +const Ti_arr = repeat(T_array_dict["ions"]',     n_horiz, 1)
 +const Te_arr = repeat(T_array_dict["electrons"]', n_horiz, 1)
++
++# VENUS Day-Night TEST: Build 2-D temperature arrays
++# const Tn_arr = zeros(n_horiz, num_layers+2)
++# const Ti_arr = similar(Tn_arr)
++# const Te_arr = similar(Tn_arr)
++# Tn_arr[1,:] .= T_day_dict["neutrals"]
++# Ti_arr[1,:] .= T_day_dict["ions"]
++# Te_arr[1,:] .= T_day_dict["electrons"]
++# Tn_arr[2,:] .= T_night_dict["neutrals"]
++# Ti_arr[2,:] .= T_night_dict["ions"]
++# Te_arr[2,:] .= T_night_dict["electrons"]
  
  const Tplasma_arr = Ti_arr .+ Te_arr;
  # A comment on the plasma temperature: It's more rightly defined as (Te + Ti)/2, and comes into play in the diffusion
-@@ -274,6 +285,16 @@ const Tplasma_arr = Ti_arr .+ Te_arr;
+@@ -274,6 +317,23 @@ const Tplasma_arr = Ti_arr .+ Te_arr;
  const Tprof_for_diffusion = Dict("neutral"=>Tn_arr, "ion"=>Tplasma_arr)
  const Tprof_for_Hs = Dict("neutral"=>Tn_arr, "ion"=>Ti_arr)
  
@@ -85,14 +124,21 @@ index 2a315a9..b11e4e7 100644
 +# array over altitude with values in cm/s.  The wind speed is taken from the
 +# user-configurable parameter `horiz_wind_speed` in `INPUT_PARAMETERS.jl`.
 +# Setting that value to zero disables horizontal advection.
++
 +const horiz_wind_v = [fill(horiz_wind_speed, length(alt)) for ihoriz in 1:n_horiz]
++
++# VENUS Day-Night TEST: Construct horizontal wind profiles by setting positive winds below, e.g., 140 km (day → night) and negative winds above (night → day)
++# switch_alt = 140e5  # 140 km
++# v_profile = fill(horiz_wind_speed, length(alt))
++# v_profile[alt .>= switch_alt] .= -horiz_wind_speed
++# const horiz_wind_v = [copy(v_profile) for _ in 1:n_horiz]
 +
 +# Toggle cross-column mixing `enable_horiz_transport`.  When disabled the horizontal transport
 +# routines will return zero coefficients so that each column evolves independently.
  
  #                                      Water profile settings
  # =======================================================================================================
-@@ -329,86 +350,90 @@ const H2Oi = findfirst(x->x==:H2O, active_longlived)
+@@ -329,86 +389,90 @@ const H2Oi = findfirst(x->x==:H2O, active_longlived)
  const HDOi = findfirst(x->x==:HDO, active_longlived)
  
  # Altitude at which water transitions from fixed to freely solved for
@@ -114,9 +160,9 @@ index 2a315a9..b11e4e7 100644
  #                              Species-specific scale heights
  # =======================================================================================================
 -const Hs_dict = Dict{Symbol, Vector{Float64}}([sp=>scaleH(alt, sp, Tprof_for_Hs[charge_type(sp)]; molmass, M_P, R_P) for sp in all_species])
--
 +const Hs_dict = Dict{Symbol, Vector{Vector{Float64}}}([sp => [scaleH(alt, sp, Tprof_for_Hs[charge_type(sp)][ihoriz, :]; molmass, M_P, R_P) for ihoriz in 1:n_horiz] for sp in all_species])
  
+-
 -#                                     Boundary conditions
 +#                                     Boundary conditions (lower and upper)
  # =======================================================================================================
@@ -221,7 +267,7 @@ index 2a315a9..b11e4e7 100644
                                      #           "ntf"=>[NaN, "see boundaryconditions()"]),
  
                                      # unusued neutral boundary conditions
-@@ -417,8 +442,8 @@ elseif planet=="Venus"
+@@ -417,8 +481,8 @@ elseif planet=="Venus"
                                      #:NO=>Dict("v"=>[-KoverH_lowerbdy, NaN], #="n"=>[3e8, NaN],=# #="n"=>[5.5e-9*ntot_at_lowerbdy, NaN], =# "f"=>[NaN, 0.]),
  
                                      # assume no ion loss, appropriate for global average and small observed rates
@@ -232,7 +278,7 @@ index 2a315a9..b11e4e7 100644
                                      #:Opl=>Dict("v"=>[-KoverH_lowerbdy, 2e5], ), # "f"=>[NaN, 2.1e8] # tends to cause hollowing out of atmosphere
                                      );
  
-@@ -428,13 +453,44 @@ elseif planet=="Venus"
+@@ -428,13 +492,44 @@ elseif planet=="Venus"
          if sp in keys(manual_speciesbclist)
              auto_speciesbclist[sp] = manual_speciesbclist[sp]
          else
@@ -278,7 +324,7 @@ index 2a315a9..b11e4e7 100644
  # ***************************************************************************************************** #
  #                                                                                                       #
  #                         Set up simulation filenames and define input files                            #
-@@ -618,7 +674,10 @@ PARAMETERS_SPLISTS = DataFrame(AllSpecies=[[string(a) for a in all_species]...,
+@@ -618,7 +713,10 @@ PARAMETERS_SPLISTS = DataFrame(AllSpecies=[[string(a) for a in all_species]...,
                                 Jratelist=[[string(j) for j in Jratelist]..., ["" for i in 1:L-length(Jratelist)]...]);
  PARAMETERS_SOLVER = DataFrame(Field=[], Value=[]);
  PARAMETERS_XSECTS = DataFrame(Species=[], Description=[], Filename=[]);

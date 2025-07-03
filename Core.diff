@@ -1,5 +1,5 @@
 diff --git a/Photochemistry/src/Core.jl b/Photochemistry/src/Core.jl
-index 5128abd..f1a7a2b 100644
+index 5128abd..e1a1974 100644
 --- a/Photochemistry/src/Core.jl
 +++ b/Photochemistry/src/Core.jl
 @@ -88,60 +88,103 @@ function electron_density(atmdict; globvars...)
@@ -80,10 +80,7 @@ index 5128abd..f1a7a2b 100644
 +    # Loop over each horizontal column to find individual exobase altitudes
 +    for ihoriz in 1:GV.n_horiz
 +        Tn_col = GV.Tn[ihoriz, :]
- 
--    if typeof(exobase_alt)==Nothing # If no exobase is found, use the top of the atmosphere.
--        if verbose
--            println("Warning: No exobase found for species $(sp); assuming top of atmosphere, but this is not guaranteed to be true.")
++
 +        # Calculate scale height using temperature for this column
 +        # H_s = scaleH(GV.non_bdy_layers, sp, Tn_col[ihoriz, 2:end-1]; globvars...)
 +        H_s = scaleH(GV.non_bdy_layers, sp, Tn_col[2:end-1]; globvars...)
@@ -92,7 +89,10 @@ index 5128abd..f1a7a2b 100644
 +        mfp_sp = 1 ./ (GV.collision_xsect[sp] .* n_tot(atmdict, ihoriz; GV.all_species, GV.n_alt_index))
 +
 +        exobase_alt = findfirst(mfp_sp .>= H_s)
-+
+ 
+-    if typeof(exobase_alt)==Nothing # If no exobase is found, use the top of the atmosphere.
+-        if verbose
+-            println("Warning: No exobase found for species $(sp); assuming top of atmosphere, but this is not guaranteed to be true.")
 +        if exobase_alt === nothing # If no exobase is found, use the top of the atmosphere.
 +            if verbose
 +                println("Warning: No exobase found for species $(sp) at column $(ihoriz); assuming top of atmosphere, but this is not guaranteed to be true.")
@@ -645,7 +645,11 @@ index 5128abd..f1a7a2b 100644
 +    # Calculate optical depth (now 2-D)
 +    solarabs = optical_depth(n_cur_densities; n_horiz=n_horiz, globvars...)
 +    # solarabs now records the total optical depth of the atmosphere at each wavelength and altitude
-+
+ 
+-    # actinic flux at each wavelength is solar flux diminished by total
+-    # optical depth
+-    for ialt in [1:GV.num_layers;]
+-        solarabs[ialt] = GV.solarflux[:,2] .* exp.(-solarabs[ialt])
 +     # Determine whether solar flux is provided per column.  If a single array is
 +    # given, replicate it for all columns to maintain backwards compatibility.
 +    flux_per_column = if GV.solarflux isa Vector
@@ -653,11 +657,7 @@ index 5128abd..f1a7a2b 100644
 +    else
 +        [GV.solarflux for _ in 1:n_horiz]
 +    end
- 
--    # actinic flux at each wavelength is solar flux diminished by total
--    # optical depth
--    for ialt in [1:GV.num_layers;]
--        solarabs[ialt] = GV.solarflux[:,2] .* exp.(-solarabs[ialt])
++
 +    # Actinic flux at each wavelength and each horizontal column is the solar
 +    # flux for that column diminished by the integrated optical depth above that
 +    # layer.
@@ -669,7 +669,7 @@ index 5128abd..f1a7a2b 100644
      end
  
      # You can uncomment these to plot the extinction at each atmospheric level, but you have to feed it a specific Jrate
-@@ -993,10 +1128,34 @@ function update_Jrates!(n_cur_densities::Dict{Symbol, Array{ftype_ncur, 1}}; nla
+@@ -993,12 +1128,36 @@ function update_Jrates!(n_cur_densities::Dict{Symbol, Array{ftype_ncur, 1}}; nla
      # altitude times the actinic flux.
      # BLAS.dot includes an integration (sum) across wavelengths, i.e:
      # (a·b) = aa + ab + ab + bb etc that kind of thing
@@ -692,21 +692,23 @@ index 5128abd..f1a7a2b 100644
 +                    BLAS.dot(nlambda, solarabs[ihoriz][ialt], 1, GV.crosssection[j][ihoriz][ialt+1], 1) # updated update_Jrates! so Jrates integrate column-specific cross sections
 +                )
 +            end
-+        end
-+    end
-+
-+    # Verify identical Jrates when horizontal transport is disabled
-+    if n_horiz > 1 && !GV.enable_horiz_transport
-+        for j in GV.Jratelist
-+            if haskey(n_cur_densities, j)
-+                first = n_cur_densities[j][1]
-+                for col in n_cur_densities[j][2:end]
-+                    @assert isapprox(col, first; rtol=1e-8, atol=0.0) "Jrate mismatch across columns for $(j)"
-+                end
-+            end
          end
      end
++
++    # # Verify identical Jrates when horizontal transport is disabled
++    # if n_horiz > 1 && !GV.enable_horiz_transport
++    #     for j in GV.Jratelist
++    #         if haskey(n_cur_densities, j)
++    #             first = n_cur_densities[j][1]
++    #             for col in n_cur_densities[j][2:end]
++    #                 @assert isapprox(col, first; rtol=1e-8, atol=0.0) "Jrate mismatch across columns for $(j)"
++    #             end
++    #         end
++    #     end
++    # end
  end
+ 
+ #===============================================================================#
 @@ -1032,7 +1191,7 @@ function effusion_velocity(Texo, m; globvars...)
  end
  
@@ -1632,7 +1634,7 @@ index 5128abd..f1a7a2b 100644
 -    Ouptut:
 +        nt: Total atmospheric density.
 +            - For single-column case: Vector (#/cm³)
-+            - For multi-column, this should be a Matrix (#altitudes, n_horiz), and `ihoriz` must be specified.
++            - For multi-column, this should be a Matrix (n_horiz × #altitudes) with horizontal index first, and `ihoriz` must be specified.
 +    Output:
          k: eddy diffusion coefficients at all altitudes.
             Units: cm^2/s
@@ -1658,7 +1660,7 @@ index 5128abd..f1a7a2b 100644
 +        upperatm = findall(z .> 60e5)
 +
 +        # Assign constant Keddy below 60 km altitude (lower atmosphere)
-+        k[z .<= 60e5] .= 1e6
++        k[z .<= 60e5] .= 10. ^ 6
 +
 +        # Upper atmosphere (>60 km), altitude-dependent Keddy
 +        if ndims(nt) == 1  # Single-column case
@@ -1673,9 +1675,9 @@ index 5128abd..f1a7a2b 100644
 +    elseif GV.planet == "Venus"
 +        # Venus: just an altitude-dependent eddy diffusion
 +        if ndims(nt) == 1  # Single-column case
-+            k .= 8e12 .* (nt .^ -0.5)
++            k .= 8e12 .* nt .^ (-0.5)
 +        else  # Multi-column case
-+            k .= 8e12 .* (nt[ihoriz, :] .^ -0.5)
++            k .= 8e12 .* (nt[ihoriz, :] .^ (-0.5))
 +        end
      end
  
@@ -2018,8 +2020,12 @@ index 5128abd..f1a7a2b 100644
 +            tbackwards[ihoriz, :, isp] .= fluxcoefs_horiz_all[sp][ihoriz][2:end-1, 1]
 +            tforwards[ihoriz, :, isp]  .= fluxcoefs_horiz_all[sp][ihoriz][2:end-1, 2]
 +        end
-+    end
-+
+     end
+-    bc_dict = boundaryconditions(fluxcoefs_all, atmdict, M; nonthermal=calc_nonthermal, globvars...)
+ 
+-    # transport coefficients for boundary layers
+-    tlower = permutedims(reduce(hcat, [bc_dict[sp][1,:] for sp in GV.transport_species]))
+-    tupper = permutedims(reduce(hcat, [bc_dict[sp][2,:] for sp in GV.transport_species]))
 +    # Validate horizontal coefficient shapes
 +    expected_flux_shape = (GV.n_all_layers, 2)
 +    @assert all(all(size(mat) == expected_flux_shape for mat in mats)
@@ -2038,12 +2044,9 @@ index 5128abd..f1a7a2b 100644
 +        front_cols = [bc_dict_horiz[sp][ialt][2, :] for sp in GV.transport_species]
 +        tbackedge[ialt]  = permutedims(reduce(hcat, back_cols))
 +        tfrontedge[ialt] = permutedims(reduce(hcat, front_cols))
-     end
--    bc_dict = boundaryconditions(fluxcoefs_all, atmdict, M; nonthermal=calc_nonthermal, globvars...)
++    end
  
--    # transport coefficients for boundary layers
--    tlower = permutedims(reduce(hcat, [bc_dict[sp][1,:] for sp in GV.transport_species]))
--    tupper = permutedims(reduce(hcat, [bc_dict[sp][2,:] for sp in GV.transport_species]))
+-    return tlower, tup, tdown, tupper
 +    expected_edge_shape = (length(GV.transport_species), 2)
 +    @assert all(size(mat) == expected_edge_shape for mat in tbackedge) "horizontal back edge shape mismatch"
 +    @assert all(size(mat) == expected_edge_shape for mat in tfrontedge) "horizontal front edge shape mismatch"
@@ -2075,8 +2078,7 @@ index 5128abd..f1a7a2b 100644
 +                    " max backward=", max_back)
 +        end
 +    end
- 
--    return tlower, tup, tdown, tupper
++
 +    return tbackedge, tforwards, tbackwards, tfrontedge
  end
  
@@ -2220,20 +2222,20 @@ index 5128abd..f1a7a2b 100644
 -end 
 +    plot_water_profile(atmdict, GV.results_dir*GV.sim_folder_name; watersat=satarray, H2Oinitf=H2Oinitfrac_all[1], plot_grid=GV.plot_grid, showonly=showonly, globvars...)
 +
-+    # ----------------------------------------------------------------------
-+    # Consistency checks when horizontal transport is disabled
-+    # ----------------------------------------------------------------------
-+    if !GV.enable_horiz_transport && GV.n_horiz > 1
-+        base_H2O = atmdict[:H2O][1]
-+        base_HDO = atmdict[:HDO][1]
++    # # ----------------------------------------------------------------------
++    # # Consistency checks when horizontal transport is disabled
++    # # ----------------------------------------------------------------------
++    # if !GV.enable_horiz_transport && GV.n_horiz > 1
++    #     base_H2O = atmdict[:H2O][1]
++    #     base_HDO = atmdict[:HDO][1]
 +
-+        for ihoriz in 2:GV.n_horiz
-+            @assert size(atmdict[:H2O][ihoriz]) == size(base_H2O) "H2O profile shape mismatch across columns"
-+            @assert size(atmdict[:HDO][ihoriz]) == size(base_HDO) "HDO profile shape mismatch across columns"
-+            @assert all(atmdict[:H2O][ihoriz] .== base_H2O) "H2O profiles differ across columns with horizontal transport disabled"
-+            @assert all(atmdict[:HDO][ihoriz] .== base_HDO) "HDO profiles differ across columns with horizontal transport disabled"
-+        end
-+    end
++    #     for ihoriz in 2:GV.n_horiz
++    #         @assert size(atmdict[:H2O][ihoriz]) == size(base_H2O) "H2O profile shape mismatch across columns"
++    #         @assert size(atmdict[:HDO][ihoriz]) == size(base_HDO) "HDO profile shape mismatch across columns"
++    #         @assert all(atmdict[:H2O][ihoriz] .== base_H2O) "H2O profiles differ across columns with horizontal transport disabled"
++    #         @assert all(atmdict[:HDO][ihoriz] .== base_HDO) "HDO profiles differ across columns with horizontal transport disabled"
++    #     end
++    # end
 +end
  
  function water_tanh_prof(z; f=10, z0=62, dz=11)

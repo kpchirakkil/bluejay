@@ -225,6 +225,14 @@ const Texo_inclusive_opts = Dict("inclusive-ap"=>175.,
 const Tsurf = Dict("Mars"=>230., "Venus"=>735.)
 const Tmeso = Dict("Mars"=>130., "Venus"=>170.)
 
+# VENUS Day-Night TEST: Day/night control temperatures for Venus columns
+# const Tsurf_day   = Tsurf[planet]
+# const Tmeso_day   = Tmeso[planet]
+# const Texo_day    = Texo_opts[planet]["mean"]
+# const Tsurf_night = Tsurf[planet]
+# const Tmeso_night = Tmeso[planet]
+# const Texo_night  = Texo_opts[planet]["min"]
+
 # Create the temperature profile control array
 const controltemps = [Tsurf[planet], Tmeso[planet], Texo_opts[planet]["mean"]]
 if planet=="Venus"
@@ -265,10 +273,34 @@ elseif planet == "Venus"
                            "Venus-Inputs/FoxandSung2001_temps_mike.txt"; alt=alt)
 end
 
+# VENUS Day-Night TEST: Construct separate day and night temperature profiles
+# local T_day_dict
+# local T_night_dict
+# if planet == "Mars"
+#     T_day_dict   = T_Mars(controltemps[1], controltemps[2], controltemps[3]; alt=alt)
+#     T_night_dict = T_day_dict
+# elseif planet == "Venus"
+#     T_day_dict   = T_Venus(Tsurf_day, Tmeso_day, Texo_day,
+#                            "Venus-Inputs/FoxandSung2001_temps_mike.txt"; alt=alt)
+#     T_night_dict = T_Venus(Tsurf_night, Tmeso_night, Texo_night,
+#                            "Venus-Inputs/FoxandSung2001_temps_mike.txt"; alt=alt)
+# end
+
 # Build 2-D temperature arrays by repeating the single-column profile across columns
 const Tn_arr = repeat(T_array_dict["neutrals"]', n_horiz, 1)
 const Ti_arr = repeat(T_array_dict["ions"]',     n_horiz, 1)
 const Te_arr = repeat(T_array_dict["electrons"]', n_horiz, 1)
+
+# VENUS Day-Night TEST: Build 2-D temperature arrays
+# const Tn_arr = zeros(n_horiz, num_layers+2)
+# const Ti_arr = similar(Tn_arr)
+# const Te_arr = similar(Tn_arr)
+# Tn_arr[1,:] .= T_day_dict["neutrals"]
+# Ti_arr[1,:] .= T_day_dict["ions"]
+# Te_arr[1,:] .= T_day_dict["electrons"]
+# Tn_arr[2,:] .= T_night_dict["neutrals"]
+# Ti_arr[2,:] .= T_night_dict["ions"]
+# Te_arr[2,:] .= T_night_dict["electrons"]
 
 const Tplasma_arr = Ti_arr .+ Te_arr;
 # A comment on the plasma temperature: It's more rightly defined as (Te + Ti)/2, and comes into play in the diffusion
@@ -291,7 +323,14 @@ const Tprof_for_Hs = Dict("neutral"=>Tn_arr, "ion"=>Ti_arr)
 # array over altitude with values in cm/s.  The wind speed is taken from the
 # user-configurable parameter `horiz_wind_speed` in `INPUT_PARAMETERS.jl`.
 # Setting that value to zero disables horizontal advection.
+
 const horiz_wind_v = [fill(horiz_wind_speed, length(alt)) for ihoriz in 1:n_horiz]
+
+# VENUS Day-Night TEST: Construct horizontal wind profiles by setting positive winds below, e.g., 140 km (day → night) and negative winds above (night → day)
+# switch_alt = 140e5  # 140 km
+# v_profile = fill(horiz_wind_speed, length(alt))
+# v_profile[alt .>= switch_alt] .= -horiz_wind_speed
+# const horiz_wind_v = [copy(v_profile) for _ in 1:n_horiz]
 
 # Toggle cross-column mixing `enable_horiz_transport`.  When disabled the horizontal transport
 # routines will return zero coefficients so that each column evolves independently.
