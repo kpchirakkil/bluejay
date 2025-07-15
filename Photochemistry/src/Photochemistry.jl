@@ -76,10 +76,12 @@ export
     ## Transport and boundary conditions
     binary_dcoeff_inCO2, 
     boundaryconditions, 
+    boundaryconditions_horiz,
     Dcoef_neutrals, 
     Dcoef!, 
     diffparams, 
     fluxcoefs, 
+    fluxcoefs_horiz,
     Keddy, 
     update_diffusion_and_scaleH, 
     update_transport_coefficients,
