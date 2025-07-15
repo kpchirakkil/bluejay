@@ -1,4 +1,3 @@
-
 # **************************************************************************** #
 #                                                                              #
 #                             PLOTTING FUNCTIONS                               #
@@ -212,9 +211,10 @@ function make_equilibrium_plots_temp(case_folders; savepath=nothing, extrafn="",
 
         vardicts[atm_keys[i]] = load_from_paramlog(thefolder; GV.alt)
 
-        Tn_all[:, i] = vardicts[atm_keys[i]]["Tn_arr"];
-        Ti_all[:, i] = vardicts[atm_keys[i]]["Ti_arr"];
-        Te_all[:, i] = vardicts[atm_keys[i]]["Te_arr"];
+        # Store the first column (ihoriz=1) for each temperature array for backward compatibility
+        Tn_all[:, i] = vardicts[atm_keys[i]]["Tn_arr"][1, :];
+        Ti_all[:, i] = vardicts[atm_keys[i]]["Ti_arr"][1, :];
+        Te_all[:, i] = vardicts[atm_keys[i]]["Te_arr"][1, :];
     end
     
     esc_df_lowT = final_escape(case_folders[1], "final_atmosphere.h5"; globvars...)
@@ -2121,9 +2121,11 @@ function reincorp_vs_time(fax, fax2, t, thefiles, cols, change_indices; typeflag
         
         # Need to get the temperature arrays, but we have stored them all for every file
         if typeflag=="temp"
-            this_Tn = GV.Tn[2:end-1, ti]
+            # Extract the first column for backward compatibility with 1-D analysis
+            this_Tn = GV.Tn[1, 2:end-1]
         else
-            this_Tn = GV.Tn
+            # Extract the first column for backward compatibility with 1-D analysis
+            this_Tn = GV.Tn[1, :]
         end
             
         println(length(this_Tn))

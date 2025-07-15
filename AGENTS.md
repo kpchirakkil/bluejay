@@ -59,13 +59,19 @@ Note that this is a simplified version with 4 species and 7 altitude bins.
 - Horizontal boundary conditions are stored separately per altitude with bc_dict_horiz[sp][ialt][row, col] and populated consistently inside the loop over ialt
 - Make sure the horizontal transport coefficients are placed correctly in the transport matrices (chemical Jacobian and rate functions)
 
+## Horizontal advection timescale
+
+- Use appropriate wind speeds and column widths, and advection time scales.
+
 ## Merging multicolumn with master
 
-- Make sure the 2-D multicolumn framework is working in the full set-up (all species and altitudes) with horizontal transport implemented.
-- Make sure the multicolumn branch is working for both Mars and Venus. Master branch (1-D single column) is working for both Mars and Venus.
-- Merge multicolumn branch with master branch.
+- I verified that 2-D multicolumn gives the same final atmosphere as the original 1-D master for both Mars and Venus. I turned off the horizontal transport and all columns are identical as the 1-D; this confirms the 2-D multicolumn is working with all the species and altitudes as in the 1-D master.
 
-## Create diff files
+- When `n_horiz=1`, the 2-D multicolumn model falls back into a 1-D model.
+
+- Help me merge multicolumn branch with master branch.
+
+## How to create diff files in my local computer
 
 git diff master multicolumn -- Photochemistry/src/Core.jl > Core.diff
 git diff master multicolumn -- Photochemistry/src/AnalyzeChemAndTransport.jl > AnalyzeChemAndTransport.diff
@@ -87,5 +93,3 @@ git diff master multicolumn -- SeasonsAnalysis/src/Support.jl > Support.diff
 git diff master multicolumn -- Solar\ spectra/scale_solar_spectrum.py > scale_solar_spectrum.diff
 <!-- git diff master multicolumn -- SeasonsAnalysis/src/SeasonsAnalysis.jl > SeasonsAnalysis.diff -->
 <!-- git diff master multicolumn -- scale_solar_spectrum.py > scale_solar_spectrum.diff -->
-
-Only edit .jl or .py files. No need to edit the .diff files - I am producing them manually on my computer.

@@ -477,10 +477,10 @@ function plot_Jrates(sp, atmdict::Dict{Symbol, Vector{Array{ftype_ncur}}}, n_hor
         Te_col = GV.Te[ihoriz, :]
 
         # Obtain the reaction rates specifically for this horizontal column
-        rxd_prod, prod_rc = get_volume_rates(sp, atmdict, ihoriz; 
+        rxd_prod, prod_rc = get_volume_rates(sp, atmdict, n_horiz; 
                                 which="Jrates", globvars..., 
                                 Tn=Tn_col[2:end-1], Ti=Ti_col[2:end-1], Te=Te_col[2:end-1])
-        rxd_loss, loss_rc = get_volume_rates(sp, atmdict, ihoriz; 
+        rxd_loss, loss_rc = get_volume_rates(sp, atmdict, n_horiz; 
                                 which="Jrates", globvars..., 
                                 Tn=Tn_col[2:end-1], Ti=Ti_col[2:end-1], Te=Te_col[2:end-1])
 
@@ -786,7 +786,13 @@ function plot_rxns(sp::Symbol, atmdict::Dict{Symbol, Vector{Array{ftype_ncur}}},
         loss_without_nans = [filter(x->!isnan(x), total_chem_loss[ihoriz]) for ihoriz in 1:n_horiz]
 	minx[1] = minimum( minimum([[minimum(prod_without_nans[ihoriz]), minimum(loss_without_nans[ihoriz])] for ihoriz in 1:n_horiz]) )
         maxx[1] = maximum( maximum([[maximum(prod_without_nans[ihoriz]), maximum(loss_without_nans[ihoriz])] for ihoriz in 1:n_horiz]) )
-        minx[1] = 10^(floor(log10(minx[1])))
+        
+        # Fix for UserWarning: prevent non-positive xlim on log-scaled axis
+        if minx[1] <= 0
+            minx[1] = 1e-12  # Set to a small positive value
+        else
+            minx[1] = 10^(floor(log10(minx[1])))
+        end
         maxx[1] = 10^(ceil(log10(maxx[1])))
 
         ax[1].legend(fontsize=10)
@@ -836,8 +842,16 @@ function plot_rxns(sp::Symbol, atmdict::Dict{Symbol, Vector{Array{ftype_ncur}}},
         end
 
         # set the x lims for transport axis. Special because total_transport_prod, and etc are incomplete arrays.
-	minx[2] = 10.0^(floor(log10(minimum([minimum(abs.(filter(x->!isnan(x),transportPL[ihoriz]))) for ihoriz in 1:n_horiz]))))
-	maxx[2] = 10.0^(ceil(log10(maximum([maximum(abs.(filter(x->!isnan(x),transportPL[ihoriz]))) for ihoriz in 1:n_horiz]))))
+	transport_min = minimum([minimum(abs.(filter(x->!isnan(x),transportPL[ihoriz]))) for ihoriz in 1:n_horiz])
+	transport_max = maximum([maximum(abs.(filter(x->!isnan(x),transportPL[ihoriz]))) for ihoriz in 1:n_horiz])
+	
+	# Fix for UserWarning: prevent non-positive xlim on log-scaled axis
+	if transport_min <= 0
+	    minx[2] = 1e-12  # Set to a small positive value
+	else
+	    minx[2] = 10.0^(floor(log10(transport_min)))
+	end
+	maxx[2] = 10.0^(ceil(log10(transport_max)))
 
         # Plot the transport production and loss without the boundary layers
 	for ihoriz in 1:n_horiz
@@ -872,7 +886,13 @@ function plot_rxns(sp::Symbol, atmdict::Dict{Symbol, Vector{Array{ftype_ncur}}},
 
     minx[3] = minimum(minimum([[minimum(prod_without_nans[ihoriz]), minimum(loss_without_nans[ihoriz])] for ihoriz in 1:n_horiz]))
     maxx[3] = maximum(maximum([[maximum(prod_without_nans[ihoriz]), maximum(loss_without_nans[ihoriz])] for ihoriz in 1:n_horiz]))
-    minx[3] = 10^(floor(log10(minx[3])))
+    
+    # Fix for UserWarning: prevent non-positive xlim on log-scaled axis
+    if minx[3] <= 0
+        minx[3] = 1e-12  # Set to a small positive value
+    else
+        minx[3] = 10^(floor(log10(minx[3])))
+    end
     maxx[3] = 10^(ceil(log10(maxx[3])))
 
     ax[3].legend(fontsize=12)

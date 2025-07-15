@@ -163,7 +163,7 @@ const conv_ions = Dict("Mars"=>[:Arpl, :ArHpl, :ArDpl,
 
 # More specific settings for controling the modeling of species
 # -------------------------------------------------------------------
-const dont_compute_chemistry = [] #  :Ar should be in this list if running Mars.
+const dont_compute_chemistry = planet == "Mars" ? [:Ar] : [] #  :Ar should be in this list if running Mars.
 const dont_compute_transport = []
 const dont_compute_either_chem_or_transport = []  # Chemical species which should never update their densities, but may participate in chem+transport.
     # OPTIONS: Any species included in the model. 
@@ -178,8 +178,8 @@ const make_P_and_L_plots = true  # Makes a 3-panel plot showing production and l
 
 # Algorithm tolerances
 # =======================================================================================================
-const rel_tol = 1e-6
-const abs_tol = 1e-12 
+const rel_tol = 1e-3
+const abs_tol = 1e-9 
 
 # Helpful options for adding new things to the model 
 # =======================================================================================================
@@ -195,7 +195,7 @@ const use_ambipolar = true # Toggle ambipolar diffusion for ions.
 const use_molec_diff = true # Toggle molecular diffusion. If turned off, eddy diffusion remains active.
 
 # Number of vertical columns in the simulation. Set this to 1 for a single-column run or >1 for a multicolumn model.
-const n_horiz = 2
+const n_horiz = 3
 
 # Default horizontal wind speed in cm/s used to initialize wind profiles in
 # `MODEL_SETUP.jl`. Set to zero for no horizontal advection.
