@@ -326,10 +326,10 @@ const Tprof_for_Hs = Dict("neutral"=>Tn_arr, "ion"=>Ti_arr)
 
 const horiz_wind_v = [fill(horiz_wind_speed, length(alt)) for ihoriz in 1:n_horiz]
 
-# VENUS Day-Night TEST: Construct horizontal wind profiles by setting positive winds below, e.g., 140 km (day → night) and negative winds above (night → day)
-# switch_alt = 140e5  # 140 km
-# v_profile = fill(horiz_wind_speed, length(alt))
-# v_profile[alt .>= switch_alt] .= -horiz_wind_speed
+# VENUS Day-Night TEST: Construct horizontal wind profiles by setting negative below the switch altitude and positive above
+# switch_alt = 140e5               # altitude in cm where winds reverse (~140 km)
+# v_profile = fill(-horiz_wind_speed, length(alt))    # low-alt winds: night→day
+# v_profile[alt .>= switch_alt] .= horiz_wind_speed   # high-alt winds: day→night
 # const horiz_wind_v = [copy(v_profile) for _ in 1:n_horiz]
 
 # Toggle cross-column mixing `enable_horiz_transport`.  When disabled the horizontal transport
