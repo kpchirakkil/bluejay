@@ -224,7 +224,7 @@ const horiz_column_width = π * Dict("Mars"=>3396e5, "Venus"=>6050e5)[planet]
 
 # If true, horizontal transport uses altitude-dependent width dx(z) = π(R + z).
 # If false, it uses constant `horiz_column_width`.
-const use_altitude_dependent_horiz_dx = true
+const use_altitude_dependent_horiz_dx = false
 
 # Horizontal transport timescale in hours. This determines the wind speed via: wind_speed = horiz_column_width / (timescale * 3600)
 # For Venus: 23-44 hours corresponds to 230-120 m/s wind speeds

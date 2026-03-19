@@ -640,18 +640,18 @@ function plot_limiting_flux(atm_states, atm_keys, Tn_all; savepath=nothing, simp
     # Limiting flux
     if all_carriers
         
-        limflux_H = [limiting_flux(:H, atm_states[atm_keys[i]], Tn_all[2:end-1, i], GV.n_horiz; ihoriz=ihoriz, globvars...) +
-                     limiting_flux(:H2, atm_states[atm_keys[i]], Tn_all[2:end-1, i], GV.n_horiz; ihoriz=ihoriz, globvars...) +
-                     2 * limiting_flux(:H2O, atm_states[atm_keys[i]], Tn_all[2:end-1, i], GV.n_horiz; ihoriz=ihoriz, globvars...) +
-                     limiting_flux(:HDO, atm_states[atm_keys[i]], Tn_all[2:end-1, i], GV.n_horiz; ihoriz=ihoriz, globvars...) +
-                     limiting_flux(:OH, atm_states[atm_keys[i]], Tn_all[2:end-1, i], GV.n_horiz; ihoriz=ihoriz, globvars...) for i in therange]
-        limflux_D = [limiting_flux(:D, atm_states[atm_keys[i]], Tn_all[2:end-1, i], GV.n_horiz; ihoriz=ihoriz, globvars...) +
-                     limiting_flux(:HD, atm_states[atm_keys[i]], Tn_all[2:end-1, i], GV.n_horiz; ihoriz=ihoriz, globvars...) +
-                     limiting_flux(:HDO, atm_states[atm_keys[i]], Tn_all[2:end-1, i], GV.n_horiz; ihoriz=ihoriz, globvars...) +
-                     limiting_flux(:OD, atm_states[atm_keys[i]], Tn_all[2:end-1, i], GV.n_horiz; ihoriz=ihoriz, globvars...) for i in therange]
+        limflux_H = [limiting_flux(:H, atm_states[atm_keys[i]], Tn_all[2:end-1, i]; ihoriz=ihoriz, globvars...) +
+                     limiting_flux(:H2, atm_states[atm_keys[i]], Tn_all[2:end-1, i]; ihoriz=ihoriz, globvars...) +
+                     2 * limiting_flux(:H2O, atm_states[atm_keys[i]], Tn_all[2:end-1, i]; ihoriz=ihoriz, globvars...) +
+                     limiting_flux(:HDO, atm_states[atm_keys[i]], Tn_all[2:end-1, i]; ihoriz=ihoriz, globvars...) +
+                     limiting_flux(:OH, atm_states[atm_keys[i]], Tn_all[2:end-1, i]; ihoriz=ihoriz, globvars...) for i in therange]
+        limflux_D = [limiting_flux(:D, atm_states[atm_keys[i]], Tn_all[2:end-1, i]; ihoriz=ihoriz, globvars...) +
+                     limiting_flux(:HD, atm_states[atm_keys[i]], Tn_all[2:end-1, i]; ihoriz=ihoriz, globvars...) +
+                     limiting_flux(:HDO, atm_states[atm_keys[i]], Tn_all[2:end-1, i]; ihoriz=ihoriz, globvars...) +
+                     limiting_flux(:OD, atm_states[atm_keys[i]], Tn_all[2:end-1, i]; ihoriz=ihoriz, globvars...) for i in therange]
     else
-        limflux_H = [limiting_flux(:H, atm_states[atm_keys[i]], Tn_all[2:end-1, i], GV.n_horiz; ihoriz=ihoriz, globvars...) for i in therange]
-        limflux_D = [limiting_flux(:D, atm_states[atm_keys[i]], Tn_all[2:end-1, i], GV.n_horiz; ihoriz=ihoriz, globvars...) for i in therange]
+        limflux_H = [limiting_flux(:H, atm_states[atm_keys[i]], Tn_all[2:end-1, i]; ihoriz=ihoriz, globvars...) for i in therange]
+        limflux_D = [limiting_flux(:D, atm_states[atm_keys[i]], Tn_all[2:end-1, i]; ihoriz=ihoriz, globvars...) for i in therange]
     end
 
     # Typical escape fluxes for these files:
@@ -1169,7 +1169,7 @@ function flux_vs_time(thefiles, IVAR_array, change_indices, sp; fn="flux_vs_time
         
         # Get flux
         n_horiz = length(thisatm[GV.all_species[1]])
-        flux_heatmap[:, c] = get_directional_fluxes(sp, thisatm, n_horiz; nonthermal=true, Jratedict, speciesbclist_vert=vardict["speciesbclist_vert"],
+        flux_heatmap[:, c] = get_directional_fluxes(sp, thisatm; nonthermal=true, Jratedict, speciesbclist_vert=vardict["speciesbclist_vert"],
                                                          Tprof_for_Hs=vardict["Tprof_for_Hs"], Tprof_for_diffusion=vardict["Tprof_for_diffusion"],
                                                          Hs_dict = vardict["Hs_dict"], Tn = vardict["Tn_arr"], Ti = vardict["Ti_arr"],
                                                          Te = vardict["Te_arr"], Tp = vardict["Tplasma_arr"],

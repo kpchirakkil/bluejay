@@ -54,7 +54,7 @@ function get_grad_colors(L::Int64, cmap; strt=0, stp=1)
     return c
 end
 
-function plot_atm(atmdict::Dict{Symbol, Vector{Array{ftype_ncur}}}, savepath::String, atol, E_prof, n_horiz::Int64; imgfmt="png", print_shortcodes=true, mixing_ratio=false,
+function plot_atm(atmdict::Dict{Symbol, Vector{Array{ftype_ncur}}}, savepath::String, atol, E_prof; imgfmt="png", print_shortcodes=true, mixing_ratio=false,
                   t="", showonly=false, xlab=L"Species density (cm$^{-3}$)", xlim_1=(1e-12, 1e18), xlim_2=(1e-5, 2.5e5), ylims=[0, 250],
                   legloc=[0.8,1], globvars...)
     #=
@@ -66,7 +66,6 @@ function plot_atm(atmdict::Dict{Symbol, Vector{Array{ftype_ncur}}}, savepath::St
         savepath: path and name for saving resulting .png file
         atol: absolute tolerance to plot
         E_prof: E densities for plotting the electron line
-	n_horiz: number of vertical columns in the simulation
         print_shortcodes: whether to print unique simulation IDs on plots
         t: title text for whole plot
         showonly: whether to just show() the plot instead of saving. If setting to true, send in junk string for savepath.
@@ -79,8 +78,9 @@ function plot_atm(atmdict::Dict{Symbol, Vector{Array{ftype_ncur}}}, savepath::St
     =#
 
     GV = values(globvars)
-    required =  [:monospace_choice, :neutral_species, :plot_grid, :sansserif_choice, :speciescolor, :speciesstyle, :zmax]
+    required =  [:monospace_choice, :n_horiz, :neutral_species, :plot_grid, :sansserif_choice, :speciescolor, :speciesstyle, :zmax]
     check_requirements(keys(GV), required)
+    n_horiz = GV.n_horiz
 
     if print_shortcodes
         required =  [:short_summary, :run_id]
@@ -293,8 +293,7 @@ end
 
 function plot_directional_flux(
     sp,
-    atmdict,
-    n_horiz::Int64;
+    atmdict;
     ihoriz::Int=1,
     xlims=((1e0, 1e10), (1e3, 1e12)),
     titlestr="",
@@ -304,13 +303,14 @@ function plot_directional_flux(
     Makes a directional flux plot for sp in atmosphere atmdict.
     =#
     GV = values(globvars)
-    required = [:all_species, :alt, :dz, :Hs_dict, :molmass, :n_alt_index, :neutral_species, :polarizability, :q, :plot_grid,
+    required = [:all_species, :alt, :dz, :Hs_dict, :molmass, :n_alt_index, :n_horiz, :neutral_species, :polarizability, :q, :plot_grid,
                 :speciesbclist_vert, :Tn, :Ti, :Te, :Tp, :Tprof_for_Hs, :Tprof_for_diffusion, :transport_species]
     
     check_requirements(keys(GV), required)
+    n_horiz = GV.n_horiz
     
     fluxes, up, down =
-        get_directional_fluxes(sp, atmdict, n_horiz; return_up_n_down=true, globvars...)
+        get_directional_fluxes(sp, atmdict; return_up_n_down=true, globvars...)
 
     fpos, fneg = flux_pos_and_neg(fluxes[ihoriz])
 
@@ -441,7 +441,7 @@ function plot_extinction(solabs; fnextr="", path=nothing, tauonly=false, xsect_i
     end
 end
 
-function plot_Jrates(sp, atmdict::Dict{Symbol, Vector{Array{ftype_ncur}}}, n_horiz::Int64; savedir=nothing, opt="", globvars...)
+function plot_Jrates(sp, atmdict::Dict{Symbol, Vector{Array{ftype_ncur}}}; savedir=nothing, opt="", globvars...)
     #=
     Plots the Jrates for each photodissociation or photoionization reaction. Override for small groups of species.
     Input:
@@ -455,9 +455,10 @@ function plot_Jrates(sp, atmdict::Dict{Symbol, Vector{Array{ftype_ncur}}}, n_hor
     =#
 
     GV = values(globvars)
-    required = [:all_species, :ion_species, :monospace_choice, :num_layers, :plot_grid, 
+    required = [:all_species, :ion_species, :monospace_choice, :n_horiz, :num_layers, :plot_grid,
                 :reaction_network, :sansserif_choice, :speciesbclist_vert, :Tn, :Ti, :Te]
     check_requirements(keys(GV), required)
+    n_horiz = GV.n_horiz
 
     # Plot setup
     set_rc_params(; fs=12, axlab=16, xtls=16, ytls=16, 
@@ -465,11 +466,11 @@ function plot_Jrates(sp, atmdict::Dict{Symbol, Vector{Array{ftype_ncur}}}, n_hor
 
     for ihoriz in 1:n_horiz
         # Obtain the reaction rates specifically for this horizontal column
-        rxd_prod, prod_rc = get_volume_rates(sp, atmdict, n_horiz; 
-                                which="Jrates", globvars..., 
+        rxd_prod, prod_rc = get_volume_rates(sp, atmdict;
+                                which="Jrates", globvars...,
                                 Tn=GV.Tn[ihoriz, 2:end-1], Ti=GV.Ti[ihoriz, 2:end-1], Te=GV.Te[ihoriz, 2:end-1])
-        rxd_loss, loss_rc = get_volume_rates(sp, atmdict, n_horiz; 
-                                which="Jrates", globvars..., 
+        rxd_loss, loss_rc = get_volume_rates(sp, atmdict;
+                                which="Jrates", globvars...,
                                 Tn=GV.Tn[ihoriz, 2:end-1], Ti=GV.Ti[ihoriz, 2:end-1], Te=GV.Te[ihoriz, 2:end-1])
 
     minx = 1e10
@@ -546,7 +547,7 @@ function plot_net_volume_change(sp, atmdict; globvars...)
     show() 
 end
 
-function plot_production_and_loss(final_atm, results_dir, thefolder, n_horiz::Int64; separate_cols=false, globvars...)
+function plot_production_and_loss(final_atm, results_dir, thefolder; separate_cols=false, globvars...)
     #=
 
     =#
@@ -554,15 +555,16 @@ function plot_production_and_loss(final_atm, results_dir, thefolder, n_horiz::In
     required = [:all_species, :alt, :chem_species, :collision_xsect, :dz, :hot_D_rc_funcs, :hot_H_rc_funcs, 
                :hot_H2_rc_funcs, :hot_HD_rc_funcs, :Hs_dict, :hot_H_network, :hot_D_network, :hot_H2_network, :hot_HD_network,
                :short_summary, :ion_species, :Jratedict, :molmass, :neutral_species, :non_bdy_layers, :nonthermal,
-               :num_layers, :n_all_layers, :n_alt_index, :polarizability, :plot_grid, :q, :run_id, :reaction_network,
+               :n_horiz, :num_layers, :n_all_layers, :n_alt_index, :polarizability, :plot_grid, :q, :run_id, :reaction_network,
                :speciesbclist_vert, :Tn, :Ti, :Te, :Tp, :Tprof_for_Hs, :Tprof_for_diffusion, 
                :transport_species, :upper_lower_bdy_i, :upper_lower_bdy, :zmax]
     check_requirements(keys(GV), required)
+    n_horiz = GV.n_horiz
 
     println("Creating production and loss plots to show convergence of species...")
     create_folder("chemeq_plots", results_dir*thefolder*"/")
     # for sp in GV.all_species
-    #     plot_rxns(sp, final_atm, results_dir, n_horiz; subfolder=thefolder,num="final_atmosphere", globvars...)
+    #     plot_rxns(sp, final_atm, results_dir; subfolder=thefolder,num="final_atmosphere", globvars...)
     if separate_cols
         subfolder = thefolder*"/chemeq_plots"
         for ihoriz in 1:n_horiz
@@ -586,25 +588,26 @@ function plot_production_and_loss(final_atm, results_dir, thefolder, n_horiz::In
                                   "ion"=>GV.Tprof_for_diffusion["ion"][ihoriz:ihoriz, :])
 
             for sp in GV.all_species
-                plot_rxns(sp, atm_col, results_dir, 1;
+                plot_rxns(sp, atm_col, results_dir;
                           subfolder=subfolder,
                           plotsfolder=colfolder,
                           num="final_atmosphere",
                           globvars...,
+                          n_horiz=1,
                           Tn=Tn_col, Ti=Ti_col, Te=Te_col, Tp=Tp_col,
                           Tprof_for_Hs=Tprof_Hs_col, Tprof_for_diffusion=Tprof_diff_col)
             end
         end
     else
         for sp in GV.all_species
-            plot_rxns(sp, final_atm, results_dir, n_horiz;
+            plot_rxns(sp, final_atm, results_dir;
                       subfolder=thefolder, num="final_atmosphere", globvars...)
         end
     end
     println("Finished convergence plots")
 end
 
-function plot_rxns(sp::Symbol, atmdict::Dict{Symbol, Vector{Array{ftype_ncur}}}, results_dir::String, n_horiz::Int64; 
+function plot_rxns(sp::Symbol, atmdict::Dict{Symbol, Vector{Array{ftype_ncur}}}, results_dir::String;
                    nonthermal=true, shown_rxns=nothing, subfolder="", plotsfolder="chemeq_plots", dt=nothing, num="", extra_title="", 
                    plot_timescales=false, plot_total_rate_coefs=false, showonly=false, globvars...)
     #=
@@ -630,12 +633,13 @@ function plot_rxns(sp::Symbol, atmdict::Dict{Symbol, Vector{Array{ftype_ncur}}},
     =#
 
     GV = values(globvars)
-    required =  [:all_species, :alt, :chem_species, :dz, :short_summary, :Hs_dict, :ion_species, 
+    required =  [:all_species, :alt, :chem_species, :dz, :n_horiz, :short_summary, :Hs_dict, :ion_species,
                  :molmass, :monospace_choice, :n_all_layers, :n_alt_index, :neutral_species, :num_layers, 
                  :plot_grid, :polarizability, :q, :run_id, :reaction_network, :sansserif_choice, :speciesbclist_vert, 
                  :Te, :Ti, :Tn, :Tp, :Tprof_for_Hs, :Tprof_for_diffusion, :transport_species, 
                  :upper_lower_bdy, :upper_lower_bdy_i, :zmax]
     check_requirements(keys(GV), required)
+    n_horiz = GV.n_horiz
  
     # ================================================================================
     # Plot setup stuff
@@ -685,12 +689,12 @@ function plot_rxns(sp::Symbol, atmdict::Dict{Symbol, Vector{Array{ftype_ncur}}},
         # use the most recent Tn, Ti, Te according to rightmost taking precedence.
         
         rxd_prod, rate_coefs_prod = get_volume_rates(
-            sp, atmdict, n_horiz;
+            sp, atmdict;
             species_role="product", globvars...,
             Tn=GV.Tn, Ti=GV.Ti, Te=GV.Te
         )
         rxd_loss, rate_coefs_loss = get_volume_rates(
-            sp, atmdict, n_horiz;
+            sp, atmdict;
             species_role="reactant", globvars...,
             Tn=GV.Tn, Ti=GV.Ti, Te=GV.Te
         )
@@ -814,7 +818,7 @@ function plot_rxns(sp::Symbol, atmdict::Dict{Symbol, Vector{Array{ftype_ncur}}},
     # Calculate the transport fluxes for the species
     plottitle_ext = "" # no extra info in the plot title if flux==false 
     if sp in GV.transport_species
-        transportPL = get_transport_PandL_rate(sp, atmdict, n_horiz; nonthermal=nonthermal, globvars...)
+        transportPL = get_transport_PandL_rate(sp, atmdict; nonthermal=nonthermal, globvars...)
         # now separate into two different arrays for ease of addition.
         production_i = [transportPL[ihoriz] .>= 0 for ihoriz in 1:n_horiz]  # boolean array for where transport entries > 0 (production),
         loss_i = [transportPL[ihoriz] .< 0 for ihoriz in 1:n_horiz] # and for where transport entries < 0 (loss).
@@ -948,7 +952,7 @@ function plot_rxns(sp::Symbol, atmdict::Dict{Symbol, Vector{Array{ftype_ncur}}},
     end
 end
 
-function plot_reaction_on_demand(atmdict, reactants, n_horiz::Int64; ihoriz=1, print_col_total=false, products=nothing, ax=nothing, rxntype="all", lowerlim=nothing, upperlim=nothing,
+function plot_reaction_on_demand(atmdict, reactants; ihoriz=1, print_col_total=false, products=nothing, ax=nothing, rxntype="all", lowerlim=nothing, upperlim=nothing,
                                  savepath=nothing, plottitle="", coltotal_loc=[0.5, 0.5], globvars...)
     #=
     A function to plot a single chemical reaction as it happens in atmdict on demand.
@@ -965,9 +969,10 @@ function plot_reaction_on_demand(atmdict, reactants, n_horiz::Int64; ihoriz=1, p
 
     # Collect global variables
     GV = values(globvars)
-    required = [:all_species, :alt, :collision_xsect, :ion_species, :Jratedict, :molmass, :monospace_choice, :non_bdy_layers, :num_layers,  
+    required = [:all_species, :alt, :collision_xsect, :ion_species, :Jratedict, :molmass, :monospace_choice, :n_horiz, :non_bdy_layers, :num_layers,
                            :n_alt_index, :reaction_network, :sansserif_choice, :Tn, :Ti, :Te, :dz, :zmax]
     check_requirements(keys(GV), required)
+    n_horiz = GV.n_horiz
 
     # Build an evalutable network
     relevant_reactions = deepcopy(GV.reaction_network)
@@ -1608,7 +1613,7 @@ function set_rc_params(; fs=22, axlab=24, xtls=22, ytls=22, sansserif=nothing, m
     rcParams["ytick.labelsize"] = ytls
 end
 
-function top_mechanisms(x, sp, atmdict, p_or_r, n_horiz; savepath=nothing, filename_extra="", y0=100, count_above=1, lowerlim=nothing, upperlim=nothing, globvars...) 
+function top_mechanisms(x, sp, atmdict, p_or_r; savepath=nothing, filename_extra="", y0=100, count_above=1, lowerlim=nothing, upperlim=nothing, globvars...)
     #=
     Reports the top x dominant mechanisms for production or loss of species sp, and shows a plot.
 
@@ -1617,7 +1622,6 @@ function top_mechanisms(x, sp, atmdict, p_or_r, n_horiz; savepath=nothing, filen
         sp: Species for which to calculate most important mechanisms (symbol)
         atmdict: atmosphere dictionary
         p_or_r: product or reactant
-        n_horiz: number of horizontal columns
         savepath: somewhere to put the figure
     Output: 
         Plot of the production profiles of the top reactions.
@@ -1625,9 +1629,10 @@ function top_mechanisms(x, sp, atmdict, p_or_r, n_horiz; savepath=nothing, filen
     
     # Collect global variables
     GV = values(globvars)
-    required = [:all_species, :alt, :collision_xsect, :ion_species, :Jratedict, :molmass, :monospace_choice, :non_bdy_layers, :num_layers,  
+    required = [:all_species, :alt, :collision_xsect, :ion_species, :Jratedict, :molmass, :monospace_choice, :n_horiz, :non_bdy_layers, :num_layers,
                 :n_alt_index, :reaction_network, :sansserif_choice, :Tn, :Ti, :Te, :dz, :zmax, :plot_grid]
     check_requirements(keys(GV), required)
+    n_horiz = GV.n_horiz
 
     for ihoriz in 1:n_horiz
     

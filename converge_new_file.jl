@@ -509,7 +509,7 @@ function record_atmospheric_state(t, n, actively_solved, E_prof; opt="", globvar
     
     # write out the current atmospheric state to a file and plot it
     atm_snapshot = merge(external_storage, unflatten_atm(n, actively_solved; GV.num_layers, GV.n_horiz))
-    plot_atm(atm_snapshot, results_dir*sim_folder_name*"/atm_peek_$(plotnum)$(opt).png", abs_tol_for_plot, E_prof, n_horiz; ylims=[zmin/1e5, zmax/1e5], t="$(round(t, digits=rounding_digits))", globvars...)
+    plot_atm(atm_snapshot, results_dir*sim_folder_name*"/atm_peek_$(plotnum)$(opt).png", abs_tol_for_plot, E_prof; ylims=[zmin/1e5, zmax/1e5], t="$(round(t, digits=rounding_digits))", globvars...)
     write_atmosphere(atm_snapshot, results_dir*sim_folder_name*"/atm_state_$(lpad(plotnum,2,"0"))$(opt).h5"; t=round(t, digits=rounding_digits), globvars...)
 
     # Turn this on if you'd like to take a peek at the Jrates
@@ -1004,7 +1004,11 @@ function update!(n_current::Dict{Symbol, Vector{Array{ftype_ncur}}}, t, dt; abst
     return n_current
 end
 
-function enforce_uniform_water_columns!(n_current, n_horiz, enable_horiz_transport; species=(:H2O, :HDO), context="")
+function enforce_uniform_water_columns!(n_current, enable_horiz_transport; species=(:H2O, :HDO), context="", globvars...)
+    GV = values(globvars)
+    @assert :n_horiz in keys(GV)
+    n_horiz = GV.n_horiz
+
     if enable_horiz_transport || n_horiz <= 1
         return
     end
@@ -1077,7 +1081,7 @@ if make_new_alt_grid==true
 elseif make_new_alt_grid==false 
     println("$(Dates.format(now(), "(HH:MM:SS)")) Loading atmosphere")
     n_current = get_ncurrent(initial_atm_file)
-    enforce_uniform_water_columns!(n_current, n_horiz, enable_horiz_transport; context="after loading initial atmosphere")
+    enforce_uniform_water_columns!(n_current, enable_horiz_transport; context="after loading initial atmosphere", n_horiz=n_horiz)
 end
 
 #                       Establish new species profiles                          #
@@ -1265,7 +1269,7 @@ if reinitialize_water_profile
     end
 end
 
-enforce_uniform_water_columns!(n_current, n_horiz, enable_horiz_transport; context="after water profile initialization")
+enforce_uniform_water_columns!(n_current, enable_horiz_transport; context="after water profile initialization", n_horiz=n_horiz)
 
 # If you want to just modify the water profile, i.e. when running several simulations
 # in succession to simulate seasons: 
@@ -1346,7 +1350,7 @@ if update_water_profile
     end
 end
 
-enforce_uniform_water_columns!(n_current, n_horiz, enable_horiz_transport; context="after water profile update")
+enforce_uniform_water_columns!(n_current, enable_horiz_transport; context="after water profile update", n_horiz=n_horiz)
 
 # Calculate precipitable microns, including boundary layers (assumed same as nearest bulk layer)
 H2Oprum = [let col = n_current[:H2O][ihoriz]; precip_microns(:H2O, [col[1]; col; col[end]]; molmass, dz) end for ihoriz in 1:n_horiz]
@@ -1775,8 +1779,8 @@ end
     
 # Plot initial atmosphere condition  ===========================================
 println("$(Dates.format(now(), "(HH:MM:SS)")) Plotting the initial condition")
-plot_atm(n_current, results_dir*sim_folder_name*"/initial_atmosphere.png", abs_tol_for_plot, E, n_horiz; ylims=[zmin/1e5, zmax/1e5],
-         t="initial state", neutral_species, ion_species, plot_grid, speciescolor, speciesstyle, zmax, short_summary, run_id,
+plot_atm(n_current, results_dir*sim_folder_name*"/initial_atmosphere.png", abs_tol_for_plot, E; ylims=[zmin/1e5, zmax/1e5],
+         t="initial state", n_horiz, neutral_species, ion_species, plot_grid, speciescolor, speciesstyle, zmax, short_summary, run_id,
          monospace_choice, sansserif_choice) 
 
 # Create a list to keep track of stiffness ratio ===============================
@@ -1931,21 +1935,22 @@ if problem_type == "SS"
 
     println("Plotting final atmosphere, writing out state")
     # Make final atmosphere plot
-    plot_atm(nc_all, [neutral_species, ion_species], results_dir*sim_folder_name*"/final_atmosphere.png", t="final converged state", plot_grid, 
-                      speciescolor, speciesstyle, monospace_choice, sansserif_choice, zmax, abs_tol_for_plot)
+    plot_atm(nc_all, results_dir*sim_folder_name*"/final_atmosphere.png", abs_tol_for_plot, E;
+             t="final converged state", n_horiz, neutral_species, ion_species, plot_grid,
+             speciescolor, speciesstyle, monospace_choice, sansserif_choice, zmax)
 
 
     write_final_state(nc_all, results_dir, sim_folder_name, final_atm_file; alt, num_layers, short_summary, Jratedict, run_id, external_storage)
     write_to_log(logfile, "$(Dates.format(now(), "(HH:MM:SS)")) Making production/loss plots", mode="a")
     println("Making production/loss plots (this tends to take several minutes)")
     if make_P_and_L_plots
-        plot_production_and_loss(nc_all, results_dir, sim_folder_name, n_horiz;
+        plot_production_and_loss(nc_all, results_dir, sim_folder_name;
                                  separate_cols=true, nonthermal=nontherm, all_species, alt, chem_species,
                                  collision_xsect, dz, dx, hot_D_rc_funcs, hot_H_rc_funcs,
                                  hot_H2_rc_funcs, hot_HD_rc_funcs, Hs_dict, hot_H_network,
                                  hot_D_network, hot_H2_network, hot_HD_network, short_summary,
                                  ion_species, Jratedict, molmass, neutral_species,
-                                 non_bdy_layers, num_layers, n_all_layers, n_alt_index,
+                                 n_horiz, non_bdy_layers, num_layers, n_all_layers, n_alt_index,
                                  polarizability, plot_grid, q, run_id, reaction_network,
                                  speciesbclist_vert, speciesbclist_horiz, Tn=Tn_arr, Ti=Ti_arr,
                                  Te=Te_arr, Tp=Tplasma_arr, Tprof_for_Hs, Tprof_for_diffusion,
@@ -1983,20 +1988,20 @@ elseif problem_type == "ODE"
 
             # Make final atmosphere plot
             println("Plotting final atmosphere, writing out state")
-            plot_atm(nc_all, results_dir*sim_folder_name*"/final_atmosphere.png", t="final converged state", abs_tol_for_plot; neutral_species, ion_species, 
+            plot_atm(nc_all, results_dir*sim_folder_name*"/final_atmosphere.png", abs_tol_for_plot, E; t="final converged state", n_horiz, neutral_species, ion_species,
                      plot_grid, speciescolor, speciesstyle, zmax, monospace_choice, sansserif_choice)
 
             write_final_state(nc_all, results_dir, sim_folder_name, final_atm_file; alt, num_layers, short_summary, Jratedict, run_id, external_storage)
             write_to_log(logfile, "$(Dates.format(now(), "(HH:MM:SS)")) Making production/loss plots", mode="a")
             println("Making production/loss plots (this tends to take several minutes)")
             if make_P_and_L_plots
-                plot_production_and_loss(nc_all, results_dir, sim_folder_name, n_horiz;
+                plot_production_and_loss(nc_all, results_dir, sim_folder_name;
                                          separate_cols=true, nonthermal=nontherm, all_species, alt, chem_species,
                                          collision_xsect, dz, dx, hot_D_rc_funcs, hot_H_rc_funcs,
                                          hot_H2_rc_funcs, hot_HD_rc_funcs, Hs_dict, hot_H_network,
                                          hot_D_network, hot_H2_network, hot_HD_network, short_summary,
                                          ion_species, Jratedict, molmass, neutral_species,
-                                         non_bdy_layers, num_layers, n_all_layers, n_alt_index,
+                                         n_horiz, non_bdy_layers, num_layers, n_all_layers, n_alt_index,
                                          polarizability, plot_grid, q, run_id, reaction_network,
                                          speciesbclist_vert, speciesbclist_horiz, Tn=Tn_arr, Ti=Ti_arr,
                                          Te=Te_arr, Tp=Tplasma_arr, Tprof_for_Hs, Tprof_for_diffusion,
@@ -2010,8 +2015,8 @@ elseif problem_type == "Gear"
     # Plot the final atmospheric state
     println("Plotting final atmosphere, writing out state")
     final_E_profile = electron_density(atm_soln; e_profile_type, non_bdy_layers, ion_species, n_horiz)
-    plot_atm(atm_soln, results_dir*sim_folder_name*"/final_atmosphere.png", abs_tol_for_plot, final_E_profile, n_horiz; ylims=[zmin/1e5, zmax/1e5],
-             t="final converged state, total time = $(sim_time)", neutral_species, ion_species, plot_grid, speciescolor, speciesstyle, zmax, short_summary, run_id,
+    plot_atm(atm_soln, results_dir*sim_folder_name*"/final_atmosphere.png", abs_tol_for_plot, final_E_profile; ylims=[zmin/1e5, zmax/1e5],
+             t="final converged state, total time = $(sim_time)", n_horiz, neutral_species, ion_species, plot_grid, speciescolor, speciesstyle, zmax, short_summary, run_id,
              monospace_choice, sansserif_choice)
 
     # Collect the J rates
@@ -2032,13 +2037,13 @@ elseif problem_type == "Gear"
     println("$(Dates.format(now(), "(HH:MM:SS)")) Making production/loss plots (this tends to take several minutes)")
     # make production and loss plots
     if make_P_and_L_plots
-        plot_production_and_loss(atm_soln, results_dir, sim_folder_name, n_horiz;
+        plot_production_and_loss(atm_soln, results_dir, sim_folder_name;
                                  separate_cols=true, nonthermal=nontherm, all_species, alt, chem_species,
                                  collision_xsect, dz, dx, hot_D_rc_funcs, hot_H_rc_funcs,
                                  hot_H2_rc_funcs, hot_HD_rc_funcs, Hs_dict, hot_H_network,
                                  hot_D_network, hot_H2_network, hot_HD_network, short_summary,
                                  ion_species, Jratedict, M_P, molmass, monospace_choice,
-                                 neutral_species, non_bdy_layers, num_layers, n_all_layers, n_alt_index,
+                                 n_horiz, neutral_species, non_bdy_layers, num_layers, n_all_layers, n_alt_index,
                                  polarizability, planet, plot_grid, q, R_P, run_id, reaction_network,
                                  sansserif_choice, speciesbclist_vert, speciesbclist_horiz,
                                  Tn=Tn_arr, Ti=Ti_arr, Te=Te_arr, Tp=Tplasma_arr,

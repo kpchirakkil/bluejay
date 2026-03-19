@@ -12,22 +12,23 @@
 #                           Chemistry functions                                 #
 #===============================================================================#
 
-function chemical_lifetime(s::Symbol, atmdict, n_horiz::Int64; globvars...)
+function chemical_lifetime(s::Symbol, atmdict; globvars...)
     #=
     Calculates chemical lifetime of a molecule s in the atmosphere atmdict. 
     
     Good for comparing with the results of diffusion_timescale.
     =#
     GV = values(globvars)
-    required = [:all_species, :Jratelist, :n_alt_index, :ion_species, :num_layers, :reaction_network, :Tn, :Ti, :Te]
+    required = [:all_species, :Jratelist, :n_alt_index, :ion_species, :n_horiz, :num_layers, :reaction_network, :Tn, :Ti, :Te]
     check_requirements(keys(GV), required)
+    n_horiz = GV.n_horiz
 
     # We'll accumulate chemical lifetimes in a matrix, one column per horizontal slice
     chem_lt = zeros(Float64, n_horiz, GV.num_layers)  # (n_horiz, num_layers)
 
     for ihoriz in 1:n_horiz
         loss_all_rxns, ratecoefs = get_volume_rates(
-            s, atmdict, n_horiz;
+            s, atmdict;
             species_role="reactant", 
             which="all",
             remove_sp_density=true,
@@ -71,11 +72,12 @@ function get_column_rates(sp::Symbol, atmdict::Dict{Symbol, Vector{ftype_ncur}},
                 sorted[1] is the top production mechanism, e.g.
     =#
     GV = values(globvars)
-    required = [:Tn, :Ti, :Te, :all_species, :ion_species, :reaction_network, :num_layers, :dz]
+    required = [:Tn, :Ti, :Te, :all_species, :ion_species, :n_horiz, :reaction_network, :num_layers, :dz]
     check_requirements(keys(GV), required)
+    n_horiz = GV.n_horiz
 
     # Now we compute reaction rates for just this column
-    rxd, coefs = get_volume_rates(sp, atmdict, n_horiz;
+    rxd, coefs = get_volume_rates(sp, atmdict;
                                   species_role=role,
                                   which=which,
                                   globvars...,
@@ -92,7 +94,7 @@ function get_column_rates(sp::Symbol, atmdict::Dict{Symbol, Vector{ftype_ncur}},
 
     # Optionally one can specify a second species to include in the sorted result, i.e. a species' ion. If second species is requested
     if sp2 != nothing
-        rxd2, _ = get_volume_rates(sp2, atmdict, n_horiz;
+        rxd2, _ = get_volume_rates(sp2, atmdict;
                                    species_role=role,
                                    which=which,
                                    globvars...,
@@ -119,15 +121,14 @@ function get_column_rates(sp::Symbol, atmdict::Dict{Symbol, Vector{ftype_ncur}},
 end
 
 
-function get_volume_rates(sp::Symbol, atmdict::Dict{Symbol, Vector{Array{ftype_ncur}}}, 
-                          n_horiz::Int64; species_role="both", which="all", 
+function get_volume_rates(sp::Symbol, atmdict::Dict{Symbol, Vector{Array{ftype_ncur}}},
+                          ; species_role="both", which="all",
                           remove_sp_density=false, globvars...)
 
     #=
     Input:
         sp: Species name
         atmdict: Present atmospheric state dictionary
-        n_horiz: Number of vertical columns in the simulation
         Tn, Ti, Te: temperature arrays
         species_role: whether to look for the species as a "reactant", "product", or "both".  If it has a value, so must species.
         which: "all", "Jrates", "krates". Whether to fill the dictionary with all reactions, only photochemistry/photoionization 
@@ -139,8 +140,9 @@ function get_volume_rates(sp::Symbol, atmdict::Dict{Symbol, Vector{Array{ftype_n
     =#
 
     GV = values(globvars)
-    required = [:all_species, :ion_species, :num_layers, :reaction_network, :Tn, :Ti, :Te]
+    required = [:all_species, :ion_species, :n_horiz, :num_layers, :reaction_network, :Tn, :Ti, :Te]
     check_requirements(keys(GV), required)
+    n_horiz = GV.n_horiz
 
     # Make sure temperatures are correct format
     @assert size(GV.Tn) == (n_horiz, GV.num_layers+2) "Tn must be (n_horiz, num_layers+2)"
@@ -347,23 +349,21 @@ end
 #                   Transport and escape functions                              #
 #===============================================================================#
 
-function diffusion_timescale(s::Symbol, T_arr::Array, atmdict, n_horiz::Int64; globvars...)
+function diffusion_timescale(s::Symbol, T_arr::Array, atmdict; globvars...)
     #=
     Inputs:
         s: species symbol
         T_arr: temperature array for the given species 
         atmdict: atmospheric state dict
-        n_horiz: Number of vertical columns in the simulation
         Dcoef_template: array of 0s to use in Dcoef!
     Output: Molecular and eddy diffusion timescale (s) by altitude and horizontal column
     =#
-    
-    # Add n_horiz to globvars since child functions need it
-    globvars = (globvars..., n_horiz=n_horiz)
-    GV = globvars  # Use the NamedTuple directly to preserve field names
+
+    GV = values(globvars)
     required = [:all_species, :alt, :molmass, :M_P, :n_alt_index, :n_horiz, :neutral_species, :polarizability, :planet, :q, :R_P, 
                 :speciesbclist_vert, :use_ambipolar, :use_molec_diff]
     check_requirements(keys(GV), required)
+    n_horiz = GV.n_horiz
 
     # Get diffusion coefficient array template
     Dcoef_template = zeros(size(T_arr)) 
@@ -392,11 +392,11 @@ function diffusion_timescale(s::Symbol, T_arr::Array, atmdict, n_horiz::Int64; g
     return molec_or_ambi_timescale, eddy_timescale, combined_timescale
 end
 
-function final_escape(thefolder, thefile, n_horiz::Int64; globvars...)
+function final_escape(thefolder, thefile; globvars...)
     #=
     thefolder: Folder in which an atmosphere file lives
     thefile: the file containing an atmosphere for which you'd like to calculate the final escape fluxes of H and D.
-    n_horiz: Number of vertical columns in the simulation
+    Number of horizontal columns is taken from globvars.
     =#
     
     GV = values(globvars)
@@ -405,8 +405,9 @@ function final_escape(thefolder, thefile, n_horiz::Int64; globvars...)
                 # From CUSTOMIZATIONS.jl
                 :alt, :dz, :num_layers, :n_alt_index, :non_bdy_layers, 
                 # Simulation-unique stuff 
-                :all_species, :hHnet, :hDnet, :hH2net, :hHDnet, :hHrc, :hDrc, :hH2rc, :hHDrc, :use_ambipolar, :use_molec_diff]
+                :all_species, :hHnet, :hDnet, :hH2net, :hHDnet, :hHrc, :hDrc, :hH2rc, :hHDrc, :n_horiz, :use_ambipolar, :use_molec_diff]
     check_requirements(keys(GV), required)
+    n_horiz = GV.n_horiz
     
     # First load the atmosphere and associated variables.
     atmdict = get_ncurrent(joinpath(thefolder, thefile); globvars...);
@@ -423,7 +424,7 @@ function final_escape(thefolder, thefile, n_horiz::Int64; globvars...)
 
     # Now collect non-thermal and thermal fluxes for each species. 
     for s in ["H", "D", "H2", "HD"]
-        nonthermal_esc, thermal_esc = get_transport_PandL_rate(Symbol(s), atmdict, n_horiz; returnfluxes=true, Jratedict, zmax=GV.alt[end],
+        nonthermal_esc, thermal_esc = get_transport_PandL_rate(Symbol(s), atmdict; returnfluxes=true, Jratedict, zmax=GV.alt[end],
                                                                hot_H_network=GV.hHnet, hot_D_network=GV.hDnet, hot_H2_network=GV.hH2net, hot_HD_network=GV.hHDnet,
                                                                hot_H_rc_funcs=GV.hHrc, hot_D_rc_funcs=GV.hDrc, hot_H2_rc_funcs=GV.hH2rc, hot_HD_rc_funcs=GV.hHDrc, 
                                                                Hs_dict=vardict["Hs_dict"], ion_species=vardict["ion_species"], neutral_species=vardict["neutral_species"],
@@ -468,27 +469,24 @@ function fractionation_factor(esc_df, h2o_0, hdo_0; ftype="total")
     return f = ((flux_t_D + flux_nt_D) / (flux_t_H + flux_nt_H)) / (hdo_0 / (2 * h2o_0))
 end
 
-function get_transport_PandL_rate(sp::Symbol, atmdict::Dict{Symbol, Vector{Array{ftype_ncur}}}, n_horiz::Int64; returnfluxes=false, nonthermal=true, globvars...)
+function get_transport_PandL_rate(sp::Symbol, atmdict::Dict{Symbol, Vector{Array{ftype_ncur}}}; returnfluxes=false, nonthermal=true, globvars...)
     #=
     Input:
         sp: species for which to return the transport production and loss
         atmdict: species number density by altitude for each vertical column
         returnfluxes: whether to return fluxes (thermal and nonthermal) instead of production/loss
         nonthermal: whether to consider nonthermal escape
-        n_horiz: Number of vertical columns in simulation
     Output
         Array of production and loss (#/cm³/s) at each atmospheric layer boundary.
         i = 1 in the net_bulk_flow array corresponds to the boundary at 1 km,
         and the end of the array is the boundary at 249 km.
     =#
-
-    # Add n_horiz to globvars since child functions need it
-    globvars = (globvars..., n_horiz=n_horiz)
-    GV = globvars  # Use the NamedTuple directly to preserve field names
+    GV = values(globvars)
     required = [:all_species, :alt, :dz, :Hs_dict, :molmass,  :n_alt_index, :n_horiz,
                 :neutral_species, :num_layers, :polarizability, :q, :speciesbclist_vert, :Te, :Ti, :Tn, :Tp, 
                 :Tprof_for_Hs, :Tprof_for_diffusion, :transport_species, :use_ambipolar, :use_molec_diff]
     check_requirements(keys(GV), required)
+    n_horiz = GV.n_horiz
 
     if nonthermal
         required = [:hot_H_network, :hot_D_network, :hot_H_rc_funcs, :hot_D_rc_funcs, 
@@ -563,8 +561,7 @@ end
 
 function get_directional_fluxes(
     sp::Symbol,
-    atmdict::Dict{Symbol, Vector{Array{ftype_ncur}}},
-    n_horiz::Int64;
+    atmdict::Dict{Symbol, Vector{Array{ftype_ncur}}};
     nonthermal=true,
     return_up_n_down=false,
     globvars...
@@ -575,9 +572,7 @@ function get_directional_fluxes(
     Input:
         sp: species for which to return the transport production and loss
         atmdict: species number density by altitude for each column
-        returnfluxes: whether to return fluxes (thermal and nonthermal) instead of production/loss
         nonthermal: whether to consider nonthermal escape
-        n_horiz: number of vertical columns in the simulation
     Output
         Array of production and loss (#/cm³/s) at each atmospheric layer boundary.
         i = 1 in the net_bulk_flow array corresponds to the boundary at 1 km,
@@ -585,10 +580,11 @@ function get_directional_fluxes(
     =#
 
     GV = values(globvars)
-    required = [:all_species, :alt, :dz, :Hs_dict, :molmass, :n_alt_index,
+    required = [:all_species, :alt, :dz, :Hs_dict, :molmass, :n_alt_index, :n_horiz,
                :neutral_species, :num_layers, :polarizability, :q, :speciesbclist_vert, :Te, :Ti, :Tn, :Tp, 
                :Tprof_for_Hs, :Tprof_for_diffusion, :transport_species, :use_ambipolar, :use_molec_diff]
     check_requirements(keys(GV), required)
+    n_horiz = GV.n_horiz
 
     if nonthermal
         required = [:hot_H_network, :hot_D_network, :hot_H_rc_funcs, :hot_D_rc_funcs, 
@@ -688,14 +684,13 @@ end
 
 # Note: These functions are probably misleading. They were used to create plots that never made it 
 # to publication.
-function limiting_flux(sp, atmdict, T_arr, n_horiz::Int64; ihoriz::Int=1, treat_H_as_rare=false, full_equation=true, globvars...)
+function limiting_flux(sp, atmdict, T_arr; ihoriz::Int=1, treat_H_as_rare=false, full_equation=true, globvars...)
     #=
     Calculate the limiting upward flux (Hunten, 1973; Zahnle, 2008). 
     Inputs:
         sp: A species that is traveling upwards
         atmdict: present atmospheric state
         T_arr: Array of neutral temperatures
-        n_horiz: Number of vertical columns in the simulation
         ihoriz: horizontal column index to extract correct column data
     Output:
         Φ, limiting flux for a hydrostatic atmosphere
@@ -736,14 +731,13 @@ function limiting_flux(sp, atmdict, T_arr, n_horiz::Int64; ihoriz::Int=1, treat_
     end
 end
 
-function limiting_flow_velocity(sp, atmdict, T_arr, n_horiz::Int64; ihoriz::Int=1, globvars...)
+function limiting_flow_velocity(sp, atmdict, T_arr; ihoriz::Int=1, globvars...)
     #=
     Calculate the limiting upward flux (Hunten, 1973; Zahnle, 2008). 
     Inputs:
         sp: A species that is traveling upwards
         atmdict: present atmospheric state
         T_arr: Array of neutral temperatures
-        n_horiz: Number of vertical columns in the simulation
     Output:
         Φ, limiting flux for a hydrostatic atmosphere
     =#
@@ -760,7 +754,7 @@ function limiting_flow_velocity(sp, atmdict, T_arr, n_horiz::Int64; ihoriz::Int=
     return @. (bi / na) * (1/Ha - 1/Hi)
 end
 
-function limiting_flux_molef(sp, atmdict, T_arr, n_horiz::Int64; ihoriz::Int=1, globvars...)
+function limiting_flux_molef(sp, atmdict, T_arr; ihoriz::Int=1, globvars...)
     #=
     Roger requested the limiting flux in in mole fraction. This is actually the same result as above. But this way we're sure
     =#
