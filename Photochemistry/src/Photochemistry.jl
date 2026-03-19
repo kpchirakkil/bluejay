@@ -85,7 +85,7 @@ export
     fluxcoefs_horiz,
     Keddy, 
     update_diffusion_and_scaleH, 
-    update_transport_coefficients,
+    update_vertical_transport_coefficients,
     update_horiz_transport_coefficients,
 
     ## Water

@@ -42,7 +42,7 @@ function make_jacobian(n, p, t)
     # and update the shortlived species with the new Jrates - assuming not needed to be done in this function
     # n_short_updated = set_concentrations!(external_storage, n, n_short, n_inactive, active_longlived, active_shortlived, inactive_species, Jrates, Tn, Ti, Te)
 
-    tlower, tup, tdown, tupper = update_transport_coefficients(GV.transport_species, # Species for which to update coefficients so it's not a mistake to pass it twice.
+    tlower, tup, tdown, tupper = update_vertical_transport_coefficients(GV.transport_species, # Species for which to update coefficients so it's not a mistake to pass it twice.
                                                                n_cur_all, D_arr, M; calc_nonthermal=nontherm, globvars...)
                                                                # Tn, Tp, Hs_dict, bcdict=speciesbclist_vert,
                                                                # all_species, neutral_species, transport_species, molmass, n_alt_index,
@@ -115,7 +115,7 @@ function PnL_eqn(dndt, n, p, t)
 
     # Get the updated transport coefficients, taking into account short-lived species update
     updated_ncur_all = compile_ncur_all(n, n_short_updated, GV.n_inactive; GV...)#active_longlived, active_shortlived, inactive_species, num_layers)
-    tlower, tup, tdown, tupper = update_transport_coefficients(GV.transport_species, updated_ncur_all, D_arr, M;
+    tlower, tup, tdown, tupper = update_vertical_transport_coefficients(GV.transport_species, updated_ncur_all, D_arr, M;
                                                                calc_nonthermal=nontherm, globvars...)
 
     tbackedge, tforwards, tbackwards, tfrontedge =

@@ -745,7 +745,7 @@ function get_rates_and_jacobian(n, p, t; globvars...)
     updated_ncur_all = compile_ncur_all(n, n_short_updated, GV.n_inactive; GV.active_longlived, GV.active_shortlived, GV.inactive_species, GV.num_layers, GV.n_horiz)
 
     # Get the updated transport coefficients, taking into account short-lived species update
-    tlower, tup, tdown, tupper = update_transport_coefficients(GV.transport_species, updated_ncur_all, D_arr, M; 
+    tlower, tup, tdown, tupper = update_vertical_transport_coefficients(GV.transport_species, updated_ncur_all, D_arr, M; 
                                                                calc_nonthermal=nontherm, results_dir, sim_folder_name, 
                                                                Jratedict=Dict([j=>n_cur_all[j] for j in GV.Jratelist]), # Needed for nonthermal BCs
                                                                globvars...)
@@ -1005,6 +1005,14 @@ function update!(n_current::Dict{Symbol, Vector{Array{ftype_ncur}}}, t, dt; abst
 end
 
 function enforce_uniform_water_columns!(n_current, enable_horiz_transport; species=(:H2O, :HDO), context="", globvars...)
+    #=
+    When horizontal transport is disabled and multiple columns are present, ensure that
+    water species (H2O, HDO) have identical profiles across all columns. Without horizontal
+    transport to redistribute water, columns can diverge unphysically. This function copies
+    the column-1 profile to all other columns for the specified species.
+
+    Does nothing if horizontal transport is enabled or if there is only one column.
+    =#
     GV = values(globvars)
     @assert :n_horiz in keys(GV)
     n_horiz = GV.n_horiz
@@ -1081,7 +1089,6 @@ if make_new_alt_grid==true
 elseif make_new_alt_grid==false 
     println("$(Dates.format(now(), "(HH:MM:SS)")) Loading atmosphere")
     n_current = get_ncurrent(initial_atm_file)
-    enforce_uniform_water_columns!(n_current, enable_horiz_transport; context="after loading initial atmosphere", n_horiz=n_horiz)
 end
 
 #                       Establish new species profiles                          #
@@ -1269,8 +1276,6 @@ if reinitialize_water_profile
     end
 end
 
-enforce_uniform_water_columns!(n_current, enable_horiz_transport; context="after water profile initialization", n_horiz=n_horiz)
-
 # If you want to just modify the water profile, i.e. when running several simulations
 # in succession to simulate seasons: 
 if update_water_profile
@@ -1350,7 +1355,7 @@ if update_water_profile
     end
 end
 
-enforce_uniform_water_columns!(n_current, enable_horiz_transport; context="after water profile update", n_horiz=n_horiz)
+enforce_uniform_water_columns!(n_current, enable_horiz_transport; context="after water profile setup", n_horiz=n_horiz)
 
 # Calculate precipitable microns, including boundary layers (assumed same as nearest bulk layer)
 H2Oprum = [let col = n_current[:H2O][ihoriz]; precip_microns(:H2O, [col[1]; col; col[end]]; molmass, dz) end for ihoriz in 1:n_horiz]
@@ -1667,7 +1672,7 @@ const crosssection = populate_xsect_dict(photochem_data_files, xsecfolder; ion_x
 solarflux_base = readdlm(code_dir*solarfile,'\t', Float64, comments=true, comment_char='#')[1:2000,:]
 
 # Build column-specific solar flux arrays based on scenario configuration
-solarflux_per_column = []
+solarflux_per_column = Vector{Matrix{Float64}}(undef, n_horiz)
 for ihoriz in 1:n_horiz
     scenario = horiz_column_scenario[ihoriz]
     solarflux_col = deepcopy(solarflux_base)
@@ -1680,7 +1685,7 @@ for ihoriz in 1:n_horiz
         solarflux_col[:,2] .*= cosd(scenario["SZA"])
     end
 
-    push!(solarflux_per_column, solarflux_col)
+    solarflux_per_column[ihoriz] = solarflux_col
 end
 
 # pad all cross-sections to solar

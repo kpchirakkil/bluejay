@@ -269,7 +269,7 @@ function n_tot(atmdict::Dict{Symbol, Vector{Array{ftype_ncur}}}, ihoriz::Int64; 
     return vec(sum(ndensities, dims=1))
 end
 
-function optical_depth(n_cur_densities; globvars...)
+function optical_depth(atmdict; globvars...)
     #=
     Given the current state (atmdict), this populates solarabs, a 1D array of 1D arrays of 1D arrays 
     with dimensions (n_horiz, n_alt, n_lambda), where each element is a wavelength-dependent optical depth.
@@ -296,7 +296,7 @@ function optical_depth(n_cur_densities; globvars...)
 
             for ialt in GV.num_layers:-1:1
                 # Vertical column of the absorbing constituent for this horizontal column
-                jcolumn += convert(Float64, n_cur_densities[species][ihoriz][ialt]) * GV.dz
+                jcolumn += convert(Float64, atmdict[species][ihoriz][ialt]) * GV.dz
 
                 # Add total extinction to solarabs for this horizontal column and altitude
                 # multiplies air column density (N, #/cm^2) at all wavelengths by crosssection (σ)
@@ -2430,7 +2430,7 @@ function update_diffusion_and_scaleH(
     return K, H0_dict, Dcoef_dict
 end
 
-function update_transport_coefficients(
+function update_vertical_transport_coefficients(
     species_list,
     atmdict::Dict{Symbol, Vector{Array{Float64}}},
     D_coefs::Vector{Matrix{Float64}},  # Unused
@@ -2439,7 +2439,7 @@ function update_transport_coefficients(
     globvars...
 )
     # Call the real function that doesn't expect D_coefs
-    return update_transport_coefficients(
+    return update_vertical_transport_coefficients(
         species_list,
         atmdict,
         M;
@@ -2448,7 +2448,7 @@ function update_transport_coefficients(
     )
 end
 
-function update_transport_coefficients(
+function update_vertical_transport_coefficients(
     species_list,
     atmdict::Dict{Symbol, Vector{Array{ftype_ncur}}},
     M::Matrix{ftype_ncur};  # now explicitly 2D: num_layers × n_horiz
