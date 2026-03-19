@@ -216,14 +216,8 @@ const n_horiz = 2
 # corresponding to wind speeds of 230 to 120 m/s (2.3e4 to 1.2e4 cm/s), with 30 hours being typical.
 # This assumes semi-circumference of Venus ~19,000 km as the characteristic width for day-to-night transport.
 
-# Horizontal column width in cm. This determines the physical scale of horizontal transport.
-# For day-night transport setups (n_horiz=2), use larger values for physically realistic transport rates.
-# Constant-mode width is surface half-circumference πR using the same R values
-# as in MODEL_SETUP.jl (Mars=3396e5 cm, Venus=6050e5 cm).
-const horiz_column_width = π * Dict("Mars"=>3396e5, "Venus"=>6050e5)[planet]
-
 # If true, horizontal transport uses altitude-dependent width dx(z) = π(R + z).
-# If false, it uses constant `horiz_column_width`.
+# If false, it uses constant `horiz_column_width` (defined in MODEL_SETUP.jl).
 const use_altitude_dependent_horiz_dx = false
 
 # Horizontal transport timescale in hours. This determines the wind speed via: wind_speed = horiz_column_width / (timescale * 3600)
@@ -234,11 +228,7 @@ const horiz_transport_timescale = planet == "Venus" ? 30.0 : 0.0  # Baseline sha
 const horiz_transport_timescale_neutral = planet == "Venus" ? 30.0 : horiz_transport_timescale
 const horiz_transport_timescale_ion = planet == "Venus" ? 15.0 : horiz_transport_timescale
 
-# Horizontal wind speed in cm/s calculated from timescale: wind_speed = width / (timescale * 3600)
-# This is used to initialize wind profiles in `MODEL_SETUP.jl`
-const horiz_wind_speed = horiz_transport_timescale > 0 ? horiz_column_width / (horiz_transport_timescale * 3600) : 0.0
-const horiz_wind_speed_neutral = horiz_transport_timescale_neutral > 0 ? horiz_column_width / (horiz_transport_timescale_neutral * 3600) : 0.0
-const horiz_wind_speed_ion = horiz_transport_timescale_ion > 0 ? horiz_column_width / (horiz_transport_timescale_ion * 3600) : 0.0
+# Horizontal wind speeds are derived from timescales and horiz_column_width in MODEL_SETUP.jl
 
 # Whether to allow horizontal transport between columns. When set to `false`
 # the model does not compute horizontal advection or diffusion, matching the

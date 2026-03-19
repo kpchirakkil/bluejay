@@ -203,7 +203,8 @@ const e_profile_type = ions_included==true ? "quasineutral" : "none"
 # =======================================================================================================
 const zmin = Dict("Venus"=>90e5, "Mars"=>0.)[planet]
 const dz = 2e5  # Discretized layer thickness
-const dx = horiz_column_width # Use the configurable column width from INPUT_PARAMETERS.jl
+const horiz_column_width = π * R_P  # Surface half-circumference πR (cm)
+const dx = horiz_column_width
 const zmax = 250e5  # Top altitude (cm)
 const alt = convert(Array, (zmin:dz:zmax)) # These are the layer centers.
 const n_all_layers = length(alt)
@@ -340,6 +341,11 @@ const Tprof_for_Hs = Dict("neutral"=>Tn_arr, "ion"=>Ti_arr)
 # array over altitude with values in cm/s.  The wind speed is taken from the
 # user-configurable parameters in `INPUT_PARAMETERS.jl`.
 # Setting that value to zero disables horizontal advection.
+
+# Horizontal wind speed in cm/s: wind_speed = horiz_column_width / (timescale * 3600)
+const horiz_wind_speed = horiz_transport_timescale > 0 ? horiz_column_width / (horiz_transport_timescale * 3600) : 0.0
+const horiz_wind_speed_neutral = horiz_transport_timescale_neutral > 0 ? horiz_column_width / (horiz_transport_timescale_neutral * 3600) : 0.0
+const horiz_wind_speed_ion = horiz_transport_timescale_ion > 0 ? horiz_column_width / (horiz_transport_timescale_ion * 3600) : 0.0
 
 const horiz_wind_v_neutral = [fill(horiz_wind_speed_neutral, length(alt)) for ihoriz in 1:n_horiz]
 const horiz_wind_v_ion     = [fill(horiz_wind_speed_ion, length(alt)) for ihoriz in 1:n_horiz]

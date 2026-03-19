@@ -326,10 +326,11 @@ function volume_rate_wrapper(sp, source_rxns, source_rxn_rc_funcs, atmdict, Mtot
     # altitude. This orientation matches how we populate the array below.
     rates = Array{ftype_ncur}(undef, GV.num_layers, length(source_rxns))
 
-    # Loop through reactions
+    # Loop through reactions - use the single-reaction get_volume_rates override
+    # which handles both photodissociation/ionization (via Jratedict) and chemistry.
+    # Do NOT override Tn/Ti/Te here — the single-reaction override slices them internally.
     for (i, source_rxn) in enumerate(source_rxns)
-        rate_coef = source_rxn_rc_funcs[source_rxn](GV.Tn[ihoriz, 2:end-1], GV.Ti[ihoriz, 2:end-1], GV.Te[ihoriz, 2:end-1], Mtot)
-        rates[:, i] = reactant_density_product(atmdict, source_rxn[1], ihoriz; globvars...) .* rate_coef
+        rates[:, i] = get_volume_rates(sp, source_rxn, source_rxn_rc_funcs[source_rxn], atmdict, Mtot, ihoriz; globvars...)
     end
 
     # Returns an array where rows represent altitudes and columns are reactions.
@@ -372,22 +373,23 @@ function diffusion_timescale(s::Symbol, T_arr::Array, atmdict; globvars...)
     ncur_with_bdys = ncur_with_boundary_layers(atmdict; GV.all_species, GV.n_alt_index, GV.n_horiz)
     
     # Molecular diffusion timescale: H_s^2 / D, scale height over diffusion constant
-    Hs = scaleH(GV.alt, s, T_arr; globvars...)
+    # Column-ize Hs since it depends on temperature which varies per column
+    Hs = [scaleH(GV.alt, s, T_arr[ihoriz, :]; globvars...) for ihoriz in 1:n_horiz]
     D = Dcoef!(Dcoef_template, T_arr, s, ncur_with_bdys; globvars...)
-    molec_or_ambi_timescale = (Hs .^ 2) ./ D
-   
-    # Eddy timescale... this was in here only as scale H... 
-    H0 = scaleH(ncur_with_bdys, T_arr; globvars...)
+    molec_or_ambi_timescale = [Hs[ihoriz] .^ 2 ./ D[ihoriz] for ihoriz in 1:n_horiz]
+
+    # Eddy timescale - column-ize H0 since it depends on temperature
+    H0 = [scaleH(ncur_with_bdys, T_arr[ihoriz, :], ihoriz; globvars...) for ihoriz in 1:n_horiz]
     # Calculate total atmospheric density as 2D matrix
-    nt = zeros(n_horiz, length(alt))
+    nt = zeros(n_horiz, length(GV.alt))
     for ihoriz in 1:n_horiz
         nt[ihoriz, :] = n_tot(ncur_with_bdys, ihoriz; GV.all_species, GV.molmass)
     end
-    K = [Keddy(alt, nt, ihoriz; globvars...) for ihoriz in 1:n_horiz]
-    eddy_timescale = ([H0 for ihoriz in 1:n_horiz] .^ 2) ./ K
+    K = [Keddy(GV.alt, nt, ihoriz; globvars...) for ihoriz in 1:n_horiz]
+    eddy_timescale = [H0[ihoriz] .^ 2 ./ K[ihoriz] for ihoriz in 1:n_horiz]
 
     # Combined timescale
-    combined_timescale = ([Hs for ihoriz in 1:n_horiz] .^ 2) ./ (K .+ D)
+    combined_timescale = [Hs[ihoriz] .^ 2 ./ (K[ihoriz] .+ D[ihoriz]) for ihoriz in 1:n_horiz]
 
     return molec_or_ambi_timescale, eddy_timescale, combined_timescale
 end
@@ -496,7 +498,7 @@ function get_transport_PandL_rate(sp::Symbol, atmdict::Dict{Symbol, Vector{Array
 
     # Generate the fluxcoefs dictionary and boundary conditions dictionary
     # Initialize D_arr for performance optimization - Vector of Arrays structure
-    D_arr = [zeros(ftype_ncur, size(GV.Tn, 2)) for _ in 1:GV.n_horiz]
+    D_arr = [zeros(ftype_ncur, GV.num_layers+2) for _ in 1:GV.n_horiz]
     Keddy_arr, H0_dict, Dcoef_dict = update_diffusion_and_scaleH(GV.all_species, atmdict, D_arr; globvars...)
     fluxcoefs_all = fluxcoefs(GV.all_species, Keddy_arr, Dcoef_dict, H0_dict; globvars...)
 
@@ -594,7 +596,7 @@ function get_directional_fluxes(
 
     # Generate vertical transport coefficients and boundary conditions for all columns
     # Initialize D_arr for performance optimization - Vector of Arrays structure
-    D_arr = [zeros(ftype_ncur, size(GV.Tn, 2)) for _ in 1:GV.n_horiz]
+    D_arr = [zeros(ftype_ncur, GV.num_layers+2) for _ in 1:GV.n_horiz]
     Keddy_arr, H0_dict, Dcoef_dict =
         update_diffusion_and_scaleH(GV.all_species, atmdict, D_arr; globvars...)
     fluxcoefs_all = fluxcoefs(GV.all_species, Keddy_arr, Dcoef_dict, H0_dict; globvars...)
