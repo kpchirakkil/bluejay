@@ -234,7 +234,7 @@ function load_from_paramlog(folder; quiet=true, globvars...)
     df_bcs = DataFrame(XLSX.readtable("$(folder)PARAMETERS.xlsx", "BoundaryConditions"));
 
     # Planet, M_P, R_P, and altitude, which were not logged in older runs.
-    if ~(:M_P in keys(GV)) | ~(:R_P in keys(GV))
+    if ~(:M_P in keys(GV)) || ~(:R_P in keys(GV))
         try
             global planet = get_param("PLANET", df_gen)
             global M_P = get_param("M_P", df_gen)
@@ -245,32 +245,26 @@ function load_from_paramlog(folder; quiet=true, globvars...)
             println()
         end
     end
-    
+
     if ~(:alt in keys(GV))
         try 
             global df_alt = DataFrame(XLSX.readtable("$(folder)PARAMETERS.xlsx", "AltGrid"));
             global df_altinfo = DataFrame(XLSX.readtable("$(folder)PARAMETERS.xlsx", "AltInfo"));
+            global alt = df_alt.Alt
+            global non_bdy_layers = [parse(Float64, f) for f in collect(skipmissing(df_alt.non_bdy_layers))]
+            global zmin = get_param("zmin", df_altinfo)
+            global dz = get_param("dz", df_altinfo)
+            global zmax = get_param("zmax", df_altinfo)
+            global n_all_layers = get_param("n_all_layers", df_altinfo)
+            global num_layers = get_param("num_layers", df_altinfo)
+            global upper_lower_bdy = get_param("upper_lower_bdy", df_altinfo)
+            global upper_lower_bdy_i = get_param("upper_lower_bdy_i", df_altinfo)
         catch y
             println("WARNING: Exception: $(y) - you tried to load the altitude grid but it's not logged. File probably made before module updates. Please pass in alt manually")
             println()
         end
     else
         global alt = GV.alt # This seems stupid but has to be done because apparently the if/else blocks can't access the keyword arg alt??
-    end
-
-    # AltInfo
-    if (@isdefined df_altinfo) & (@isdefined df_alt)
-        global alt = df_alt.Alt
-        global non_bdy_layers = [parse(Float64, f) for f in collect(skipmissing(df_alt.non_bdy_layers))]
-        global zmin = get_param("zmin", df_altinfo)
-        global dz = get_param("dz", df_altinfo)
-        global zmax = get_param("zmax", df_altinfo)
-        global n_all_layers = get_param("n_all_layers", df_altinfo)
-        global num_layers = get_param("num_layers", df_altinfo)
-        global upper_lower_bdy = get_param("upper_lower_bdy", df_altinfo)
-        global upper_lower_bdy_i = get_param("upper_lower_bdy_i", df_altinfo)
-    else 
-        # In this case, alt should have been passed in manually.
         global non_bdy_layers = alt[2:end-1]
         global zmin = alt[1]
         global dz = alt[2] - alt[1]
@@ -337,6 +331,7 @@ function load_from_paramlog(folder; quiet=true, globvars...)
     Tplasma_arr = Ti_arr .+ Te_arr;
     Tprof_for_Hs = Dict("neutral"=>Tn_arr, "ion"=>Ti_arr);
     Tprof_for_diffusion = Dict("neutral"=>Tn_arr, "ion"=>Tplasma_arr)
+    Hs_dict = Dict{Symbol, Vector{Float64}}([sp=>scaleH(alt, sp, Tprof_for_Hs[charge_type(sp)]; M_P, R_P, globvars...) for sp in all_species]); 
     try
         global Hs_dict = Dict{Symbol, Vector{Float64}}([sp=>scaleH(alt, sp, Tprof_for_Hs[charge_type(sp)]; M_P, R_P, globvars...) for sp in all_species]); 
     catch UndefVarError
