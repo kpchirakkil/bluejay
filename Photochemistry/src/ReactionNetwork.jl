@@ -509,6 +509,11 @@ function format_neutral_network(reactions_spreadsheet, used_species; saveloc=not
                                sheet names: Neutral reactions, Ion reactions.
         used_species: List of species in use, really just used once to find unneeded
                       reactions
+        saveloc: path at which to save a copy of the file, used for logging what was used in a run
+        write_rxns: boolean
+                    whether to copy the used reactions to a file at saveloc
+        verbose : boolean
+                  whether to print feedback to the terminal
     Outputs:
         lists of several reaction types, all neutrals, in form [[R1, R2], [P1, P2], :(k)].
         3 reactants or products are also possible.
